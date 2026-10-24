@@ -8,6 +8,8 @@ catalog = (root / 'Source' / 'ParameterCatalog.cpp').read_text(encoding='utf-8')
 ids = re.findall(r'"slider(\d{3})"', catalog)
 expected = [f'{n:03}' for n in range(1, 36)]
 assert ids == expected, (len(ids), ids)
+# JUCE 8 uses juce::Optional, which does not implement std::optional::value_or.
+assert '.value_or(' not in (root / 'Source' / 'PluginProcessor.cpp').read_text(encoding='utf-8')
 assert len(re.findall(r'^slider\d+:', original, re.M)) == 35
 for src in ['ParameterCatalog.cpp', 'BassEngine.cpp', 'PluginEditor.cpp', 'PluginProcessor.cpp', 'ScreenReaderAnnouncer.cpp']:
     assert (root / 'Source' / src).is_file(), src

@@ -56,6 +56,15 @@ The focused parameter name and value are also set as native accessibility text,
 so screen-reader line reading has a concise value. Host interception of global
 shortcuts may vary; please test Alt+L and arrow focus with NVDA/OSARA in REAPER.
 
+## TEST1.1 — GitHub Actions build compatibility fix
+
+- Fixes JUCE 8.0.15 / MSVC error C2039 in `Source/PluginProcessor.cpp`:
+  `juce::Optional<double>` has no `value_or()` method.
+- Host BPM now uses the same `if (const auto bpm = position->getBpm())`
+  and `*bpm` idiom already present in LJuno-116.
+- No DSP, parameter IDs, presets, UI or keyboard controls have been modified.
+- Static source checks only; compilation is reserved for GitHub Actions.
+
 ## Build on GitHub Actions
 
 1. Create a public (or private) repository named `LB-303`.

@@ -45,7 +45,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     double bpm = 120.0;
     if (auto* playhead = getPlayHead())
         if (const auto position = playhead->getPosition())
-            bpm = position->getBpm().value_or (120.0);
+            if (const auto hostBpm = position->getBpm())
+                bpm = *hostBpm;
     engine.setParameters (snapshot, bpm);
     const auto count = audio.getNumSamples();
     if (audio.getNumChannels() < 2) { audio.clear(); return; }
