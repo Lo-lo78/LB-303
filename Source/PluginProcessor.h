@@ -6,6 +6,7 @@
 #include "SequencerPlayback.h"
 #include <array>
 #include <atomic>
+#include <cstdint>
 
 class LB303AudioProcessor final : public juce::AudioProcessor
 {
@@ -49,6 +50,19 @@ private:
     double fallbackPpq = 0.0;
     double previewPpq = 0.0;
     bool previousPreview = false;
+    double previewOriginPpq = 0.0;
+    // Physical MIDI keys are only triggers when the corresponding sequencer
+    // switch is On; the notes themselves must never reach that bassline.
+    std::array<std::array<bool, 128>, lb303::basslineCount> heldKeys {};
+    std::array<int, lb303::basslineCount> heldKeyCount {};
+    // LJuno-style last-pressed priority: C4 (MIDI 60) is the untransposed root.
+    // Each MIDI channel keeps an independent stack of held physical keys.
+    std::array<std::array<std::uint64_t, 128>, lb303::basslineCount> heldKeyAge {};
+    std::array<std::uint64_t, lb303::basslineCount> keyAgeCounter {{ 1, 1 }};
+    std::array<int, lb303::basslineCount> keyboardTranspose {};
+    std::array<int, lb303::basslineCount> lastKeyboardNote {{ 60, 60 }};
+    std::array<double, lb303::basslineCount> triggerOriginPpq {};
+    std::array<bool, lb303::basslineCount> previousSequencerOn {};
     std::atomic<int> previewLane { -1 };
     std::array<std::atomic<float>*, lb303::parameterCount> rawParameters {};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessor)

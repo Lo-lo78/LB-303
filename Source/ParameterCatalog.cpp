@@ -80,8 +80,8 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         }
         result[pattern1Index] = { "seq_b1_pattern", "Pattern Bassline 1", 0, 15, 1, 0, "", patternChoices, 16 };
         result[pattern2Index] = { "seq_b2_pattern", "Pattern Bassline 2", 0, 15, 1, 0, "", patternChoices, 16 };
-        result[sequencer1EnabledIndex] = { "seq_b1_enable", "Play Bassline 1", 0, 1, 1, 0, "", switchChoices, 2 };
-        result[sequencer2EnabledIndex] = { "seq_b2_enable", "Play Bassline 2", 0, 1, 1, 0, "", switchChoices, 2 };
+        result[sequencer1EnabledIndex] = { "seq_b1_enable", "Sequencer Bassline 1", 0, 1, 1, 0, "", switchChoices, 2 };
+        result[sequencer2EnabledIndex] = { "seq_b2_enable", "Sequencer Bassline 2", 0, 1, 1, 0, "", switchChoices, 2 };
         result[editTrackIndex] = { "seq_edit_track", "Editor Track", 0, 1, 1, 0, "", trackChoices, 2 };
         return result;
     }();

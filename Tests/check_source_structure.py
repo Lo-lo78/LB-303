@@ -108,7 +108,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.2.7-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.2.9-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -117,7 +117,7 @@ assert 'const int midiChannel = message.getChannel();' in processor
 assert 'midiChannel >= 1 && midiChannel <= static_cast<int> (lb303::basslineCount)' in processor
 assert 'engines[static_cast<size_t> (midiChannel - 1)].midi (message);' in processor
 assert 'const auto offset = std::clamp (entry.samplePosition, 0, count);' in processor
-assert processor.index('renderTo (offset);') < processor.index('const int midiChannel = message.getChannel();')
+assert processor.index('generateSegment (previousSample, offset);') < processor.index('const int midiChannel = message.getChannel();')
 assert 'Bassline 1, channel 1' in (root / 'README.md').read_text()
 assert 'Bassline 2, channel 2' in (root / 'README.md').read_text()
 print('PASS: TEST1.7 MIDI ch1 -> Bassline 1, ch2 -> Bassline 2 only.')
@@ -144,7 +144,7 @@ assert 'midi.addEvents (generated' in processor
 assert 'if (! enabled[lane]) continue;' in playback
 assert 'const auto& bank = banks[static_cast<size_t> (lane)]' in playback
 assert 'const int pattern = juce::jlimit' in playback
-assert 'juce::MidiMessage::noteOn (lane + 1' in playback
+assert 'lane + 1, note, static_cast<juce::uint8> (velocity)' in playback
 assert 'juce::MidiMessage::noteOff (lane + 1' in playback
 assert 'lastSelected[static_cast<size_t> (context)] = chosen;' in editor
 assert 'juce::MidiBuffer generated;' in processor
@@ -231,7 +231,7 @@ assert 'currentStep = juce::jlimit (firstActive, lastActive, currentStep);' in s
 assert "if (code == juce::KeyPress::homeKey) { changeTrack (-1); return true; }" in step
 assert "if (code == juce::KeyPress::upKey) { changePattern (1); return true; }" in step
 assert 'TEST2.2.3' in (root / 'README.md').read_text()
-assert 'TEST2.2.7' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.2.9' in (root / '.github/workflows/build-windows.yml').read_text()
 
 # Example active ranges, zero-based block bounds. Every permitted Tab block
 # intersects [Start Step, End Step], never stepping past the recorded End.
@@ -283,3 +283,41 @@ font_source = (root / 'Source' / 'SequencerStepEditor.cpp').read_text(encoding='
 assert 'juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 17.0f, juce::Font::plain)' in font_source
 assert 'juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 17.0f)' not in font_source
 print('PASS: TEST2.2.7 FontOptions uses explicit font style (C2248 regression).')
+
+
+# TEST2.2.8 — each lane has an automatable Off/On keyboard/sequence mode.
+assert '"seq_b1_enable", "Sequencer Bassline 1"' in param_cpp
+assert '"seq_b2_enable", "Sequencer Bassline 2"' in param_cpp
+assert 'const juce::MidiBuffer physicalInput (midi);' in processor
+assert 'if (sequencerOn[lane] && message.isNoteOnOrOff())' in processor
+assert 'Physical Note On/Off is consumed' in processor
+assert 'triggerOriginPpq[lane] = ppq + offset * beatsPerSample;' in processor
+assert 'audible[0] || audible[1]' in processor
+assert 'engines[lane].releaseNote();' in processor
+assert 'void BassEngine::releaseNote() noexcept' in (root / 'Source/BassEngine.cpp').read_text()
+assert 'const std::array<double, 2>& triggerOrigins' in playback
+assert 'const double lanePpq = ppq - triggerOrigins[' in playback
+assert 'if (! playing) ppq = activePreview ? previewPpq : fallbackPpq;' in processor
+assert 'midi.addEvents (generated, 0, segmentLength, beginSample);' in processor
+print('PASS: TEST2.2.8 Off = direct MIDI, On = MIDI-triggered sequencer, no double notes, independent lanes.')
+
+# TEST2.2.9 — LJuno-style keyboard transposition, two independent lanes.
+processor_h = (root / 'Source/PluginProcessor.h').read_text(encoding='utf-8')
+processor = (root / 'Source/PluginProcessor.cpp').read_text(encoding='utf-8')
+playback = (root / 'Source/SequencerPlayback.cpp').read_text(encoding='utf-8')
+playback_h = (root / 'Source/SequencerPlayback.h').read_text(encoding='utf-8')
+assert 'keyboardTranspose' in processor_h and 'heldKeyAge' in processor_h
+assert 'std::array<int, lb303::basslineCount> lastKeyboardNote {{ 60, 60 }}' in processor_h
+assert 'keyboardTranspose[lane] = note - 60;' in processor
+assert 'keyboardTranspose[lane] = newestNote - 60;' in processor
+assert 'heldKeys[lane][index] && heldKeyAge[lane][index] > newestAge' in processor
+assert 'heldKeyCount[lane] == 0' in processor  # only first key retriggers step 1
+assert 'previewingTrack == 0 ? lastKeyboardNote[0] - 60' in processor
+assert 'const std::array<int, 2>& keyboardTransposes' in playback_h
+assert 'step.note + keyboardTransposes[lane]' in playback
+assert 'lastSourceNote[lane] == step.note' in playback
+assert 'lane + 1, lastNote[lane])' in playback
+assert 'oldPattern[lane] = patterns[lane]' in playback
+assert 'Physical Note On/Off is consumed' not in processor or 'transposed pattern notes play' in processor
+assert 'TEST2.2.9' in (root / '.github/workflows/build-windows.yml').read_text()
+print('PASS: TEST2.2.9 keyboard transpose reference C4, MIDI1/MIDI2 independence, newest-held priority and matching Note Off (static).')

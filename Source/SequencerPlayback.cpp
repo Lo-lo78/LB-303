@@ -33,6 +33,7 @@ void SequencerPlayback::reset() noexcept
     oldPattern = { -1, -1 };
     oldEnabled = { false, false };
     lastNote = { -1, -1 };
+    lastSourceNote = { -1, -1 };
     previousPpq = -1.0;
     previousPlaying = false;
 }
@@ -41,6 +42,8 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                                   const std::array<SequencerState, 2>& banks,
                                   const std::array<int, 2>& patterns,
                                   const std::array<bool, 2>& enabled,
+                                  const std::array<double, 2>& triggerOrigins,
+                                  const std::array<int, 2>& keyboardTransposes,
                                   bool playing, double ppq, double bpm,
                                   double sampleRate, int samples)
 {
@@ -60,6 +63,7 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         {
             output.addEvent (juce::MidiMessage::noteOff (lane + 1, lastNote[lane]), 0);
             lastNote[lane] = -1;
+            lastSourceNote[lane] = -1;
         }
         oldPattern[lane] = patterns[lane];
         oldEnabled[lane] = enabled[lane];
@@ -71,6 +75,10 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
     for (int lane = 0; lane < 2; ++lane)
     {
         if (! enabled[lane]) continue;
+        // Each MIDI-triggered bassline has its own song-time origin. A new key
+        // begins its own pattern at step 1, without restarting the other lane.
+        const double lanePpq = ppq - triggerOrigins[static_cast<size_t> (lane)];
+        const double laneEndPpq = endPpq - triggerOrigins[static_cast<size_t> (lane)];
         const int pattern = juce::jlimit (0, SequencerState::maximumSequences - 1, patterns[lane]);
         const auto& bank = banks[static_cast<size_t> (lane)];
         const auto config = bank.getConfig (pattern);
@@ -84,9 +92,9 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         const double launchDelay = (juce::jlimit (1, 128, config.launchStep) - 1) * stepBeats
             + static_cast<double> (config.launchOffsetMs) * bpm / 60000.0;
         const std::int64_t first = static_cast<std::int64_t> (
-            std::floor ((ppq - launchDelay) / stepBeats)) - 2;
+            std::floor ((lanePpq - launchDelay) / stepBeats)) - 2;
         const std::int64_t last = static_cast<std::int64_t> (
-            std::ceil ((endPpq - launchDelay) / stepBeats)) + 2;
+            std::ceil ((laneEndPpq - launchDelay) / stepBeats)) + 2;
         // Bound CPU for pathological host jumps or extreme divisions.
         for (std::int64_t tick = first; tick <= last && tick < first + 1024; ++tick)
         {
@@ -94,7 +102,10 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
             const auto step = bank.getStep (pattern, start + stepInPattern);
             if (step.note >= 128 || step.velocity <= 0 || shouldSkip (
                 lane, pattern, tick, config.noteSkipProbability)) continue;
-            const int note = juce::jlimit (0, 127, step.note + config.semitoneShift + 12 * config.octaveShift);
+            // Same C4-based keyboard transposition as LJuno. Each lane uses
+            // its own physical MIDI channel and independent held-note stack.
+            const int note = juce::jlimit (0, 127, step.note + keyboardTransposes[lane]
+                + config.semitoneShift + 12 * config.octaveShift);
             const int velocity = juce::jlimit (1, 127, step.velocity);
             const int repeats = juce::jlimit (1, 16, step.repeat);
             const double repeatBeats = stepBeats / repeats;
@@ -109,14 +120,25 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                     * (step.length > 100 ? 1.02 : juce::jlimit (0.01, 1.0, step.length / 100.0));
                 const auto emit = [&] (bool noteOn, double eventPpq)
                 {
-                    if (eventPpq < ppq || eventPpq >= endPpq) return;
+                    if (eventPpq < lanePpq || eventPpq >= laneEndPpq) return;
                     const int sample = juce::jlimit (0, samples - 1,
-                        static_cast<int> (std::floor ((eventPpq - ppq) / beatsPerSample + 0.5)));
-                    output.addEvent (noteOn
-                        ? juce::MidiMessage::noteOn (lane + 1, note, static_cast<juce::uint8> (velocity))
-                        : juce::MidiMessage::noteOff (lane + 1, note), sample);
-                    if (noteOn) lastNote[lane] = note;
-                    else if (lastNote[lane] == note) lastNote[lane] = -1;
+                        static_cast<int> (std::floor ((eventPpq - lanePpq) / beatsPerSample + 0.5)));
+                    if (noteOn)
+                    {
+                        output.addEvent (juce::MidiMessage::noteOn (
+                            lane + 1, note, static_cast<juce::uint8> (velocity)), sample);
+                        lastNote[lane] = note;
+                        lastSourceNote[lane] = step.note;
+                    }
+                    else if (lastNote[lane] >= 0 && lastSourceNote[lane] == step.note)
+                    {
+                        // Match the pitch emitted at Note On, not the current
+                        // transpose: the player may have changed keys meanwhile.
+                        output.addEvent (juce::MidiMessage::noteOff (
+                            lane + 1, lastNote[lane]), sample);
+                        lastNote[lane] = -1;
+                        lastSourceNote[lane] = -1;
+                    }
                 };
                 emit (true, onPpq);
                 emit (false, offPpq);

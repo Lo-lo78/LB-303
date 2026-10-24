@@ -20,6 +20,15 @@ void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
     fallbackPpq = 0.0;
     previewPpq = 0.0;
     previousPreview = false;
+    previewOriginPpq = 0.0;
+    heldKeys = {};
+    heldKeyCount = {};
+    heldKeyAge = {};
+    keyAgeCounter = { 1, 1 };
+    keyboardTranspose = {};
+    lastKeyboardNote = { 60, 60 };
+    triggerOriginPpq = {};
+    previousSequencerOn = {};
     previewLane.store (-1, std::memory_order_relaxed);
     sequencerPlayback.reset();
     for (auto& engine : engines) engine.prepare (sampleRate);
@@ -67,20 +76,145 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     if (! std::isfinite (ppq)) ppq = 0.0;
     const int previewingTrack = previewLane.load (std::memory_order_relaxed);
     const bool activePreview = previewingTrack >= 0 && previewingTrack < 2;
-    if (activePreview && ! previousPreview) previewPpq = 0.0;
+    if (activePreview && ! previousPreview)
+    {
+        previewPpq = 0.0;
+        previewOriginPpq = playing ? ppq : 0.0;
+    }
     previousPreview = activePreview;
-    if (! playing && activePreview) ppq = previewPpq;
-    const double nextPpq = ppq + audio.getNumSamples() * bpm / (60.0 * sampleRateHz);
+    // Many hosts report a fixed PPQ position while stopped. Keyboard-held
+    // patterns must keep advancing on our own sample clock instead of replaying
+    // their first step on every audio block.
+    if (! playing) ppq = activePreview ? previewPpq : fallbackPpq;
+    const int count = audio.getNumSamples();
+    const double beatsPerSample = bpm / (60.0 * sampleRateHz);
+    const double nextPpq = ppq + count * beatsPerSample;
     if (! playing && activePreview) previewPpq = nextPpq;
     else fallbackPpq = nextPpq;
-    juce::MidiBuffer generated;
-    sequencerPlayback.generate (generated, sequenceBanks,
-        { currentPattern (0), currentPattern (1) },
-        { (playing && value (lb303::sequencer1EnabledIndex) > 0.5f) || previewingTrack == 0,
-          (playing && value (lb303::sequencer2EnabledIndex) > 0.5f) || previewingTrack == 1 },
-        playing || activePreview, ppq, bpm, sampleRateHz, audio.getNumSamples());
-    // Generated events keep MIDI channels 1 and 2 and are merged with host MIDI.
-    midi.addEvents (generated, 0, audio.getNumSamples(), 0);
+
+    const std::array<bool, 2> sequencerOn {{
+        value (lb303::sequencer1EnabledIndex) > 0.5f,
+        value (lb303::sequencer2EnabledIndex) > 0.5f
+    }};
+
+    // On changing modes, release a note held by the previous mode. This also
+    // prevents the physical key that selected a pattern from being heard.
+    for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
+    {
+        if (sequencerOn[lane] == previousSequencerOn[lane]) continue;
+        engines[lane].releaseNote();
+        heldKeys[lane].fill (false);
+        heldKeyAge[lane].fill (0);
+        heldKeyCount[lane] = 0;
+        keyboardTranspose[lane] = 0;
+        previousSequencerOn[lane] = sequencerOn[lane];
+    }
+
+    // Route physical keys before generating each audio segment. Unlike the
+    // earlier implementation, we never merge them into the sequenced notes.
+    // Dividing at MIDI offsets makes trigger/release sample-accurate, including
+    // when a key begins or ends in the middle of an audio block.
+    const juce::MidiBuffer physicalInput (midi);
+    midi.clear();
+    auto generateSegment = [&] (int beginSample, int endSample)
+    {
+        const int segmentLength = endSample - beginSample;
+        if (segmentLength <= 0) return;
+        const std::array<bool, 2> audible {{
+            (sequencerOn[0] && heldKeyCount[0] > 0) || previewingTrack == 0,
+            (sequencerOn[1] && heldKeyCount[1] > 0) || previewingTrack == 1
+        }};
+        const std::array<double, 2> origins {{
+            previewingTrack == 0 ? previewOriginPpq : triggerOriginPpq[0],
+            previewingTrack == 1 ? previewOriginPpq : triggerOriginPpq[1]
+        }};
+        const std::array<int, 2> transposes {{
+            previewingTrack == 0 ? lastKeyboardNote[0] - 60 : keyboardTranspose[0],
+            previewingTrack == 1 ? lastKeyboardNote[1] - 60 : keyboardTranspose[1]
+        }};
+        juce::MidiBuffer generated;
+        sequencerPlayback.generate (generated, sequenceBanks,
+            { currentPattern (0), currentPattern (1) }, audible, origins, transposes,
+            playing || activePreview || audible[0] || audible[1],
+            ppq + beginSample * beatsPerSample, bpm, sampleRateHz, segmentLength);
+        midi.addEvents (generated, 0, segmentLength, beginSample);
+    };
+    int previousSample = 0;
+    for (const auto entry : physicalInput)
+    {
+        const int offset = std::clamp (entry.samplePosition, 0, count);
+        generateSegment (previousSample, offset);
+        previousSample = offset;
+        const auto& message = entry.getMessage();
+        const int midiChannel = message.getChannel();
+        if (midiChannel < 1 || midiChannel > static_cast<int> (lb303::basslineCount))
+        {
+            midi.addEvent (message, offset); // other MIDI channels untouched
+            continue;
+        }
+        const auto lane = static_cast<size_t> (midiChannel - 1);
+        if (message.isNoteOn())
+            lastKeyboardNote[lane] = juce::jlimit (0, 127, message.getNoteNumber());
+
+        if (sequencerOn[lane] && message.isNoteOnOrOff())
+        {
+            const int note = juce::jlimit (0, 127, message.getNoteNumber());
+            const auto key = static_cast<size_t> (note);
+            auto& down = heldKeys[lane][key];
+            if (message.isNoteOn())
+            {
+                if (! down)
+                {
+                    if (heldKeyCount[lane] == 0)
+                        triggerOriginPpq[lane] = ppq + offset * beatsPerSample;
+                    down = true;
+                    ++heldKeyCount[lane];
+                }
+                // A newly struck key takes priority without restarting the
+                // pattern while an earlier key remains held (LJuno Mono Legato).
+                auto& nextAge = keyAgeCounter[lane];
+                if (nextAge == 0) // guard the theoretical counter wraparound
+                {
+                    heldKeyAge[lane].fill (0);
+                    nextAge = 1;
+                }
+                heldKeyAge[lane][key] = nextAge++;
+                keyboardTranspose[lane] = note - 60;
+            }
+            else if (down)
+            {
+                down = false;
+                heldKeyAge[lane][key] = 0;
+                --heldKeyCount[lane];
+                // On release, return to the newest key still held, as in LJuno.
+                int newestNote = 60;
+                std::uint64_t newestAge = 0;
+                for (int candidate = 0; candidate < 128; ++candidate)
+                {
+                    const auto index = static_cast<size_t> (candidate);
+                    if (heldKeys[lane][index] && heldKeyAge[lane][index] > newestAge)
+                    {
+                        newestAge = heldKeyAge[lane][index];
+                        newestNote = candidate;
+                    }
+                }
+                keyboardTranspose[lane] = newestNote - 60;
+            }
+            // Physical Note On/Off is consumed: only transposed pattern notes play.
+            continue;
+        }
+        if (sequencerOn[lane] && message.isController()
+            && (message.getControllerNumber() == 120
+                || message.getControllerNumber() == 123))
+        {
+            heldKeys[lane].fill (false);
+            heldKeyAge[lane].fill (0);
+            heldKeyCount[lane] = 0;
+            keyboardTranspose[lane] = 0;
+        }
+        midi.addEvent (message, offset); // controls remain usable in both modes
+    }
+    generateSegment (previousSample, count);
 
     // Separate DSP state, oscillator/envelopes/filter/delay and parameter
     // snapshots for BOTH basslines. Never share engine state between them.
@@ -102,7 +236,6 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         rightGain[voice] = level * (pan < 0.0f ? 1.0f + pan : 1.0f);
     }
 
-    const auto count = audio.getNumSamples();
     if (audio.getNumChannels() < 2) { audio.clear(); return; }
     auto* l = audio.getWritePointer (0);
     auto* r = audio.getWritePointer (1);
@@ -124,12 +257,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             r[nextSample] = outR;
         }
     };
-    // Match MIDI channel numbers to bassline numbers (one-based):
-    //   channel 1 -> Bassline 1, channel 2 -> Bassline 2.
-    // Route all channel messages (including note-off and CC) only to their
-    // respective engine. Channel-less system messages and channels 3-16
-    // are not sent to either synthesizer. Preserve sample-accurate offsets.
-    // The host's MIDI buffer is forwarded unchanged, as in TEST1.6.
+    // Route generated sequencer notes or direct notes exclusively to their
+    // respective engines (MIDI channel 1 or 2), preserving exact offsets.
+    // MIDI output contains generated notes, never a doubled physical note.
     for (const auto entry : midi)
     {
         const auto offset = std::clamp (entry.samplePosition, 0, count);

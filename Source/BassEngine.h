@@ -16,6 +16,7 @@ public:
     void reset();
     void setParameters (const Values& values, double bpm);
     void midi (const juce::MidiMessage& event);
+    void releaseNote() noexcept; // stop a direct note when switching to sequencer mode
     std::pair<float, float> tick (float inputL, float inputR);
 
 private:

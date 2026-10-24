@@ -174,6 +174,15 @@ void BassEngine::setParameters (const Values& values, double newBpm)
     delayTargetSamples = std::min (10000.0, delayMs) * 0.001 * fs;
 }
 
+void BassEngine::releaseNote() noexcept
+{
+    // Do not reset effect tails, oscillators or delay: only release the held voice.
+    noteActive = false;
+    legato = false;
+    envelopeStage = 3;
+    lastNote = -1;
+}
+
 void BassEngine::midi (const juce::MidiMessage& message)
 {
     if (message.isController() && message.getControllerNumber() == 123)

@@ -1,3 +1,54 @@
+# LB-303 TEST2.2.9 — Keyboard transpose while Sequencer is On
+
+- **C4 (MIDI note 60) = zero transpose**, as in LJuno: C5 raises the pattern by
+  12 semitones; B3 lowers it by one. Pattern steps retain their saved pitches.
+- MIDI channel **1 transposes only Bassline 1**; channel **2 only Bassline 2**.
+  The two 16-pattern banks and independent Sequencer Off/On switches remain.
+- When On, physical keyboard notes trigger and **transpose** the sequence,
+  without producing doubled direct notes. With multiple held keys, the last
+  pressed key determines pitch. On releasing it, pitch returns to the most
+  recently pressed key still held. Changing keys does **not restart** the
+  pattern; releasing the last key stops it.
+- Note Off uses the actual pitch previously sent at Note On even if a keyboard
+  note changes between them, avoiding hanging notes when changing transpose.
+- Step-editor Space preview follows the **last physical keyboard note** on the
+  corresponding channel (defaults to C4).
+- No new parameters or altered IDs. Pattern save format, Grid/Value/Edit,
+  screen-reader announcements and Parameter Lock data are unchanged. Lock
+  **audio playback** is still deferred to TEST2.3.
+- Static tests only; compile on GitHub Actions and verify behavior in REAPER.
+
+---
+
+# LB-303 TEST2.2.8 — MIDI-triggered sequencer mode (per bassline)
+
+The Sequencer parameter grid contains two independent automatable Off/On
+switches named **Sequencer Bassline 1** and **Sequencer Bassline 2**. They
+reuse the old persistent IDs `seq_b1_enable` and `seq_b2_enable`, respectively,
+so existing projects and automation retain their values. Both default Off.
+
+- **Off:** keyboard MIDI notes play the selected bassline directly on MIDI
+  channel 1 (Bassline 1) or channel 2 (Bassline 2). The sequencer does not
+  generate notes for that lane (except manual Alt+Q preview).
+- **On:** pressing a keyboard note on that bassline's MIDI channel **triggers
+  its selected pattern** at step 1; the physical note is **not** played or
+  forwarded alongside the generated notes. Releasing the final held key stops
+  the sequence and releases its generated note. Holding multiple keys keeps
+  the sequencer running until the last release. Each lane triggers and stops
+  independently. Keyboard notes select timing, not pitch transposition in this
+  version.
+- The pattern clock follows REAPER's BPM; while stopped, it uses the last
+  available host BPM (120 if none is supplied). A note retriggers step 1 when
+  all keys had been released. Preview via the step editor still works.
+- Other channel messages (such as CC or pitch bend) still reach the relevant
+  bassline. MIDI channels 3–16 remain ignored by the sound engines.
+- Level of Bassline 2 still defaults to 0; raise Level to hear it.
+
+Only static regression checks are run locally. Build on GitHub Actions, then
+try both modes and MIDI channels independently in an empty REAPER project.
+
+---
+
 # LB-303 0.0.2 — TEST2.2.7 (fix compilazione GitHub Actions)
 
 - Risolve errore MSVC `C2248` in `Source/SequencerStepEditor.cpp` alla riga 21:
@@ -42,7 +93,7 @@ using GitHub Actions and test behavior with NVDA/REAPER.
 
 **Two independent pattern selectors:** Pattern Bassline 1 (1–16) and Pattern Bassline 2 (1–16). Selecting a new pattern in either lane never changes the other. There are **32 patterns total** (16 per bassline), each with 128 steps and up to 32 parameter-lock slots per step. Both use REAPER's transport clock, but have independent pattern lengths, playback positions and note events. Bassline 1 outputs MIDI channel 1; Bassline 2 outputs MIDI channel 2.
 
-Use **Ctrl+Tab** to open the Sequencer parameter grid (Bassline 1 → Bassline 2 → Sequencer). This grid has **Pattern Bassline 1, Pattern Bassline 2, Play Bassline 1, Play Bassline 2, Editor Track**. Navigation remains Grid/Value/Edit with silent bounds and NVDA announcements. The two Play controls default to Off, so existing projects remain unaffected. Bassline 2 Level still defaults to 0; raise it to hear track 2.
+Use **Ctrl+Tab** to open the Sequencer parameter grid (Bassline 1 → Bassline 2 → Sequencer). This grid has **Pattern Bassline 1, Pattern Bassline 2, Sequencer Bassline 1, Sequencer Bassline 2, Editor Track**. Navigation remains Grid/Value/Edit with silent bounds and NVDA announcements. The two Play controls default to Off, so existing projects remain unaffected. Bassline 2 Level still defaults to 0; raise it to hear track 2.
 
 **TEST2.2:** Alt+Q opens the accessible step editor and can now program both
 independent 16-pattern banks: Note, Length, Velocity, Repeat, Shift and Launch Step.
