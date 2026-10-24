@@ -67,6 +67,7 @@ private:
     void changeValue (int direction, int speed = 1);
     void changeStepWidth (int direction);
     void setValue (float value);
+    void announceSelectedValueChanged();
     void setBoundary (bool maximum);
     void resetParameter();
     void enterEdit();

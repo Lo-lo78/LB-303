@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static regressions for LB-303 TEST1.4. No local compilation."""
+"""Static regressions for LB-303 TEST1.5. No local compilation."""
 from pathlib import Path
 import re
 root = Path(__file__).resolve().parents[1]
@@ -54,4 +54,24 @@ assert 'if (code == juce::KeyPress::pageDownKey) { changeValue (-1, valuePageSte
 assert 'void changeValue (int direction, int speed = 1);' in header
 assert 'void changeStepWidth (int direction);' in header
 assert 'int stepWidthIndex = 0;' in header
-print('PASS: TEST1.4 UI/step-width/focus/static regressions; no compilation performed.')
+print('PASS: TEST1.5 UI/step-width/focus/static regressions; no compilation performed.')
+
+# TEST1.5: actual value notifications must reach NVDA/OSARA independently of
+# whether Grid, Value or Edit has keyboard focus. All shortcut value changes
+# converge on setValue(), which must not speak on effective-value boundaries.
+start = editor.index('void LB303AudioProcessorEditor::setValue (float value)')
+end = editor.index('void LB303AudioProcessorEditor::changeValue (', start)
+value_code = editor[start:end]
+assert 'if (std::abs (legal - original) <= 1.0e-6f) return;' in value_code
+assert 'param->setValueNotifyingHost (param->convertTo0to1 (legal));' in value_code
+assert value_code.index('setValueNotifyingHost') < value_code.index('announceSelectedValueChanged();')
+assert 'void LB303AudioProcessorEditor::announceSelectedValueChanged()' in value_code
+assert 'numericEdit.hasKeyboardFocus (true)' in value_code
+assert 'parameterValue.hasKeyboardFocus (true)' in value_code
+assert 'parameterGrid.hasKeyboardFocus (true)' in value_code
+assert 'lb303::announceToActiveScreenReader (*active, text);' in value_code
+assert 'numericEdit.setText (text, juce::dontSendNotification);' in value_code
+assert 'numericEdit.selectAll();' in value_code
+assert 'void announceSelectedValueChanged();' in header
+assert 'handler->notifyAccessibilityEvent (juce::AccessibilityEvent::valueChanged);' not in value_code
+print('PASS: TEST1.5 accessible value announcements for Grid/Value/Edit and silent bounds.')

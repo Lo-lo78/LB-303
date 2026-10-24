@@ -306,10 +306,47 @@ void LB303AudioProcessorEditor::setValue (float value)
         param->setValueNotifyingHost (param->convertTo0to1 (legal));
         param->endChangeGesture();
         refreshLabels (true);
-        if (parameterValue.hasKeyboardFocus (true))
-            if (auto* handler = parameterValue.getAccessibilityHandler())
-                handler->notifyAccessibilityEvent (juce::AccessibilityEvent::valueChanged);
+        announceSelectedValueChanged();
     }
+}
+void LB303AudioProcessorEditor::announceSelectedValueChanged()
+{
+    // Match LJuno: report the ACTUAL parameter value after host notification,
+    // regardless of whether the active editor control is Grid, Value or Edit.
+    // A valueChanged event on the Value slider alone is not heard when keyboard
+    // shortcuts are pressed while focus remains in the Grid (or in Edit).
+    const auto text = lb303::parameterText (static_cast<size_t> (selected),
+                                            processor.value (static_cast<size_t> (selected)));
+    if (numericEdit.hasKeyboardFocus (true))
+    {
+        // An Alt shortcut in Edit is a committed parameter change, not part of
+        // the uncommitted text. Keep its text synchronised like LJuno does.
+        numericEdit.setText (text, juce::dontSendNotification);
+        numericEdit.selectAll();
+        editDirty = false;
+    }
+
+    juce::Component* active = nullptr;
+    if (numericEdit.hasKeyboardFocus (true)) active = &numericEdit;
+    else if (parameterValue.hasKeyboardFocus (true)) active = &parameterValue;
+    else if (parameterGrid.hasKeyboardFocus (true)) active = &parameterGrid;
+    if (active == nullptr) active = &parameterGrid;
+
+    // Explicit UIA speech for all three contexts, rather than only a slider
+    // accessibility valueChanged event. Announce the value once, not the full
+    // Grid label, and never announce when no effective change happened.
+    lb303::announceToActiveScreenReader (*active, text);
+    juce::Timer::callAfterDelay (180,
+        [safe = juce::Component::SafePointer<LB303AudioProcessorEditor> (this)]
+        {
+            if (safe == nullptr) return;
+            if (safe->parameterGrid.hasKeyboardFocus (true))
+                safe->parameterGrid.setLineReadingMode();
+            else if (safe->parameterValue.hasKeyboardFocus (true))
+                safe->parameterValue.setLineReadingMode();
+            else if (safe->numericEdit.hasKeyboardFocus (true))
+                safe->numericEdit.setDescription (juce::String());
+        });
 }
 void LB303AudioProcessorEditor::changeValue (int direction, int speed)
 {

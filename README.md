@@ -107,7 +107,7 @@ shortcuts may vary; please test Alt+L and arrow focus with NVDA/OSARA in REAPER.
    `.github/workflows/build-windows.yml` hierarchy.
 3. Open **Actions → Build LB-303 Windows x64**. The `push` starts the build,
    or use `Run workflow` manually.
-4. Download the `LB-303-0.0.1-TEST1.2-Windows-x64` artifact after it succeeds.
+4. Download the `LB-303-0.0.1-TEST1.5-Windows-x64` artifact after it succeeds.
 5. Extract the VST3 directory under the usual VST3 folder, e.g.
    `C:\Program Files\Common Files\VST3\`, and scan in REAPER.
 
@@ -154,3 +154,21 @@ Reference files are not compiled directly into the VST3.
   focus away from the host FX Chain during initialization.
 - The 35 original parameter IDs, DSP, JUCE version and Actions workflow
   remain unchanged. Compile and runtime testing remain GitHub/REAPER tasks.
+
+## TEST1.5 — Spoken value shortcuts from Grid, Value and Edit
+
+- Fixes a missing accessibility announcement when Alt+Up/Down, Alt+PageUp/PageDown,
+  Alt+Home/End or other parameter-changing shortcuts are used with **Grid** or
+  **Edit** focused. The previous implementation only sent a valueChanged event
+  when the **Value** slider itself had keyboard focus.
+- Announces the **resulting parameter value only**, using the same Windows UI
+  Automation notification mechanism as LJuno. Applies also in Value.
+- The operation is silent when the resulting value is unchanged at a minimum,
+  maximum or due to range/step snapping (silent boundaries remain intact).
+- An Alt value shortcut while Edit is focused also updates the edit field to
+  the actual new value and selects the text for further editing.
+- Restores unobtrusive accessibility descriptions after speaking; does not
+  move focus, change the audio engine, change keyboard mappings, or change any
+  of the 35 parameter IDs.
+- Static regression tests pass; compilation still takes place exclusively
+  through GitHub Actions.
