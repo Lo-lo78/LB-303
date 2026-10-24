@@ -18,7 +18,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
 {
     setWantsKeyboardFocus (true);
     setJustificationType (juce::Justification::topLeft);
-    setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 17.0f)));
+    setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 17.0f, juce::Font::plain)));
     setColour (juce::Label::backgroundColourId, juce::Colour (0xff182439));
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));

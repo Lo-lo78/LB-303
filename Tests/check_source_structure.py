@@ -108,7 +108,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.2.6-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.2.7-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -231,7 +231,7 @@ assert 'currentStep = juce::jlimit (firstActive, lastActive, currentStep);' in s
 assert "if (code == juce::KeyPress::homeKey) { changeTrack (-1); return true; }" in step
 assert "if (code == juce::KeyPress::upKey) { changePattern (1); return true; }" in step
 assert 'TEST2.2.3' in (root / 'README.md').read_text()
-assert 'TEST2.2.6' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.2.7' in (root / '.github/workflows/build-windows.yml').read_text()
 
 # Example active ranges, zero-based block bounds. Every permitted Tab block
 # intersects [Start Step, End Step], never stepping past the recorded End.
@@ -276,3 +276,10 @@ assert 'if (prior >= 0 && toggle)' in step and 'else if (prior >= 0)' in step
 assert 'if (toggle)' in step and 'announcePickerItem();' in step
 assert 'TEST2.2.6' in (root / 'README.md').read_text()
 print('PASS: TEST2.2.6 silent/unassigned Ctrl+Up/Down in picker, selected-name prefix, Alt+Enter semantics preserved.')
+
+# TEST2.2.7: JUCE 8.0.15 / MSVC requires a matching FontOptions
+# overload. The two-argument (String, float) call causes C2248.
+font_source = (root / 'Source' / 'SequencerStepEditor.cpp').read_text(encoding='utf-8')
+assert 'juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 17.0f, juce::Font::plain)' in font_source
+assert 'juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 17.0f)' not in font_source
+print('PASS: TEST2.2.7 FontOptions uses explicit font style (C2248 regression).')

@@ -1,3 +1,14 @@
+# LB-303 0.0.2 — TEST2.2.7 (fix compilazione GitHub Actions)
+
+- Risolve errore MSVC `C2248` in `Source/SequencerStepEditor.cpp` alla riga 21:
+  `juce::FontOptions` ora riceve esplicitamente `juce::Font::plain` come terzo argomento.
+- Non cambia DSP, sequencer, pattern, scorciatoie, identificatori dei parametri o accessibilità.
+- Aggiunto un controllo statico per questa regressione; l'artefatto Actions porta TEST2.2.7.
+- Il log precedente contiene anche warning non bloccanti di conversione e signedness.
+- Non è stata eseguita una compilazione locale; verificare su GitHub Actions.
+
+---
+
 # LB-303 0.0.2 — TEST2.2.5 (parameter picker can change bassline)
 
 - **Page 7 — Parameters** (zero-based code index `6`): on a selected step, **Enter** opens a separate accessible selection view listing **37 parameters of the current bassline only** in columns of eight rows. Page 6 remains Launch Step.
