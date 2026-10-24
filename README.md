@@ -65,6 +65,20 @@ shortcuts may vary; please test Alt+L and arrow focus with NVDA/OSARA in REAPER.
 - No DSP, parameter IDs, presets, UI or keyboard controls have been modified.
 - Static source checks only; compilation is reserved for GitHub Actions.
 
+## TEST1.2 — REAPER editor-opening crash fix
+
+- **Fixed a reproducible invalid pointer dereference in the UI constructor.**
+  The previous editor called `setResizeLimits(720, 390, ...)` before constructing
+  the 35 `ParameterCell` components. JUCE may resize the window synchronously,
+  invoke `resized()`, and trigger a null-pointer access while opening the editor.
+- All 35 cells are now created before `setResizable`, `setResizeLimits`, and `setSize`.
+  `resized()` also checks for null children as a defensive measure.
+- Added static regression checks for the constructor ordering and null guard.
+- No changes to DSP, parameter IDs, stored state, navigation, or screen-reader
+  announcements; GitHub Actions must recompile, and REAPER needs a fresh runtime test.
+- To verify: test the fixed VST3 on a blank REAPER project first. Remove the
+  old `LB-303.vst3` directory before installing the updated VST3 directory.
+
 ## Build on GitHub Actions
 
 1. Create a public (or private) repository named `LB-303`.
@@ -72,7 +86,7 @@ shortcuts may vary; please test Alt+L and arrow focus with NVDA/OSARA in REAPER.
    `.github/workflows/build-windows.yml` hierarchy.
 3. Open **Actions → Build LB-303 Windows x64**. The `push` starts the build,
    or use `Run workflow` manually.
-4. Download the `LB-303-0.0.1-TEST1-Windows-x64` artifact after it succeeds.
+4. Download the `LB-303-0.0.1-TEST1.2-Windows-x64` artifact after it succeeds.
 5. Extract the VST3 directory under the usual VST3 folder, e.g.
    `C:\Program Files\Common Files\VST3\`, and scan in REAPER.
 

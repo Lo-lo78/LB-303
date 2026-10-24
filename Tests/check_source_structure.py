@@ -16,4 +16,13 @@ for src in ['ParameterCatalog.cpp', 'BassEngine.cpp', 'PluginEditor.cpp', 'Plugi
 assert (root / '.github/workflows/build-windows.yml').is_file()
 assert 'LB303_artefacts' in (root / '.github/workflows/build-windows.yml').read_text()
 assert 'Alt+Q' in (root / 'README.md').read_text()
-print('PASS: 35 stable params and expected TEST1 sources present; no compilation performed.')
+
+# Regression test TEST1.2: JUCE setResizeLimits() can synchronously call
+# resized(); creating all cells must precede ALL resizing-related setup.
+editor = (root / 'Source' / 'PluginEditor.cpp').read_text(encoding='utf-8')
+constructor = editor.split('LB303AudioProcessorEditor::LB303AudioProcessorEditor (', 1)[1].split('LB303AudioProcessorEditor::~', 1)[0]
+assert constructor.find('cells[i] = std::make_unique<ParameterCell>') < constructor.find('setResizable (true, true)')
+assert constructor.find('cells[i] = std::make_unique<ParameterCell>') < constructor.find('setResizeLimits (')
+assert 'if (cells[i] != nullptr)' in editor.split('void LB303AudioProcessorEditor::resized()', 1)[1].split('void LB303AudioProcessorEditor::timerCallback()', 1)[0]
+
+print('PASS: parameter and safe editor construction checks; no compilation performed.')

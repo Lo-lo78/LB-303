@@ -33,13 +33,17 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
     : AudioProcessorEditor (p), processor (p)
 {
     setWantsKeyboardFocus (false);
-    setResizable (true, true);
-    setResizeLimits (720, 390, 1800, 1300);
+    // Create every child before touching resize constraints. JUCE's
+    // setResizeLimits() synchronously changes the initial 0x0 window to the
+    // minimum size, which calls resized() immediately. In TEST1.1, resized()
+    // dereferenced not-yet-created cells and crashed REAPER when opening UI.
     for (size_t i = 0; i < cells.size(); ++i)
     {
         cells[i] = std::make_unique<ParameterCell> (*this, static_cast<int> (i));
         addAndMakeVisible (*cells[i]);
     }
+    setResizable (true, true);
+    setResizeLimits (720, 390, 1800, 1300);
     setSize (1100, 610);
     refresh (true);
     startTimerHz (8);
@@ -76,8 +80,11 @@ void LB303AudioProcessorEditor::resized()
     {
         const auto col = static_cast<int> (i / 8);
         const auto row = static_cast<int> (i % 8);
-        cells[i]->setBounds (area.getX() + col*(columnWidth+9),
-                             area.getY() + row*(rowHeight+6), columnWidth, rowHeight);
+        // Defensive guard for size notifications during future UI changes.
+        // Layout is allowed to run before children exist; never dereference null.
+        if (cells[i] != nullptr)
+            cells[i]->setBounds (area.getX() + col*(columnWidth+9),
+                                 area.getY() + row*(rowHeight+6), columnWidth, rowHeight);
     }
 }
 void LB303AudioProcessorEditor::timerCallback() { refresh(); }
