@@ -16,7 +16,7 @@ constexpr const char* responseChoices[] = { "Gate", "Lowpass Gate" };
 
 const std::array<ParameterInfo, parameterCount>& catalog()
 {
-    static const std::array<ParameterInfo, parameterCount> values {{
+    static const std::array<ParameterInfo, synthParameterCount> originals {{
         { "slider001", "Waveform", 0, 1, 1, 1, "", waveChoices, 2 },
         { "slider002", "Attack", 0, 0.05f, 0.001f, 0, "s" },
         { "slider003", "Decay", 0, 0.2f, 0.001f, 0.1f, "s" },
@@ -53,21 +53,49 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         { "slider034", "Response Mode", 0, 1, 1, 0, "", responseChoices, 2 },
         { "slider035", "Gate Velocity Filter", 0, 127, 1, 0, "" }
     }};
+    // The first 35 IDs are intentionally unchanged for old REAPER projects.
+    // Bassline 2 gets entirely independent IDs; never duplicate the originals.
+    static const std::array<ParameterInfo, parameterCount> values = [&]
+    {
+        std::array<ParameterInfo, parameterCount> result {};
+        for (size_t voice = 0; voice < basslineCount; ++voice)
+        {
+            const auto base = parameterIndex (voice, 0);
+            for (size_t i = 0; i < synthParameterCount; ++i)
+            {
+                result[base + i] = originals[i];
+                if (voice == 1)
+                    result[base + i].id = juce::String ("b2_") + originals[i].id;
+            }
+            result[base + outputLevelOffset] = {
+                voice == 0 ? "b1_level" : "b2_level", "Level",
+                0.0f, 1.0f, 0.01f, voice == 0 ? 1.0f : 0.0f, "" };
+            result[base + outputPanOffset] = {
+                voice == 0 ? "b1_pan" : "b2_pan", "Pan",
+                -100.0f, 100.0f, 1.0f, 0.0f, "%" };
+        }
+        return result;
+    }();
     return values;
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout result;
-    for (const auto& p : catalog())
+    for (size_t index = 0; index < catalog().size(); ++index)
     {
+        const auto& p = catalog()[index];
+        // Distinguish automated parameters in REAPER's global FX parameter list,
+        // without adding redundant prefixes to the accessible per-bassline grids.
+        const auto hostName = "Bassline " + juce::String (1 + index / voiceParameterCount)
+                              + " - " + p.name;
         if (p.choiceCount)
         {
             juce::StringArray options;
             for (int i = 0; i < p.choiceCount; ++i)
                 options.add (p.choices[i]);
             result.add (std::make_unique<juce::AudioParameterChoice> (
-                juce::ParameterID { p.id, 1 }, p.name, options, static_cast<int> (p.initial)));
+                juce::ParameterID { p.id, 1 }, hostName, options, static_cast<int> (p.initial)));
         }
         else
         {
@@ -75,7 +103,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
             if (p.logarithmic)
                 range.setSkewForCentre (p.minimum == 20.0f ? 1000.0f : 1.5f);
             result.add (std::make_unique<juce::AudioParameterFloat> (
-                juce::ParameterID { p.id, 1 }, p.name, range, p.initial));
+                juce::ParameterID { p.id, 1 }, hostName, range, p.initial));
         }
     }
     return result;

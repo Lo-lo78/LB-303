@@ -11,7 +11,7 @@ namespace lb303
 class BassEngine
 {
 public:
-    using Values = std::array<float, parameterCount>;
+    using Values = std::array<float, synthParameterCount>;
     void prepare (double sampleRate);
     void reset();
     void setParameters (const Values& values, double bpm);

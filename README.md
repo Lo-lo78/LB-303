@@ -1,6 +1,6 @@
-# LB-303 (VST3) — version 0.0.1 TEST1
+# LB-303 (VST3) — version 0.0.1 TEST1.7
 
-Accessible monophonic bassline synthesizer for REAPER, ported from **LB-303.jsfx**
+Accessible dual-engine bassline synthesizer for REAPER, ported from **LB-303.jsfx**
 by Lo-lo. This TEST1 source is prepared for Windows x64 VST3 builds using **GitHub Actions**.
 
 Repository: https://github.com/Lo-lo78/LB-303
@@ -8,14 +8,14 @@ Repository: https://github.com/Lo-lo78/LB-303
 ## TEST1 scope
 
 - All **35 LB-303 JSFX parameters** retain their original order, values, defaults
-  and meaningful ranges. Persistent VST parameter IDs are `slider001` … `slider035`.
+  and meaningful ranges. Persistent VST parameter IDs are `slider001` … `slider035` for Bassline 1, with independent `b2_slider001` … `b2_slider035` for Bassline 2. Each has an additional output Level and Pan.
 - PolyBLEP saw/pulse, PWM, portamento, velocity/accent, filter ADSR,
   Lowpass Gate, resonant two-stage filter, fixed high-air peak, post-filter,
   saturation and input passthrough have been translated to C++.
 - Delay includes tempo divisions, ping-pong, spread/Haas, RBJ LP/HP,
   modulation, dry/wet, feedback and transpose.
 - REAPER project state uses JUCE APVTS XML. Sample-accurate MIDI note scheduling.
-- Accessible **single Bassline grid**, with **five columns, eight rows per column**.
+- Two independent accessible Bassline grids, each **five columns with eight rows per column**.
   No page combo box. Starting with TEST1.3, a single LJuno-style accessible
   ComboBox selects parameters; a dedicated Value slider and numeric Edit field
   replace the 35 individual buttons.
@@ -60,7 +60,7 @@ keeps them, rather than silently modifying the character.
 | Ctrl+Home / Ctrl+End | First / last parameter |
 | Alt+L / Alt+V / Alt+E | Focus Grid / Value / Edit |
 | Alt+Q | TEST1 announces that sequencer editor is scheduled for TEST2 |
-| Ctrl+Tab | TEST1 announces that sequencer grid is scheduled for TEST2 |
+| Ctrl+Tab | Cycle Bassline 1 → Bassline 2 → Sequencer placeholder → Bassline 1 |
 
 The focused parameter name and value are also set as native accessibility text,
 so screen-reader line reading has a concise value. Host interception of global
@@ -107,7 +107,7 @@ shortcuts may vary; please test Alt+L and arrow focus with NVDA/OSARA in REAPER.
    `.github/workflows/build-windows.yml` hierarchy.
 3. Open **Actions → Build LB-303 Windows x64**. The `push` starts the build,
    or use `Run workflow` manually.
-4. Download the `LB-303-0.0.1-TEST1.5-Windows-x64` artifact after it succeeds.
+4. Download the `LB-303-0.0.1-TEST1.7-Windows-x64` artifact after it succeeds.
 5. Extract the VST3 directory under the usual VST3 folder, e.g.
    `C:\Program Files\Common Files\VST3\`, and scan in REAPER.
 
@@ -116,7 +116,7 @@ GitHub Actions run is the actual compiler check.
 
 ## Upcoming roadmap (not implemented in TEST1)
 
-- **TEST2:** one-track LJuno-style sequencer, 16 patterns/128 steps, second grid
+- **TEST2:** two-track LJuno-style sequencer, 16 patterns/128 steps, second grid
   for sequencer-wide settings, Alt+Q step editor (Note, Length, Velocity,
   Repeat, Shift, Launch Step, Parameter Locks), copy/paste/undo.
 - **TEST3:** precise MIDI note overlap, portamento/legato, accent,
@@ -172,3 +172,47 @@ Reference files are not compiled directly into the VST3.
   of the 35 parameter IDs.
 - Static regression tests pass; compilation still takes place exclusively
   through GitHub Actions.
+
+## TEST1.6 — Two independent basslines, Level/Pan, three contexts
+
+- Two real `BassEngine` instances, each with its own oscillator, phase, envelopes,
+  filter, accent, delay and internal state. No shared synthesis state.
+- Each bassline retains the original 35 sound parameters, plus **Level** and
+  **Pan** (37 controls per grid, five columns × eight rows). There are 74 VST3
+  parameter IDs total, grouped under Bassline 1 / Bassline 2 in the host list.
+- Bassline 1 preserves the existing 35 automation IDs exactly. Bassline 2 uses
+  stable `b2_slider001` through `b2_slider035` IDs; output controls use
+  `b1_level`, `b1_pan`, `b2_level`, `b2_pan`.
+- `Volume` is the original pre-filter amplitude control, untouched; `Level` is
+  an additional **final** post-delay level. Pan: -100% left, 0 centre, +100% right.
+  Linear balance panning keeps the original Bassline 1 signal unchanged at centre.
+- Default final Level: Bassline 1 = 1.00, Bassline 2 = 0.00. Raise Bassline 2's
+  Level to hear it. This avoids suddenly doubling the output on old projects.
+- In TEST1.6, incoming MIDI was layered to both basslines. Starting in TEST1.7,
+  Bassline 1 receives MIDI channel 1 exclusively and Bassline 2 channel 2.
+  The future two-track sequencer will address them independently. TEST1.7 still
+  does not contain a functional sequencer engine, clocks or patterns.
+- `Ctrl+Tab` rotates **Bassline 1 → Bassline 2 → Sequencer → Bassline 1**.
+  The Sequencer context displays a descriptive placeholder without bogus
+  editable controls. Alt+Q continues to report that step editing is not yet
+  implemented. The two bassline grids remember their selections separately.
+- Grid → Value → Edit, Enter, Alt+Left/Right, Alt+PageUp/PageDown, Alt+Home/End,
+  silent borders, NVDA/OSARA speech and no-focus-steal-on-load are preserved.
+- **No local compilation.** GitHub Actions is responsible for the VST3 build;
+  please test both engine outputs and UI focus using NVDA in REAPER.
+
+## TEST1.7 — Independent MIDI channels
+
+- **Bassline 1, channel 1:** receives only MIDI on channel 1.
+- **Bassline 2, channel 2:** receives only MIDI on channel 2.
+- Note On, Note Off and any channel MIDI messages are routed to the matching
+  bassline only; messages on channels 3–16 or channel-less system events
+  are not routed into either bassline engine.
+- REAPER can host both basslines as one VST3 instrument: send MIDI 1 for the
+  first instrument and MIDI 2 for the second. MIDI output is passed through.
+- The Bassline 2 Level parameter still defaults to **0.00**. Increase it to
+  hear the second bassline, even after sending it notes on channel 2.
+- No synthesis algorithms, parameter IDs, keyboard controls or UI navigation
+  have been changed. Only MIDI event routing, tests and build artifact naming.
+- Static checks only. GitHub Actions must compile; REAPER must verify
+  channel isolation, including overlapping notes and Note Off messages.

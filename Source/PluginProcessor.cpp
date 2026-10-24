@@ -15,7 +15,7 @@ LB303AudioProcessor::LB303AudioProcessor()
 
 void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
 {
-    engine.prepare (sampleRate);
+    for (auto& engine : engines) engine.prepare (sampleRate);
 }
 void LB303AudioProcessor::releaseResources() {}
 
@@ -40,14 +40,32 @@ juce::RangedAudioParameter* LB303AudioProcessor::parameter (size_t i)
 void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
-    lb303::BassEngine::Values snapshot {};
-    for (size_t i = 0; i < snapshot.size(); ++i) snapshot[i] = value (i);
     double bpm = 120.0;
     if (auto* playhead = getPlayHead())
         if (const auto position = playhead->getPosition())
             if (const auto hostBpm = position->getBpm())
                 bpm = *hostBpm;
-    engine.setParameters (snapshot, bpm);
+
+    // Separate DSP state, oscillator/envelopes/filter/delay and parameter
+    // snapshots for BOTH basslines. Never share engine state between them.
+    std::array<float, lb303::basslineCount> leftGain {}, rightGain {};
+    for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
+    {
+        lb303::BassEngine::Values snapshot {};
+        for (size_t i = 0; i < snapshot.size(); ++i)
+            snapshot[i] = value (lb303::parameterIndex (voice, i));
+        engines[voice].setParameters (snapshot, bpm);
+        const auto level = std::clamp (
+            value (lb303::parameterIndex (voice, lb303::outputLevelOffset)), 0.0f, 1.0f);
+        const auto pan = std::clamp (
+            value (lb303::parameterIndex (voice, lb303::outputPanOffset)) / 100.0f,
+            -1.0f, 1.0f);
+        // Centre pan has unity gain on both channels, so Bassline 1 alone
+        // remains sonically identical to TEST1.5 at its default settings.
+        leftGain[voice] = level * (pan > 0.0f ? 1.0f - pan : 1.0f);
+        rightGain[voice] = level * (pan < 0.0f ? 1.0f + pan : 1.0f);
+    }
+
     const auto count = audio.getNumSamples();
     if (audio.getNumChannels() < 2) { audio.clear(); return; }
     auto* l = audio.getWritePointer (0);
@@ -57,23 +75,37 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     {
         for (; nextSample < end; ++nextSample)
         {
-            const auto rendered = engine.tick (l[nextSample], r[nextSample]);
-            l[nextSample] = rendered.first;
-            r[nextSample] = rendered.second;
+            float outL = l[nextSample], outR = r[nextSample];
+            for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
+            {
+                // Engine.tick adds incoming audio to its output. Pass zero to
+                // both engines and mix the original host input only ONCE.
+                const auto generated = engines[voice].tick (0.0f, 0.0f);
+                outL += generated.first * leftGain[voice];
+                outR += generated.second * rightGain[voice];
+            }
+            l[nextSample] = outL;
+            r[nextSample] = outR;
         }
     };
-    // MIDI event offsets are preserved at single-sample resolution, including
-    // note-off followed by note-on on the same audio block boundary.
+    // Match MIDI channel numbers to bassline numbers (one-based):
+    //   channel 1 -> Bassline 1, channel 2 -> Bassline 2.
+    // Route all channel messages (including note-off and CC) only to their
+    // respective engine. Channel-less system messages and channels 3-16
+    // are not sent to either synthesizer. Preserve sample-accurate offsets.
+    // The host's MIDI buffer is forwarded unchanged, as in TEST1.6.
     for (const auto entry : midi)
     {
         const auto offset = std::clamp (entry.samplePosition, 0, count);
         renderTo (offset);
-        engine.midi (entry.getMessage());
+        const auto& message = entry.getMessage();
+        const int midiChannel = message.getChannel();
+        if (midiChannel >= 1 && midiChannel <= static_cast<int> (lb303::basslineCount))
+            engines[static_cast<size_t> (midiChannel - 1)].midi (message);
     }
     renderTo (count);
     for (int channel = 2; channel < audio.getNumChannels(); ++channel)
         audio.clear (channel, 0, count);
-    // Like the original JSFX, MIDI input is forwarded unchanged to the host.
 }
 
 juce::AudioProcessorEditor* LB303AudioProcessor::createEditor()

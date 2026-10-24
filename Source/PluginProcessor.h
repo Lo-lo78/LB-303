@@ -34,7 +34,7 @@ public:
     juce::RangedAudioParameter* parameter (size_t index);
 
 private:
-    lb303::BassEngine engine;
+    std::array<lb303::BassEngine, lb303::basslineCount> engines;
     std::array<std::atomic<float>*, lb303::parameterCount> rawParameters {};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessor)
 };

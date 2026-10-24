@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Static regressions for LB-303 TEST1.5. No local compilation."""
+"""Static regressions for LB-303 TEST1.7. No local compilation."""
 from pathlib import Path
 import re
 root = Path(__file__).resolve().parents[1]
 original = (root / 'Reference' / 'LB-303.jsfx').read_text(encoding='utf-8')
 catalog = (root / 'Source' / 'ParameterCatalog.cpp').read_text(encoding='utf-8')
 ids = re.findall(r'"slider(\d{3})"', catalog)
-assert ids == [f'{n:03}' for n in range(1, 36)], (len(ids), ids)
+assert ids == [f'{n:03}' for n in range(1, 36)], (len(ids), ids) # stable JSFX source IDs
 assert len(re.findall(r'^slider\d+:', original, re.M)) == 35
 assert '.value_or(' not in (root / 'Source' / 'PluginProcessor.cpp').read_text(encoding='utf-8')
 for src in ['ParameterCatalog.cpp', 'BassEngine.cpp', 'PluginEditor.cpp',
@@ -75,3 +75,49 @@ assert 'numericEdit.selectAll();' in value_code
 assert 'void announceSelectedValueChanged();' in header
 assert 'handler->notifyAccessibilityEvent (juce::AccessibilityEvent::valueChanged);' not in value_code
 print('PASS: TEST1.5 accessible value announcements for Grid/Value/Edit and silent bounds.')
+
+# TEST1.6: two DSP engines, separate per-bassline parameter groups and
+# post-delay Level/Pan. The original JSFX has only 35 DSP parameters.
+param_h = (root / 'Source' / 'ParameterCatalog.h').read_text(encoding='utf-8')
+param_cpp = (root / 'Source' / 'ParameterCatalog.cpp').read_text(encoding='utf-8')
+engine_h = (root / 'Source' / 'BassEngine.h').read_text(encoding='utf-8')
+processor_h = (root / 'Source' / 'PluginProcessor.h').read_text(encoding='utf-8')
+processor = (root / 'Source' / 'PluginProcessor.cpp').read_text(encoding='utf-8')
+assert 'synthParameterCount = 35' in param_h
+assert 'voiceParameterCount = synthParameterCount + 2' in param_h
+assert 'basslineCount = 2' in param_h
+assert 'std::array<float, synthParameterCount>' in engine_h
+assert 'std::array<lb303::BassEngine, lb303::basslineCount> engines;' in processor_h
+assert 'result[base + i].id = juce::String ("b2_") + originals[i].id;' in param_cpp
+assert 'b1_level' in param_cpp and 'b2_level' in param_cpp
+assert 'b1_pan' in param_cpp and 'b2_pan' in param_cpp
+assert 'voice == 0 ? 1.0f : 0.0f' in param_cpp
+assert '"Bassline " + juce::String (1 + index / voiceParameterCount)' in param_cpp
+assert 'lb303::parameterIndex (voice, i)' in processor
+assert 'for (auto& engine : engines) engine.midi (entry.getMessage());' not in processor
+assert 'engines[voice].tick (0.0f, 0.0f)' in processor
+assert 'outL = l[nextSample], outR = r[nextSample]' in processor
+assert 'outL += generated.first * leftGain[voice]' in processor
+assert 'outR += generated.second * rightGain[voice]' in processor
+assert 'context = (context + 1) % static_cast<int> (lb303::basslineCount + 1)' in editor
+assert 'Bassline 1' in editor and 'Bassline 2' in editor and 'Sequencer' in editor
+assert 'Two-track sequencer' in editor
+assert 'lastSelected[static_cast<size_t> (context)] = chosen;' in editor
+assert 'void LB303AudioProcessorEditor::populateContext()' in editor
+assert 'if (! hasBassline()) return;' in editor
+assert 'focusControl (Control::grid, true);' in editor
+assert 'processor.parameters, p.id, parameterValue' in editor
+assert 'lb303::voiceParameterCount' in editor
+assert 'LB-303-0.0.1-TEST1.7-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
+
+# TEST1.7: separate MIDI channel routing for the two existing DSP engines.
+# Channel numbers from JUCE are one-based, while the engines array is zero-based.
+assert 'const int midiChannel = message.getChannel();' in processor
+assert 'midiChannel >= 1 && midiChannel <= static_cast<int> (lb303::basslineCount)' in processor
+assert 'engines[static_cast<size_t> (midiChannel - 1)].midi (message);' in processor
+assert 'const auto offset = std::clamp (entry.samplePosition, 0, count);' in processor
+assert processor.index('renderTo (offset);') < processor.index('const int midiChannel = message.getChannel();')
+assert 'Bassline 1, channel 1' in (root / 'README.md').read_text()
+assert 'Bassline 2, channel 2' in (root / 'README.md').read_text()
+print('PASS: TEST1.7 MIDI ch1 -> Bassline 1, ch2 -> Bassline 2 only.')

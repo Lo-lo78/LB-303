@@ -4,6 +4,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include <memory>
+#include <array>
 
 class LB303AudioProcessorEditor final : public juce::AudioProcessorEditor,
                                          private juce::Timer
@@ -54,11 +55,19 @@ private:
     NumericEdit numericEdit { *this };
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> valueAttachment;
     juce::Rectangle<int> drawnGrid;
-    int selected = 0;
+    int context = 0; // 0 = Bassline 1, 1 = Bassline 2, 2 = future sequencer
+    std::array<int, lb303::basslineCount> lastSelected { 0, 0 };
+    int selected = 0; // per-context, not global parameter index
     int stepWidthIndex = 0; // LJuno: 1 / 5 / 10 / 15 / 20, saved with the project.
     bool changingParameter = false;
     bool editDirty = false;
 
+    size_t globalIndex (int local) const;
+    size_t globalIndex() const { return globalIndex (selected); }
+    bool hasBassline() const { return context < static_cast<int> (lb303::basslineCount); }
+    juce::String contextName() const;
+    void changeContext();
+    void populateContext();
     void timerCallback() override;
     void refreshLabels (bool force = false);
     void changeSelection (int index);
