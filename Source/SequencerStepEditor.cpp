@@ -661,15 +661,19 @@ bool SequencerStepEditor::handlePickerKey (const juce::KeyPress& key)
     else if (code == juce::KeyPress::rightKey) target = juce::jmin (count - 1, pickerIndex + 8);
     else if (! mods.isAltDown() && ! mods.isCtrlDown())
     {
-        const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+        auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+        if (mods.isShiftDown() && code >= '0' && code <= '9')
+            ch = static_cast<juce::juce_wchar> (code);
         if (juce::CharacterFunctions::isLetterOrDigit (ch))
         {
+            const int delta = mods.isShiftDown() ? -1 : 1;
             for (int i = 1; i <= count; ++i)
             {
-                const int candidate = (pickerIndex + i) % count;
+                const int candidate = (pickerIndex + delta * i + count * 2) % count;
                 const auto index = lb303::parameterIndex (static_cast<size_t> (track),
                                                          static_cast<size_t> (candidate));
-                if (lb303::catalog()[index].name.startsWithChar (ch))
+                const auto& name = lb303::catalog()[index].name;
+                if (name.isNotEmpty() && juce::CharacterFunctions::toLowerCase (name[0]) == ch)
                 { target = candidate; break; }
             }
         }

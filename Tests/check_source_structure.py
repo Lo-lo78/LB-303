@@ -108,7 +108,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.2.9-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.3-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -231,7 +231,7 @@ assert 'currentStep = juce::jlimit (firstActive, lastActive, currentStep);' in s
 assert "if (code == juce::KeyPress::homeKey) { changeTrack (-1); return true; }" in step
 assert "if (code == juce::KeyPress::upKey) { changePattern (1); return true; }" in step
 assert 'TEST2.2.3' in (root / 'README.md').read_text()
-assert 'TEST2.2.9' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.3' in (root / '.github/workflows/build-windows.yml').read_text()
 
 # Example active ranges, zero-based block bounds. Every permitted Tab block
 # intersects [Start Step, End Step], never stepping past the recorded End.
@@ -319,5 +319,35 @@ assert 'lastSourceNote[lane] == step.note' in playback
 assert 'lane + 1, lastNote[lane])' in playback
 assert 'oldPattern[lane] = patterns[lane]' in playback
 assert 'Physical Note On/Off is consumed' not in processor or 'transposed pattern notes play' in processor
-assert 'TEST2.2.9' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.3' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.2.9 keyboard transpose reference C4, MIDI1/MIDI2 independence, newest-held priority and matching Note Off (static).')
+
+# TEST2.3 — locks drive actual audio snapshots per step, including paused steps.
+assert 'struct StepEvent' in playback_h
+assert 'maximumStepEvents = 2048' in playback_h
+assert 'const int stepIndex = start + stepInPattern;' in playback
+assert playback.index('stepEvents[static_cast<size_t> (stepEventCount++)]') < playback.index('if (step.note >= 128')
+assert 'stepEvents, stepEventCount, beginSample' in processor
+assert 'std::sort (stepEvents.begin()' in processor
+assert 'const auto applyVoiceParameters = [&] (size_t voice)' in processor
+assert 'activeLockStep[lane] = event.step;' in processor
+assert 'activeLockPattern[lane] = event.pattern;' in processor
+assert 'lock.sliderNumber - 1' in processor
+assert 'sequenceBanks[voice].getStep' in processor
+assert 'effective[static_cast<size_t> (index)] =' in processor
+assert 'engines[voice].setParameters (synth, bpm)' in processor
+assert 'renderSamplesTo (event.sample);' in processor
+assert processor.index('applyVoiceParameters (lane);', processor.index('const auto renderTo')) < processor.index('engines[static_cast<size_t> (midiChannel - 1)].midi (message);')
+assert 'param->setValueNotifyingHost' not in processor
+assert 'const auto level = std::clamp (effective[lb303::outputLevelOffset]' in processor
+assert 'effective[lb303::outputPanOffset]' in processor
+assert 'activeLockStep = { -1, -1 };' in processor
+# Value/grid share the same search; edit remains native. Picker supports reverse too.
+assert 'current == Control::grid || current == Control::value' in editor
+assert 'if (current == Control::value)' in editor
+assert 'lb303::announceToActiveScreenReader (parameterValue, labelFor (candidate));' in editor
+assert 'const int delta = mods.isShiftDown() ? -1 : 1;' in editor
+assert 'const int delta = mods.isShiftDown() ? -1 : 1;' in step
+assert "mods.isShiftDown() && code >= '0' && code <= '9'" in editor
+assert "mods.isShiftDown() && code >= '0' && code <= '9'" in step
+print('PASS: TEST2.3 sample-position lock overlay, baseline persistence, dual-lane separation and cyclic character search (static).')

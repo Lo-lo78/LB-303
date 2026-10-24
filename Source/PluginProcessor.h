@@ -46,6 +46,10 @@ private:
     std::array<lb303::BassEngine, lb303::basslineCount> engines;
     std::array<lb303::SequencerState, lb303::basslineCount> sequenceBanks;
     lb303::SequencerPlayback sequencerPlayback;
+    // Last running step per lane. -1 means the raw, host-automated baseline.
+    // These are not VST parameters and never overwrite host automation.
+    std::array<int, lb303::basslineCount> activeLockStep {{ -1, -1 }};
+    std::array<int, lb303::basslineCount> activeLockPattern {{ -1, -1 }};
     double sampleRateHz = 44100.0;
     double fallbackPpq = 0.0;
     double previewPpq = 0.0;

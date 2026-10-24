@@ -586,6 +586,40 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         return true;
     }
     if (code == juce::KeyPress::backspaceKey) { resetParameter(); return true; }
+    // Character search works identically from Grid AND Value. Repeated
+    // characters cycle forward; Shift+character cycles backward. Do not
+    // steal typing from the native numeric Edit field.
+    if ((current == Control::grid || current == Control::value)
+        && ! mods.isCtrlDown() && ! mods.isAltDown() && ! mods.isCommandDown())
+    {
+        auto needle = juce::CharacterFunctions::toLowerCase (ch);
+        // Shift+digit may produce punctuation as the text character; search
+        // by the underlying numeric key to preserve reverse alphanumeric cycling.
+        if (mods.isShiftDown() && code >= '0' && code <= '9')
+            needle = static_cast<juce::juce_wchar> (code);
+        if (juce::CharacterFunctions::isLetterOrDigit (needle))
+        {
+            const int count = currentParameterCount();
+            const int delta = mods.isShiftDown() ? -1 : 1;
+            for (int offset = 1; offset <= count; ++offset)
+            {
+                const int candidate = (selected + delta * offset + count * 2) % count;
+                const auto& name = lb303::catalog()[globalIndex (candidate)].name;
+                if (name.isNotEmpty() && juce::CharacterFunctions::toLowerCase (name[0]) == needle)
+                {
+                    changeSelection (candidate);
+                    if (current == Control::value)
+                    {
+                        // Keep the Value slider focused while changing parameter.
+                        parameterValue.setLineReadingMode();
+                        lb303::announceToActiveScreenReader (parameterValue, labelFor (candidate));
+                    }
+                    return true;
+                }
+            }
+            return true; // consume unmatched keys: silence rather than popup
+        }
+    }
     if (current == Control::value)
     {
         if (code == juce::KeyPress::upKey) { changeValue (1); return true; }
@@ -626,22 +660,6 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
                                     (selected / rowsPerColumn + 1) * rowsPerColumn - 1),
                                     selected + 5));
             return true;
-        }
-        if (juce::CharacterFunctions::isLetterOrDigit (ch))
-        {
-            const int count = currentParameterCount();
-            const int delta = mods.isShiftDown() ? -1 : 1;
-            for (int t = 1; t <= count; ++t)
-            {
-                const int next = (selected + delta * t + count * 2) % count;
-                if (juce::CharacterFunctions::toLowerCase (
-                        juce::String (lb303::catalog()[globalIndex (next)].name)[0]) == ch)
-                {
-                    changeSelection (next);
-                    return true;
-                }
-            }
-            return true; // don't activate the ComboBox's native popup search
         }
     }
     return false;

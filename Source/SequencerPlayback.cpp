@@ -45,7 +45,9 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                                   const std::array<double, 2>& triggerOrigins,
                                   const std::array<int, 2>& keyboardTransposes,
                                   bool playing, double ppq, double bpm,
-                                  double sampleRate, int samples)
+                                  double sampleRate, int samples,
+                                  std::array<StepEvent, maximumStepEvents>& stepEvents,
+                                  int& stepEventCount, int blockOffset)
 {
     if (samples <= 0 || ! std::isfinite (ppq) || bpm <= 0.0 || sampleRate <= 0.0)
         return;
@@ -99,7 +101,25 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         for (std::int64_t tick = first; tick <= last && tick < first + 1024; ++tick)
         {
             const int stepInPattern = positiveModulo (tick, patternLength);
-            const auto step = bank.getStep (pattern, start + stepInPattern);
+            const int stepIndex = start + stepInPattern;
+            const auto step = bank.getStep (pattern, stepIndex);
+            const int repeats = juce::jlimit (1, 16, step.repeat);
+            const double repeatBeats = stepBeats / repeats;
+            const double swing = (positiveModulo (tick, 2) != 0)
+                ? juce::jlimit (-0.45, 0.45, static_cast<double> (config.shuffle)) * stepBeats : 0.0;
+            const double shift = juce::jlimit (-0.45, 0.45,
+                static_cast<double> (step.shift - 0.5f)) * repeatBeats;
+            // Parameter Locks take effect at this step's first onset, before
+            // its Note On, including on steps which contain a pause.
+            const double firstOnPpq = launchDelay + tick * stepBeats + swing + shift;
+            if (firstOnPpq >= lanePpq && firstOnPpq < laneEndPpq
+                && stepEventCount < maximumStepEvents)
+            {
+                const int sample = juce::jlimit (0, samples - 1,
+                    static_cast<int> (std::floor ((firstOnPpq - lanePpq) / beatsPerSample + 0.5)));
+                stepEvents[static_cast<size_t> (stepEventCount++)] =
+                    { blockOffset + sample, lane, pattern, stepIndex };
+            }
             if (step.note >= 128 || step.velocity <= 0 || shouldSkip (
                 lane, pattern, tick, config.noteSkipProbability)) continue;
             // Same C4-based keyboard transposition as LJuno. Each lane uses
@@ -107,12 +127,6 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
             const int note = juce::jlimit (0, 127, step.note + keyboardTransposes[lane]
                 + config.semitoneShift + 12 * config.octaveShift);
             const int velocity = juce::jlimit (1, 127, step.velocity);
-            const int repeats = juce::jlimit (1, 16, step.repeat);
-            const double repeatBeats = stepBeats / repeats;
-            const double swing = (positiveModulo (tick, 2) != 0)
-                ? juce::jlimit (-0.45, 0.45, static_cast<double> (config.shuffle)) * stepBeats : 0.0;
-            const double shift = juce::jlimit (-0.45, 0.45,
-                static_cast<double> (step.shift - 0.5f)) * repeatBeats;
             for (int repeat = 0; repeat < repeats; ++repeat)
             {
                 const double onPpq = launchDelay + tick * stepBeats + repeat * repeatBeats + swing + shift;

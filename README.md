@@ -1,3 +1,15 @@
+# LB-303 0.0.2 — TEST2.3: Parameter Locks in playback and alphabetic search
+
+- Step Parameter Locks (up to 32 per step) are applied to the audio engine at the corresponding step, on either MIDI channel independently, including paused steps. Locks override parameters for the active step, then non-locked parameters return to REAPER's current host-automated base values on the next step. The base VST parameters/host automation are never modified.
+- This includes synth Portamento Time/Mode, filter, delay, final Level and Pan.
+- Grid and Value: type any letter or digit to cycle through parameter names beginning with that character; Shift+letter/digit cycles backward. Edit retains normal text input.
+- Alt+Q > page 7 > Enter parameter picker: same forward / Shift+letter backward cyclic search. No Ctrl+Up/Down track switching in picker. "selected" is announced before already-assigned names.
+- All previous TEST2.2.9 two-bank routing, keyboard transposition, Z/X/C/V, shortcuts and parameter IDs are retained.
+
+**Portamento test:** use two different sequenced notes with Portamento Mode set to Always. In Legato mode, slides require overlapping notes, so Portamento Time alone may sound unchanged.
+
+This source is intended for GitHub Actions on Windows. Static checks were run; no local compilation or listening test has been performed.
+
 # LB-303 TEST2.2.9 — Keyboard transpose while Sequencer is On
 
 - **C4 (MIDI note 60) = zero transpose**, as in LJuno: C5 raises the pattern by

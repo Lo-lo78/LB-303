@@ -31,6 +31,8 @@ void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
     previousSequencerOn = {};
     previewLane.store (-1, std::memory_order_relaxed);
     sequencerPlayback.reset();
+    activeLockStep = { -1, -1 };
+    activeLockPattern = { -1, -1 };
     for (auto& engine : engines) engine.prepare (sampleRate);
 }
 void LB303AudioProcessor::releaseResources() {}
@@ -108,12 +110,28 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         heldKeyCount[lane] = 0;
         keyboardTranspose[lane] = 0;
         previousSequencerOn[lane] = sequencerOn[lane];
+        activeLockStep[lane] = -1;
+        activeLockPattern[lane] = -1;
+    }
+    for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
+    {
+        const bool gated = (sequencerOn[lane] && heldKeyCount[lane] > 0)
+                            || previewingTrack == static_cast<int> (lane);
+        if (! gated || (activeLockStep[lane] >= 0
+                         && activeLockPattern[lane] != currentPattern (lane)))
+        {
+            activeLockStep[lane] = -1;
+            activeLockPattern[lane] = -1;
+        }
     }
 
     // Route physical keys before generating each audio segment. Unlike the
     // earlier implementation, we never merge them into the sequenced notes.
     // Dividing at MIDI offsets makes trigger/release sample-accurate, including
     // when a key begins or ends in the middle of an audio block.
+    std::array<lb303::SequencerPlayback::StepEvent,
+               lb303::SequencerPlayback::maximumStepEvents> stepEvents {};
+    int stepEventCount = 0;
     const juce::MidiBuffer physicalInput (midi);
     midi.clear();
     auto generateSegment = [&] (int beginSample, int endSample)
@@ -136,7 +154,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         sequencerPlayback.generate (generated, sequenceBanks,
             { currentPattern (0), currentPattern (1) }, audible, origins, transposes,
             playing || activePreview || audible[0] || audible[1],
-            ppq + beginSample * beatsPerSample, bpm, sampleRateHz, segmentLength);
+            ppq + beginSample * beatsPerSample, bpm, sampleRateHz, segmentLength,
+            stepEvents, stepEventCount, beginSample);
         midi.addEvents (generated, 0, segmentLength, beginSample);
     };
     int previousSample = 0;
@@ -216,31 +235,59 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     }
     generateSegment (previousSample, count);
 
-    // Separate DSP state, oscillator/envelopes/filter/delay and parameter
-    // snapshots for BOTH basslines. Never share engine state between them.
+    // Each voice takes its host-automated parameter baseline, then overlays
+    // ONLY the locks of the current sequencer step. No APVTS parameter writes:
+    // REAPER automation and the two Bassline grids retain their original values.
     std::array<float, lb303::basslineCount> leftGain {}, rightGain {};
-    for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
+    const auto applyVoiceParameters = [&] (size_t voice)
     {
-        lb303::BassEngine::Values snapshot {};
-        for (size_t i = 0; i < snapshot.size(); ++i)
-            snapshot[i] = value (lb303::parameterIndex (voice, i));
-        engines[voice].setParameters (snapshot, bpm);
-        const auto level = std::clamp (
-            value (lb303::parameterIndex (voice, lb303::outputLevelOffset)), 0.0f, 1.0f);
+        std::array<float, lb303::voiceParameterCount> effective {};
+        for (size_t i = 0; i < effective.size(); ++i)
+            effective[i] = value (lb303::parameterIndex (voice, i));
+        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] == currentPattern (voice))
+        {
+            const auto step = sequenceBanks[voice].getStep (
+                activeLockPattern[voice], activeLockStep[voice]);
+            for (int i = 0; i < step.parameterLockCount; ++i)
+            {
+                const auto& lock = step.parameterLocks[static_cast<size_t> (i)];
+                const int index = lock.sliderNumber - 1; // 1..37 per bassline
+                if (! juce::isPositiveAndBelow (index, static_cast<int> (effective.size())))
+                    continue;
+                const auto& info = lb303::catalog()[lb303::parameterIndex (voice,
+                                                static_cast<size_t> (index))];
+                if (! std::isfinite (lock.value)) continue;
+                effective[static_cast<size_t> (index)] =
+                    juce::jlimit (info.minimum, info.maximum, lock.value);
+            }
+        }
+        lb303::BassEngine::Values synth {};
+        for (size_t i = 0; i < synth.size(); ++i) synth[i] = effective[i];
+        engines[voice].setParameters (synth, bpm);
+        const auto level = std::clamp (effective[lb303::outputLevelOffset], 0.0f, 1.0f);
         const auto pan = std::clamp (
-            value (lb303::parameterIndex (voice, lb303::outputPanOffset)) / 100.0f,
-            -1.0f, 1.0f);
-        // Centre pan has unity gain on both channels, so Bassline 1 alone
-        // remains sonically identical to TEST1.5 at its default settings.
+            effective[lb303::outputPanOffset] / 100.0f, -1.0f, 1.0f);
         leftGain[voice] = level * (pan > 0.0f ? 1.0f - pan : 1.0f);
         rightGain[voice] = level * (pan < 0.0f ? 1.0f + pan : 1.0f);
-    }
+    };
+    for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
+        applyVoiceParameters (voice);
+
+    // Independently scheduled lock boundaries may be emitted for paused steps,
+    // too. Sort them for exact sample order between the two MIDI channels.
+    std::sort (stepEvents.begin(), stepEvents.begin() + stepEventCount,
+        [] (const auto& a, const auto& b)
+        {
+            if (a.sample != b.sample) return a.sample < b.sample;
+            return a.lane < b.lane;
+        });
 
     if (audio.getNumChannels() < 2) { audio.clear(); return; }
     auto* l = audio.getWritePointer (0);
     auto* r = audio.getWritePointer (1);
     int nextSample = 0;
-    const auto renderTo = [&] (int end)
+    int nextStepEvent = 0;
+    const auto renderSamplesTo = [&] (int end)
     {
         for (; nextSample < end; ++nextSample)
         {
@@ -256,6 +303,21 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             l[nextSample] = outL;
             r[nextSample] = outR;
         }
+    };
+    const auto renderTo = [&] (int end)
+    {
+        // Locks at an exact MIDI Note On offset must be installed BEFORE
+        // sending that Note On to the corresponding BassEngine.
+        while (nextStepEvent < stepEventCount && stepEvents[static_cast<size_t> (nextStepEvent)].sample <= end)
+        {
+            const auto event = stepEvents[static_cast<size_t> (nextStepEvent++)];
+            renderSamplesTo (event.sample);
+            const auto lane = static_cast<size_t> (event.lane);
+            activeLockStep[lane] = event.step;
+            activeLockPattern[lane] = event.pattern;
+            applyVoiceParameters (lane);
+        }
+        renderSamplesTo (end);
     };
     // Route generated sequencer notes or direct notes exclusively to their
     // respective engines (MIDI channel 1 or 2), preserving exact offsets.
