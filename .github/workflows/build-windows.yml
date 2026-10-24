@@ -1,0 +1,35 @@
+name: Build LB-303 Windows x64
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Build LB-303 VST3 (Release)
+        shell: pwsh
+        run: ./Tools/build-windows.ps1
+
+      - name: Package VST3
+        shell: pwsh
+        run: |
+          $plugin = "build/nmake-release/LB303_artefacts/Release/VST3/LB-303.vst3"
+          if (-not (Test-Path -LiteralPath $plugin)) {
+            throw "LB-303.vst3 not found: $plugin"
+          }
+          # An actual VST3 is a bundle (directory) on Windows in JUCE 8.
+          # Preserve its internal layout (Contents/x86_64-win/*.vst3).
+          Compress-Archive -Path $plugin -DestinationPath "LB-303-0.0.1-TEST1-Windows-x64.zip" -Force
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LB-303-0.0.1-TEST1-Windows-x64
+          path: LB-303-0.0.1-TEST1-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14

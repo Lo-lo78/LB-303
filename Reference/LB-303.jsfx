@@ -1,0 +1,840 @@
+desc:LB-303
+
+slider1:1<0,1,1{Saw,Square}>Waveform
+
+slider2:0<0,0.05,0.001>Attack
+slider3:0.1<0,0.2,0.001>Decay
+slider4:0.14<0,0.99,0.01>Sustain (Filter only)
+slider5:0.03<0,0.2,0.001>Release
+
+slider6:10<0,100,0.5>Portamento Time
+slider7:1<0,1,1{Always,Legato}>Portamento Mode
+
+slider8:0.8<0,1,0.01>Volume
+
+slider9:0.6<0,1,0.01>Cutoff
+slider10:0.1<0,0.1,0.001>Resonance
+slider11:0.3<0,1,0.01>Filter Env Depth
+
+slider12:1<0,128,0.125>PWM Rate
+slider13:0.1<0,0.5,0.001>PWM Depth
+
+slider14:2.0<0,4,0.01>Soft Clip Drive
+
+slider15:0< -48,48,0.1 >Master tone
+slider16:120<80,120,1>Accent Threshold
+slider17:0.5<0,0.7,0.01>Accent Filter Amount
+slider18:0<0,127,1>Velocity
+slider19:1<0,2,1{Loose,Neutral,Tight}>Transient Response
+
+
+slider20:delayms=200<1,10000>Delay Time (ms)
+slider21:sync=0<0,8,1{Off,1/16,1/12T,1/8,1/6T,1/4,1/3T,1/2,1/1}>Delay Tempo sync
+
+slider22:_feedback=10<0,100>Delay Feedback
+slider23:mode=1<0,1,1{Normal,Ping-Pong}>Delay Mode
+slider24:spread=0<-100,100,1>Delay Spread
+
+slider25:lp_freq=16000<20,20000,1:log>Delay Low Pass
+slider26:lp_q=0.707<0.707,4,0.01:log>Delay Low Pass Q
+
+slider27:hp_freq=60<20,20000,1:log>Delay High Pass
+slider28:hp_q=0.707<0.707,4,0.01:log>Delay High Pass Q
+
+slider29:mod_amp=0<0,100>Delay Modulation amp
+slider30:mod_freq=5<1,8>Delay Modulation freq (Hz)
+slider31:_semitones=0<-12,12,1>Delay Transpose
+
+slider32:_dry=100<0,100>Delay Dry
+slider33:_wet=10<0,100>Delay Wet
+
+slider34:0<0,1,1{Gate,Lowpass Gate}>Response Mode
+slider35:0<0,127,1>Gate Velocity Filter
+
+
+
+import qd.delay.jsfx-inc
+import qd.rbj_filter.jsfx-inc
+import qd.saike_pitchlib.jsfx-inc
+
+
+
+
+
+
+@init
+
+lpg_mem = 0;
+
+
+vel_norm = 1;
+
+// 10 second stereo delay line
+d0.delay(2000000, srate * 10);
+d1.delay(3000000, srate * 10);
+
+function sine_wave(cycle) (
+  sin(cycle * 2 * $pi);
+);
+
+function rc_set(rc)
+  instance(a) (
+    a = 1 / (rc * srate + 1);
+);
+function rc_lp(sample)
+  instance(lp, a) (
+    lp += a * (sample - lp);
+);
+function smooth()
+  instance (lp, smooth) (
+    lp = smooth;
+    smooth = this.rc_lp(this);
+);
+
+function init_pitchlib ()
+(
+  transition_region = 1024;
+  bufferSize = 4 * transition_region;
+  shifter.pitchShifter(1, transition_region, bufferSize, 2*65536, 3*65536, transition_region, 1);
+);
+
+init_pitchlib();
+
+samps.rc_set(0.5);
+
+
+
+// ====================
+// MASTER TONE RELATIVO (SEMITONI)
+// ====================
+semitone_mul = pow(2, slider15/12);
+
+
+// Accent envelope (per risonanza)
+accent_env = 0;
+
+// ====================
+// COMPRESSOR STATE
+// ====================
+comp_env = 0;
+
+phase = 0;
+
+freq = 0;
+freq_target = 0;
+
+env = 0;
+env_phase = 3;
+
+note_active = 0;
+legato = 0;
+last_note = -1;
+
+// filtro
+f1L = f2L = 0;
+f1R = f2R = 0;
+
+// PWM LFO
+pwm_phase = 0;
+pwm_inc   = 0;
+
+// ====================
+// LPF AIR (post-output) - STATE
+// ====================
+xl19 = xl29 = yl19 = yl29 = 0;
+xr19 = xr29 = yr19 = yr29 = 0;
+
+a7 = (10^(slider102/40));
+
+// ====================
+// AIR DEFAULTS (FIXED)
+// ====================
+
+// Banda 4 (High Air Peak)
+air_freq = 8000;      // Hz
+air_q    = 0.7;
+air_gain = 4;         // dB
+
+air_a = 10^(air_gain/40);
+
+// LPF Air
+lpf_air_cut = 7000;   // Hz
+
+// Stato biquad Banda 4
+xl17 = xl27 = yl17 = yl27 = 0;
+xr17 = xr27 = yr17 = yr27 = 0;
+
+
+@slider
+
+feedback = _feedback / 100;
+lfactor = spread > 0 ? 1 - spread / 100 : 1;
+rfactor = spread < 0 ? 1 + spread / 100 : 1;
+rhaas = !mode && -spread > 0 ? srate / 100 * -spread / 100 : 0; // 100 ms max haas
+lhaas = !mode && spread > 0 ? srate / 100 * spread / 100 : 0; // 100 ms max haas
+
+lp_l.rbj_lp(lp_freq, lp_q);
+lp_r.rbj_lp(lp_freq, lp_q);
+hp_l.rbj_hp(hp_freq, hp_q);
+hp_r.rbj_hp(hp_freq, hp_q);
+
+semitones = 2*((2^(_semitones/12))-1.0);
+dry = _dry / 100;
+wet = _wet / 100;
+
+
+
+@block
+
+// ====================
+// MIDI INPUT (UNIFICATO)
+// ====================
+while (
+  midirecv(offset, msg1, msg2, msg3)
+)(
+  midisend(offset, msg1, msg2, msg3);
+  status = msg1 & 0xF0;
+  chan   = msg1 & 0x0F;
+  note   = msg2;
+  vel    = msg3;
+
+
+  // ====================
+  // ALL NOTES OFF (CC123) → reset delay
+  // ====================
+  (status == 0xB0 && note == 123) ? (
+    memset(d0.buf, 0, d0.size);
+    memset(d1.buf, 0, d1.size);
+  );
+
+  // ====================
+  // NOTE ON
+  // ====================
+  (status == 0x90 && vel > 0) ? (
+
+    freq_target = 440 * pow(2, (note - 69) / 12);
+vel_norm = pow(vel / 127, 0.6); // < 1 = più estesa
+
+
+
+    // ACCENT TB-303 STYLE (binario)
+    accent = vel >= slider16;
+    accent_env = accent ? 1 : 0;
+
+    // legato se nota già attiva
+    legato = note_active;
+
+    note_active = 1;
+    last_note = note;
+
+    // retrigger solo se NON legato
+    legato ? (
+      env_phase = env_phase;
+    ) : (
+      env_phase = 0;
+    );
+  );
+
+  // ====================
+  // NOTE OFF
+  // ====================
+  ((status == 0x80) || (status == 0x90 && vel == 0)) ? (
+    note == last_note ? (
+      note_active = 0;
+      legato = 0;
+      env_phase = 3; // release
+    );
+  );
+);
+
+// ====================
+// TEMPO / BPM (HOST)
+// ====================
+bpm = max(1, tempo);
+samples_per_beat = srate * 60 / bpm;
+
+// ====================
+// PWM INC (BPM SYNC)
+// ====================
+pwm_inc =
+  (max(0.001, slider12) * 0.25) / samples_per_beat;
+
+// ====================
+// ====================
+// DELAY TIME (FREE / SYNC) – DIVISIONI REALI (NO LINK SLIDER)
+// slider21 = sync, slider20 = delayms (UI)
+// ====================
+
+// NON scrivere mai su "delayms" (è lo slider20)
+// leggilo e basta:
+delayms_free = delayms;
+
+// tua “scansione diversa”: 100 = 1/16 invece di 125
+// (quindi moltiplichiamo per 1.25 per tornare ai ms reali)
+delayms_free_ms = delayms_free * 1.25;
+
+// default: free time
+delayms_final = delayms_free_ms;
+
+// sync attivo → calcola e basta (senza toccare slider20)
+sync > 0 ? (
+
+  div =
+    sync == 1 ? 16 :
+    sync == 2 ? 12 :
+    sync == 3 ? 8  :
+    sync == 4 ? 6  :
+    sync == 5 ? 4  :
+    sync == 6 ? 3  :
+    sync == 7 ? 2  :
+    1;
+
+  delayms_final = (60000 / bpm) * (4 / div);
+
+);
+
+// clamp
+delayms_final > 10000 ? delayms_final = 10000;
+
+// delay time in samples
+samps = delayms_final * 0.001 * srate;
+
+@sample
+
+inL = spl0;
+inR = spl1;
+
+// ====================
+// PORTAMENTO (SEMPRE ATTIVO, ULTRA ESPANSO)
+// ====================
+use_porta =
+  slider6 > 0 && (
+    slider7 == 0 ||
+    (slider7 == 1 && legato)
+  );
+
+t = slider6;
+
+// coefficiente con minimo udibile
+porta_coeff =
+  use_porta
+  ? max(1 / (1 + t*150), 0.0002)
+  : 1;
+
+freq += (freq_target - freq) * porta_coeff;
+freq_m = freq * pow(2, slider15/12);
+
+
+
+// ====================
+// PWM LFO (TRIANGLE, BPM SYNC)
+// ====================
+pwm_lfo = 0;
+
+slider13 > 0 ? (
+  pwm_phase += pwm_inc;
+  pwm_phase -= floor(pwm_phase);
+
+  // triangolare -1 .. +1
+  pwm_lfo =
+    pwm_phase < 0.5
+    ? (pwm_phase * 4 - 1)
+    : (3 - pwm_phase * 4);
+);
+
+// ====================
+// OSCILLATORE (BAND-LIMIT: PolyBLEP Saw + PWM Pulse)
+// ====================
+// applica il master tone
+freq_toned = freq * semitone_mul;
+
+// tick per fase
+dt = (freq_m * 0.5) / srate;
+
+
+
+
+dt < 0.000001 ? dt = 0.000001;
+dt > 0.49 ? dt = 0.49;
+
+// phase
+phase += dt;
+phase -= phase >= 1;
+
+// --- Saw 1 (band-limited)
+t1 = phase;
+saw1 = (2*t1 - 1) * 0.5;
+
+
+// polyblep per saw1
+blep1 =
+  (t1 < dt) ? (
+    x = t1 / dt;
+    (x + x - x*x - 1)
+  )
+  : (t1 > 1 - dt) ? (
+    x = (t1 - 1) / dt;
+    (x*x + x + x + 1)
+  )
+  : 0;
+
+saw1 -= blep1;
+
+// --- waveform select
+osc =
+  slider1 == 0 ? (
+    // SAW band-limited
+    saw1
+  ) : (
+    // PWM band-limited (pulse = 0.5*(saw(t) - saw(t+1-duty)))
+    duty = 0.5 + pwm_lfo * slider13;
+
+    duty < 0.01 ? duty = 0.01;
+    duty > 0.99 ? duty = 0.99;
+
+    t2 = t1 + 1 - duty;
+    t2 -= floor(t2);
+
+    saw2 = 2*t2 - 1;
+
+    // polyblep per saw2
+    blep2 =
+      (t2 < dt) ? (
+        x2 = t2 / dt;
+        (x2 + x2 - x2*x2 - 1)
+      )
+      : (t2 > 1 - dt) ? (
+        x2 = (t2 - 1) / dt;
+        (x2*x2 + x2 + x2 + 1)
+      )
+      : 0;
+
+    saw2 -= blep2;
+
+    0.4 * (saw1 - saw2)
+
+
+  );
+
+// ====================
+// TRANSIENT RESPONSE (slider19)
+// ====================
+
+// moltiplicatore temporale per A/D/R
+transient_mul =
+  slider19 == 0 ? 0.7 :   // Loose  → più lento
+  slider19 == 2 ? 1.6 :   // Tight  → più veloce
+  1.0;                    // Neutral → identico
+
+
+// ====================
+// ADSR VELOCE (per filtro) – TB-303 STYLE
+// ====================
+
+// moltiplicatore decay per ACCENT
+decay_mul = accent ? 1.8 : 1.0;
+
+env_phase == 0 ? (
+
+  // ATTACK
+  env += (slider2 > 0 ? transient_mul / (slider2 * srate) : 1);
+
+  env >= 1 ? (
+    env = 1;
+    env_phase = 1;
+  );
+
+)
+: env_phase == 1 ? (
+
+  // DECAY (più rapido se accent)
+  env -= (
+  slider3 > 0
+  ? transient_mul * (1 - slider4) / ((slider3 * srate) / decay_mul)
+  : 1
+);
+
+  env <= slider4 ? (
+    env = slider4;
+    env_phase = 2;
+  );
+
+)
+: env_phase == 2 ? (
+
+  // SUSTAIN (solo per filtro)
+  env = slider4;
+
+)
+: (
+
+  // RELEASE
+  env -= (slider5 > 0 ? transient_mul * slider4 / (slider5 * srate) : 1);
+
+  env <= 0 ? env = 0;
+
+);
+
+// ====================
+// AMP ENVELOPE (SUSTAIN FISSO, NON LEGATO A slider4)
+// ====================
+amp_sustain = 0.25;
+
+// Attack+Decay: segue env
+// Sustain: fisso (non usa slider4)
+// Release: segue env
+env_amp =
+  env_phase < 2
+  ? env
+  : (env_phase == 2 ? amp_sustain : env);
+
+// ====================
+// RESPONSE MODE (Classic / LPG)
+// ====================
+
+// ====================
+// LPG (vactrol-ish): energia + memoria
+// ====================
+
+// energia di eccitazione: mai troppo bassa
+vel_energy = 0.35 + vel_norm * 0.65;
+
+// target del vactrol (quanto dovrebbe aprire)
+lpg_target = env_amp * vel_energy;
+
+// velocità di inseguimento: colpi forti = più rapida
+lpg_speed = 0.03 + vel_norm * 0.12;
+
+// memoria (one-pole): lpg_mem segue lpg_target lentamente
+lpg_mem += (lpg_target - lpg_mem) * lpg_speed;
+
+// usa la memoria come inviluppo LPG
+lpg_env = lpg_mem;
+
+
+// curva LPG: più veloce sulle alte
+lpg_curve =
+  pow(lpg_env, 1.6);
+
+// AMP finale
+amp_final =
+  slider34 == 0
+  ? env_amp              // Classic
+  : lpg_curve;           // LPG
+
+// LPG make-up gain (energy compensation)
+lpg_gain =
+  slider34 == 0
+  ? 1
+  : (1.8 + lpg_env * 0.25);
+
+// CUTOFF modulation
+cut_env =
+  slider34 == 0
+  ? env
+  : lpg_env * 0.85;
+
+// ====================
+// AMP (ACCENT TB-303 STYLE)
+// ====================
+
+// boost semplice, musicale
+amp_accent = accent ? 1.35 : 1.0;
+
+// ====================
+// VELOCITY → AMP (slider18) – LOW RANGE EXPANDER
+// ====================
+
+// depth velocity 0..1
+vel_depth = slider18 / 127;
+
+// curva: 1 = lineare, >1 = scava la parte bassa
+curve = 1 + vel_depth * 3.0;   // max ~4
+
+// shaping: top invariato, bassi più giù
+vel_shaped = pow(vel_norm, curve);
+
+// fattore finale:
+// slider18 = 0   → vel_factor = 1 (identico a prima)
+// slider18 = 127 → bassi molto più silenziosi, alti invariati
+vel_factor = 1 - vel_depth + vel_shaped * vel_depth;
+
+sigL = osc * amp_final * lpg_gain * slider8 * amp_accent * vel_factor;
+sigR = sigL;
+
+
+// ====================
+// ACCENT ENVELOPE (very fast, no whistle)
+// ====================
+
+// decay fisso ~5–10 ms
+accent_env -= accent_env * 0.25;
+accent_env < 0.0001 ? accent_env = 0;
+
+// RENEW MINIMO per slider17
+accent_env = accent ? 1 : accent_env;
+accent_env -= accent_env * (1 - exp(-1/(0.01*srate))); // width fissa 10 ms
+accent_env < 0.0001 ? accent_env = 0;
+
+// ====================
+// ACCENT ENVELOPE WIDTH – 
+// ====================
+
+
+
+
+// ====================
+// LS-101 STYLE FILTER (LOWPASS)
+// ====================
+
+// cutoff normalizzato 0..1 (come prima)
+env_depth_accent = accent ? slider11 * 1.5 : slider11;
+
+
+
+// cutoff totale
+accent_cut = accent_env * (slider17 * 0.18);   // 0..~0.18 proporzionale
+// ====================
+// CLASSIC: Velocity → Filter (sottrattiva, mai oltre il max)
+// ====================
+
+// amount 0..1
+vel_filt_amt = slider35 / 127;
+
+// cutoff classico (reference)
+classic_cut =
+  slider9 +
+  cut_env * slider11 +
+  accent_cut;
+
+// riduzione proporzionale alla velocity
+// vel_norm = 1 → riduzione 0
+// vel_norm = 0 → riduzione massima
+vel_reduction =
+  slider34 == 0
+  ? (1 - vel_norm) * vel_filt_amt * slider11
+  : 0;
+
+// cutoff finale: MAI sopra il classico
+combined_cutoff =
+  classic_cut - vel_reduction;
+
+
+
+
+
+combined_cutoff < 0 ? combined_cutoff = 0;
+combined_cutoff > 1 ? combined_cutoff = 1;
+
+// mapping esponenziale IDENTICO a LS-101
+cut = pow(2, combined_cutoff * 14.28771);
+cut = min((cut * 2) / srate, 0.99);
+
+// risonanza con amount regolabile
+accent_res_amt = 4.0 * slider17;
+res_mul =
+  slider34 == 0
+  ? 1
+  : (0.7 + lpg_env * 0.3);
+
+res = slider10 * (7.0 + accent_env * accent_res_amt);
+
+
+fb  = res + res / (1 - cut);
+
+// LEFT
+n3 += cut * (sigL - n3 + fb * (n3 - n4));
+n4 += cut * (n3 - n4);
+
+// RIGHT
+rn3 += cut * (sigR - rn3 + fb * (rn3 - rn4));
+rn4 += cut * (rn3 - rn4);
+
+// output lowpass
+f2L = n4;
+f2R = rn4;
+
+
+// ====================
+// BANDA 4 – HIGH AIR PEAK (PRE-LPF)
+// ====================
+
+// coefficienti biquad peak
+a7 = air_a;
+q7 = air_q;
+
+w07 = 2 * $pi * air_freq / srate;
+cosw07 = cos(w07);
+sinw07 = sin(w07);
+alpha7 = sinw07 / (2 * q7);
+
+b07 = 1 + alpha7 * a7;
+b17 = -2 * cosw07;
+b27 = 1 - alpha7 * a7;
+a07 = 1 + alpha7 / a7;
+a17 = -2 * cosw07;
+a27 = 1 - alpha7 / a7;
+
+// normalizzazione
+b07 /= a07;
+b17 /= a07;
+b27 /= a07;
+a17 /= a07;
+a27 /= a07;
+
+// processamento Banda 4 (SEMPRE ATTIVA)
+ospl0 = f2L;
+f2L = b07 * f2L + b17 * xl17 + b27 * xl27 - a17 * yl17 - a27 * yl27;
+xl27 = xl17;
+xl17 = ospl0;
+yl27 = yl17;
+yl17 = f2L;
+
+ospl1 = f2R;
+f2R = b07 * f2R + b17 * xr17 + b27 * xr27 - a17 * yr17 - a27 * yr27;
+xr27 = xr17;
+xr17 = ospl1;
+yr27 = yr17;
+yr17 = f2R;
+
+
+// ====================
+// OUTPUT (SOFT CLIP / LOUDNESS) – slider14
+// ====================
+
+// slider14 = quantità di soft clipping
+drive = slider14;
+
+// soft clip razionale (JSFX-safe, musicale)
+outL =
+  drive > 0
+  ? (f2L * drive) / (1 + abs(f2L * drive))
+  : f2L;
+
+outR =
+  drive > 0
+  ? (f2R * drive) / (1 + abs(f2R * drive))
+  : f2R;
+
+
+// ====================
+// LPF AIR (FIXED @ 7000 Hz)
+// ====================
+
+a9 = 1;
+s9 = 2;
+
+// Q stabile
+q9 = 1 / sqrt((a9 + 1/a9)*(1/s9 - 1) + 2);
+
+// clamp di sicurezza
+cut9 = lpf_air_cut;
+cut9 > srate*0.49 ? cut9 = srate*0.49;
+cut9 < 40 ? cut9 = 40;
+
+w09 = 2 * $pi * cut9 / srate;
+cosw09 = cos(w09);
+sinw09 = sin(w09);
+alpha9 = sinw09 / (2 * q9);
+
+// coefficienti LPF
+b09 = (1 - cosw09) * 0.5;
+b19 = (1 - cosw09);
+b29 = (1 - cosw09) * 0.5;
+a09 = 1 + alpha9;
+a19 = -2 * cosw09;
+a29 = 1 - alpha9;
+
+// normalizzazione
+b09 /= a09;
+b19 /= a09;
+b29 /= a09;
+a19 /= a09;
+a29 /= a09;
+
+
+
+// ====================
+// LPF AIR (POST SOFT-CLIP)
+// ====================
+
+ospl0 = outL * 2;
+spl0 = b09 * ospl0 + b19 * xl19 + b29 * xl29 - a19 * yl19 - a29 * yl29;
+xl29 = xl19;
+xl19 = ospl0;
+yl29 = yl19;
+yl19 = spl0;
+
+ospl1 = outR * 2;
+spl1 = b09 * ospl1 + b19 * xr19 + b29 * xr29 - a19 * yr19 - a29 * yr29;
+xr29 = xr19;
+xr19 = ospl1;
+yr29 = yr19;
+yr19 = spl1;
+
+play_state & 1 && !(lplay_state & 1) ? (
+  samps.smooth = samps;
+);
+lplay_state = play_state;
+
+samps.smooth();
+
+// modulation sinewave
+mod_amp ? (
+  cycle += mod_freq / srate;
+  cycle > 1 ? cycle -= 1;
+  wave = sine_wave(cycle);
+) : (
+  wave = 0;
+);
+
+// read with cubic interpolation
+val0 = d0.delay_read3(samps.smooth + wave * mod_amp + lhaas);
+val1 = d1.delay_read3(samps.smooth + wave * mod_amp + rhaas);
+
+// apply filters on delay signal
+lp_freq < 20000 ? (
+  val0 = lp_l.rbj_df1(val0);
+  val1 = lp_r.rbj_df1(val1);
+);
+hp_freq > 20 ? (
+  val0 = hp_l.rbj_df1(val0);
+  val1 = hp_r.rbj_df1(val1);
+);
+
+mode == 0 ? ( // normal
+  left = spl0 + val0 * feedback;
+  right = spl1 + val1 * feedback;
+) : ( // ping pong
+  left = spl0 * lfactor + val1 * feedback;
+  right = spl1 * rfactor + val0 * feedback
+);
+
+_semitones ? (
+  shifter.pitchShifterUpdate(left, right);
+  shifter.setPitchShifterSpeed(semitones);
+  left = shifter.outL;
+  right = shifter.outR;
+);
+
+// write values in delay lines
+d0.delay_write(left);
+d1.delay_write(right);
+
+// sum and output
+spl0 = spl0*dry + val0*wet;
+spl1 = spl1*dry + val1*wet;
+
+
+// ====================
+// FINAL OUTPUT (più safe con delay)
+// ====================
+out_gain = 1.3;
+wet > 0 ? out_gain = 1.0; // quando usi delay, niente boost extra
+
+outL = spl0 * out_gain;
+outR = spl1 * out_gain;
+
+// audio entrante + plugin
+spl0 = inL + outL;
+spl1 = inR + outR;
