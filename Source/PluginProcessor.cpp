@@ -2,6 +2,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <algorithm>
+#include <cmath>
 
 LB303AudioProcessor::LB303AudioProcessor()
     : AudioProcessor (BusesProperties()
@@ -15,6 +16,12 @@ LB303AudioProcessor::LB303AudioProcessor()
 
 void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
 {
+    sampleRateHz = sampleRate;
+    fallbackPpq = 0.0;
+    previewPpq = 0.0;
+    previousPreview = false;
+    previewLane.store (-1, std::memory_order_relaxed);
+    sequencerPlayback.reset();
     for (auto& engine : engines) engine.prepare (sampleRate);
 }
 void LB303AudioProcessor::releaseResources() {}
@@ -36,15 +43,44 @@ juce::RangedAudioParameter* LB303AudioProcessor::parameter (size_t i)
 {
     return i < lb303::parameterCount ? parameters.getParameter (lb303::catalog()[i].id) : nullptr;
 }
+int LB303AudioProcessor::currentPattern (size_t lane) const noexcept
+{
+    const auto slot = lane == 0 ? lb303::pattern1Index : lb303::pattern2Index;
+    return juce::jlimit (0, lb303::SequencerState::maximumSequences - 1,
+                         juce::roundToInt (value (slot)));
+}
 
 void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
     double bpm = 120.0;
+    double ppq = fallbackPpq;
+    bool playing = false;
     if (auto* playhead = getPlayHead())
         if (const auto position = playhead->getPosition())
-            if (const auto hostBpm = position->getBpm())
-                bpm = *hostBpm;
+        {
+            if (const auto hostBpm = position->getBpm()) bpm = *hostBpm;
+            if (const auto hostPpq = position->getPpqPosition()) ppq = *hostPpq;
+            playing = position->getIsPlaying();
+        }
+    if (! std::isfinite (bpm) || bpm <= 0.0) bpm = 120.0;
+    if (! std::isfinite (ppq)) ppq = 0.0;
+    const int previewingTrack = previewLane.load (std::memory_order_relaxed);
+    const bool activePreview = previewingTrack >= 0 && previewingTrack < 2;
+    if (activePreview && ! previousPreview) previewPpq = 0.0;
+    previousPreview = activePreview;
+    if (! playing && activePreview) ppq = previewPpq;
+    const double nextPpq = ppq + audio.getNumSamples() * bpm / (60.0 * sampleRateHz);
+    if (! playing && activePreview) previewPpq = nextPpq;
+    else fallbackPpq = nextPpq;
+    juce::MidiBuffer generated;
+    sequencerPlayback.generate (generated, sequenceBanks,
+        { currentPattern (0), currentPattern (1) },
+        { (playing && value (lb303::sequencer1EnabledIndex) > 0.5f) || previewingTrack == 0,
+          (playing && value (lb303::sequencer2EnabledIndex) > 0.5f) || previewingTrack == 1 },
+        playing || activePreview, ppq, bpm, sampleRateHz, audio.getNumSamples());
+    // Generated events keep MIDI channels 1 and 2 and are merged with host MIDI.
+    midi.addEvents (generated, 0, audio.getNumSamples(), 0);
 
     // Separate DSP state, oscillator/envelopes/filter/delay and parameter
     // snapshots for BOTH basslines. Never share engine state between them.
@@ -115,13 +151,34 @@ juce::AudioProcessorEditor* LB303AudioProcessor::createEditor()
 void LB303AudioProcessor::getStateInformation (juce::MemoryBlock& data)
 {
     if (auto xml = parameters.copyState().createXml())
+    {
+        // Two independent banks, not 16 joint patterns. Save all 32 patterns.
+        auto* bank1 = xml->createNewChildElement ("LB303PatternBank1");
+        bank1->setAttribute ("data", sequenceBanks[0].serialiseToBase64());
+        auto* bank2 = xml->createNewChildElement ("LB303PatternBank2");
+        bank2->setAttribute ("data", sequenceBanks[1].serialiseToBase64());
         copyXmlToBinary (*xml, data);
+    }
 }
 void LB303AudioProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (parameters.state.getType()))
+        {
+            for (int lane = 0; lane < 2; ++lane)
+            {
+                const auto tag = juce::String (lane == 0 ? "LB303PatternBank1" : "LB303PatternBank2");
+                if (auto* bank = xml->getChildByName (tag))
+                    sequenceBanks[static_cast<size_t> (lane)].restoreFromBase64 (
+                        bank->getStringAttribute ("data"));
+                else
+                    sequenceBanks[static_cast<size_t> (lane)].reset(); // legacy TEST1 projects
+            }
+            if (auto* a = xml->getChildByName ("LB303PatternBank1")) xml->removeChildElement (a, true);
+            if (auto* b = xml->getChildByName ("LB303PatternBank2")) xml->removeChildElement (b, true);
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
+            sequencerPlayback.reset();
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

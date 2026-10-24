@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginEditor.h"
 #include "ScreenReaderAnnouncer.h"
+#include "SequencerStepEditor.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -8,7 +9,7 @@
 namespace
 {
 constexpr int rowsPerColumn = 8;
-constexpr int numberOfColumns = (static_cast<int> (lb303::voiceParameterCount) + rowsPerColumn - 1) / rowsPerColumn;
+constexpr int columnsFor (int count) { return (count + rowsPerColumn - 1) / rowsPerColumn; }
 constexpr int gridGap = 7;
 constexpr int valuePageStep = 40;
 constexpr int stepWidths[] { 1, 5, 10, 15, 20 };
@@ -139,6 +140,9 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
     numericEdit.setDescription (juce::String());
     addAndMakeVisible (numericEdit);
 
+    stepEditor = std::make_unique<SequencerStepEditor> (processor);
+    addAndMakeVisible (*stepEditor);
+    stepEditor->setVisible (false);
     populateContext();
     // Children exist before JUCE's resize notifications (TEST1.2 crash fix).
     setResizable (true, true);
@@ -149,6 +153,7 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
 LB303AudioProcessorEditor::~LB303AudioProcessorEditor()
 {
     stopTimer();
+    if (stepEditor != nullptr) stepEditor->close();
     valueAttachment.reset();
 }
 std::unique_ptr<juce::AccessibilityHandler> LB303AudioProcessorEditor::createAccessibilityHandler()
@@ -159,8 +164,9 @@ std::unique_ptr<juce::AccessibilityHandler> LB303AudioProcessorEditor::createAcc
 
 size_t LB303AudioProcessorEditor::globalIndex (int local) const
 {
-    jassert (hasBassline());
-    return lb303::parameterIndex (static_cast<size_t> (context), static_cast<size_t> (local));
+    return context < 2
+        ? lb303::parameterIndex (static_cast<size_t> (context), static_cast<size_t> (local))
+        : lb303::sequencerParameterIndex (static_cast<size_t> (local));
 }
 juce::String LB303AudioProcessorEditor::contextName() const
 {
@@ -173,33 +179,21 @@ void LB303AudioProcessorEditor::populateContext()
     changingParameter = true;
     valueAttachment.reset();
     parameterGrid.clear (juce::dontSendNotification);
-    if (hasBassline())
-    {
-        selected = lastSelected[static_cast<size_t> (context)];
-        for (int i = 0; i < static_cast<int> (lb303::voiceParameterCount); ++i)
-            parameterGrid.addItem (labelFor (i), i + 1);
-        parameterGrid.setSelectedId (selected + 1, juce::dontSendNotification);
-        parameterValue.setVisible (true);
-        numericEdit.setVisible (true);
-        changingParameter = false;
-        selectParameter();
-    }
-    else
-    {
-        selected = 0;
-        parameterGrid.addItem ("Two-track sequencer — available in TEST2", 1);
-        parameterGrid.setSelectedId (1, juce::dontSendNotification);
-        parameterValue.setVisible (false);
-        numericEdit.setVisible (false);
-        changingParameter = false;
-    }
+    selected = juce::jlimit (0, currentParameterCount() - 1,
+                             lastSelected[static_cast<size_t> (context)]);
+    for (int i = 0; i < currentParameterCount(); ++i)
+        parameterGrid.addItem (labelFor (i), i + 1);
+    parameterGrid.setSelectedId (selected + 1, juce::dontSendNotification);
+    parameterValue.setVisible (true);
+    numericEdit.setVisible (true);
+    changingParameter = false;
+    selectParameter();
     parameterGrid.setLineReadingMode();
     repaint();
 }
 void LB303AudioProcessorEditor::changeContext()
 {
-    if (hasBassline())
-        lastSelected[static_cast<size_t> (context)] = selected;
+    lastSelected[static_cast<size_t> (context)] = selected;
     // Ctrl+Tab: Bassline 1 -> Bassline 2 -> Sequencer -> Bassline 1.
     context = (context + 1) % static_cast<int> (lb303::basslineCount + 1);
     populateContext();
@@ -230,11 +224,12 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
     g.drawText (contextName() + " | Ctrl+Tab: Bassline 1 / Bassline 2 / Sequencer", 203, 12, getWidth() - 223, 27,
                 juce::Justification::centredLeft);
 
-    const int cw = (drawnGrid.getWidth() - (numberOfColumns - 1) * gridGap) / numberOfColumns;
+    const int columns = columnsFor (currentParameterCount());
+    const int cw = (drawnGrid.getWidth() - (columns - 1) * gridGap) / columns;
     const int rh = (drawnGrid.getHeight() - (rowsPerColumn - 1) * gridGap) / rowsPerColumn;
-    if (hasBassline() && cw > 0 && rh > 0)
+    if (cw > 0 && rh > 0)
     {
-        for (int i = 0; i < static_cast<int> (lb303::voiceParameterCount); ++i)
+        for (int i = 0; i < currentParameterCount(); ++i)
         {
             const auto col = i / rowsPerColumn;
             const auto row = i % rowsPerColumn;
@@ -247,16 +242,9 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
             g.drawFittedText (labelFor (i), bounds.reduced (5, 2), juce::Justification::centredLeft, 1);
         }
     }
-    if (! hasBassline())
-    {
-        g.setColour (juce::Colours::white);
-        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 23.0f, juce::Font::plain)));
-        g.drawText ("Two sequencer tracks will be added in TEST2", drawnGrid,
-                    juce::Justification::centred);
-    }
     g.setColour (juce::Colour (0xffb5c9e2));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::plain)));
-    g.drawText ("Arrows: grid | Enter: Value | Tab: Grid / Value / Edit | Alt+L / Alt+V / Alt+E",
+    g.drawText ("Arrows: grid | Enter: Value | Tab: Grid / Value / Edit | Alt+L / Alt+V / Alt+E | Alt+Q: step editor",
                 18, getHeight() - 26, getWidth() - 36, 18, juce::Justification::centredLeft);
 }
 void LB303AudioProcessorEditor::resized()
@@ -273,33 +261,37 @@ void LB303AudioProcessorEditor::resized()
     area.removeFromTop (14);
     area.removeFromBottom (32);
     drawnGrid = area;
+    if (stepEditor != nullptr) stepEditor->setBounds (getLocalBounds().reduced (24));
 }
 void LB303AudioProcessorEditor::mouseDown (const juce::MouseEvent& event)
 {
-    if (! hasBassline()) return;
     if (! drawnGrid.contains (event.getPosition())) return;
-    const auto cw = (drawnGrid.getWidth() - (numberOfColumns - 1) * gridGap) / numberOfColumns;
+    const int columns = columnsFor (currentParameterCount());
+    const auto cw = (drawnGrid.getWidth() - (columns - 1) * gridGap) / columns;
     const auto rh = (drawnGrid.getHeight() - (rowsPerColumn - 1) * gridGap) / rowsPerColumn;
     if (cw <= 0 || rh <= 0) return;
     const auto p = event.getPosition() - drawnGrid.getPosition();
     const int col = p.x / (cw + gridGap);
     const int row = p.y / (rh + gridGap);
     const int index = col * rowsPerColumn + row;
-    if (col >= 0 && col < numberOfColumns && row >= 0 && row < rowsPerColumn
-        && index < static_cast<int> (lb303::voiceParameterCount))
+    if (col >= 0 && col < columns && row >= 0 && row < rowsPerColumn
+        && index < currentParameterCount())
     {
         changeSelection (index);
         focusControl (Control::grid);
     }
 }
-void LB303AudioProcessorEditor::timerCallback() { refreshLabels(); }
+void LB303AudioProcessorEditor::timerCallback()
+{
+    if (stepEditor != nullptr && stepEditor->isOpen()) stepEditor->refresh();
+    else refreshLabels();
+}
 void LB303AudioProcessorEditor::refreshLabels (bool force)
 {
-    if (! hasBassline()) return;
     // Maintain both the native ComboBox list and visible selection text. Merely
     // changing the popup's item text is NOT enough in JUCE (see LJuno TEST95).
     bool changed = false;
-    for (int i = 0; i < static_cast<int> (lb303::voiceParameterCount); ++i)
+    for (int i = 0; i < currentParameterCount(); ++i)
     {
         const auto label = labelFor (i);
         if (force || parameterGrid.getItemText (i) != label)
@@ -316,17 +308,15 @@ void LB303AudioProcessorEditor::refreshLabels (bool force)
 }
 void LB303AudioProcessorEditor::changeSelection (int index)
 {
-    if (! hasBassline()) return;
-    index = juce::jlimit (0, static_cast<int> (lb303::voiceParameterCount) - 1, index);
+    index = juce::jlimit (0, currentParameterCount() - 1, index);
     if (index == selected) return; // silent borders; no repeated announcements
     parameterGrid.setLineReadingMode();
     parameterGrid.setSelectedId (index + 1, juce::sendNotificationSync);
 }
 void LB303AudioProcessorEditor::selectParameter()
 {
-    if (! hasBassline()) return;
     const int chosen = parameterGrid.getSelectedId() - 1;
-    if (! juce::isPositiveAndBelow (chosen, static_cast<int> (lb303::voiceParameterCount))) return;
+    if (! juce::isPositiveAndBelow (chosen, currentParameterCount())) return;
     selected = chosen;
     lastSelected[static_cast<size_t> (context)] = chosen;
     changingParameter = true;
@@ -350,18 +340,16 @@ void LB303AudioProcessorEditor::selectParameter()
 }
 void LB303AudioProcessorEditor::moveInGrid (int row, int column)
 {
-    if (! hasBassline()) return;
     const auto r = selected % rowsPerColumn;
     const auto target = selected + row + column * rowsPerColumn;
     if (row < 0 && r == 0) return;
     if (row > 0 && r == rowsPerColumn - 1) return;
     if (row != 0 && target / rowsPerColumn != selected / rowsPerColumn) return;
-    if (juce::isPositiveAndBelow (target, static_cast<int> (lb303::voiceParameterCount)))
+    if (juce::isPositiveAndBelow (target, currentParameterCount()))
         changeSelection (target);
 }
 void LB303AudioProcessorEditor::setValue (float value)
 {
-    if (! hasBassline()) return;
     if (auto* param = processor.parameter (globalIndex()))
     {
         const auto range = param->getNormalisableRange();
@@ -521,12 +509,15 @@ void LB303AudioProcessorEditor::cancelEdit()
                                               processor.value (globalIndex())),
                          juce::dontSendNotification);
 }
-void LB303AudioProcessorEditor::announceUnavailableSequencer()
+void LB303AudioProcessorEditor::openStepEditor()
 {
-    const auto source = juce::Component::getCurrentlyFocusedComponent();
-    lb303::announceToActiveScreenReader (source != nullptr && isParentOf (source)
-                                            ? *source : static_cast<juce::Component&> (parameterGrid),
-                                        "Two-track sequencer editor will be added in TEST2");
+    if (stepEditor == nullptr || stepEditor->isOpen()) return;
+    int lane = context < 2 ? context
+        : juce::jlimit (0, 1, juce::roundToInt (processor.value (lb303::editTrackIndex)));
+    juce::Component* origin = juce::Component::getCurrentlyFocusedComponent();
+    if (origin == nullptr || (origin != &parameterGrid && origin != &parameterValue
+                             && origin != &numericEdit)) origin = &parameterGrid;
+    stepEditor->open (lane, origin);
 }
 bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control current)
 {
@@ -543,20 +534,13 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         changeContext();
         return true;
     }
-    if (mods.isAltDown() && letter ('q')) { announceUnavailableSequencer(); return true; }
-    if (! hasBassline())
-    {
-        if (mods.isAltDown() && letter ('l')) { focusControl (Control::grid); return true; }
-        // No fake editable parameters until the two-track sequencer exists.
-        // Ctrl+Tab is always available to leave this context.
-        return true;
-    }
+    if (mods.isAltDown() && letter ('q')) { openStepEditor(); return true; }
     if (mods.isAltDown())
     {
         if (letter ('l')) { focusControl (Control::grid, current == Control::edit); return true; }
         if (letter ('v')) { focusControl (Control::value, current == Control::edit); return true; }
         if (letter ('e')) { enterEdit(); return true; }
-        if (letter ('q')) { announceUnavailableSequencer(); return true; }
+        if (letter ('q')) { openStepEditor(); return true; }
         if (code == juce::KeyPress::upKey) { changeValue (1, mods.isShiftDown() ? 10 : 1); return true; }
         if (code == juce::KeyPress::downKey) { changeValue (-1, mods.isShiftDown() ? 10 : 1); return true; }
         if (code == juce::KeyPress::leftKey) { changeStepWidth (-1); return true; }
@@ -617,7 +601,7 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
     parameterGrid.setLineReadingMode();
     if (mods.isCtrlDown() && code == juce::KeyPress::homeKey) { changeSelection (0); return true; }
     if (mods.isCtrlDown() && code == juce::KeyPress::endKey)
-    { changeSelection (static_cast<int> (lb303::voiceParameterCount) - 1); return true; }
+    { changeSelection (currentParameterCount() - 1); return true; }
     if (! mods.isCtrlDown() && ! mods.isCommandDown())
     {
         if (code == juce::KeyPress::upKey) { moveInGrid (-1, 0); return true; }
@@ -627,7 +611,7 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         if (code == juce::KeyPress::homeKey)
         { changeSelection ((selected / rowsPerColumn) * rowsPerColumn); return true; }
         if (code == juce::KeyPress::endKey)
-        { changeSelection (juce::jmin (static_cast<int> (lb303::voiceParameterCount) - 1,
+        { changeSelection (juce::jmin (currentParameterCount() - 1,
                                      (selected / rowsPerColumn + 1) * rowsPerColumn - 1)); return true; }
         if (code == juce::KeyPress::pageUpKey)
         {
@@ -638,14 +622,14 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         if (code == juce::KeyPress::pageDownKey)
         {
             changeSelection (juce::jmin (juce::jmin (
-                                    static_cast<int> (lb303::voiceParameterCount) - 1,
+                                    currentParameterCount() - 1,
                                     (selected / rowsPerColumn + 1) * rowsPerColumn - 1),
                                     selected + 5));
             return true;
         }
         if (juce::CharacterFunctions::isLetterOrDigit (ch))
         {
-            const int count = static_cast<int> (lb303::voiceParameterCount);
+            const int count = currentParameterCount();
             const int delta = mods.isShiftDown() ? -1 : 1;
             for (int t = 1; t <= count; ++t)
             {

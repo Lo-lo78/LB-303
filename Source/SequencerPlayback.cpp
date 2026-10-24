@@ -1,0 +1,127 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include "SequencerPlayback.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+
+namespace lb303
+{
+namespace
+{
+int positiveModulo (std::int64_t number, int divisor)
+{
+    const auto result = number % divisor;
+    return static_cast<int> (result < 0 ? result + divisor : result);
+}
+
+// Stable deterministic probability so the same timeline position renders the
+// same result after looped playback, rather than depending on audio block sizes.
+bool shouldSkip (int track, int pattern, std::int64_t step, float chance)
+{
+    if (chance <= 0.0f) return false;
+    if (chance >= 1.0f) return true;
+    std::uint32_t x = 0x9e3779b9u ^ static_cast<std::uint32_t> (step);
+    x ^= static_cast<std::uint32_t> (step >> 32) * 0x85ebca6bu;
+    x ^= static_cast<std::uint32_t> (track + 1) * 0x27d4eb2du;
+    x ^= static_cast<std::uint32_t> (pattern + 1) * 0x165667b1u;
+    x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15;
+    return static_cast<double> (x) / 4294967296.0 < chance;
+}
+}
+void SequencerPlayback::reset() noexcept
+{
+    oldPattern = { -1, -1 };
+    oldEnabled = { false, false };
+    lastNote = { -1, -1 };
+    previousPpq = -1.0;
+    previousPlaying = false;
+}
+
+void SequencerPlayback::generate (juce::MidiBuffer& output,
+                                  const std::array<SequencerState, 2>& banks,
+                                  const std::array<int, 2>& patterns,
+                                  const std::array<bool, 2>& enabled,
+                                  bool playing, double ppq, double bpm,
+                                  double sampleRate, int samples)
+{
+    if (samples <= 0 || ! std::isfinite (ppq) || bpm <= 0.0 || sampleRate <= 0.0)
+        return;
+    const auto beatsPerSample = bpm / (60.0 * sampleRate);
+    const auto endPpq = ppq + samples * beatsPerSample;
+    const bool timelineJump = previousPlaying && (previousPpq < 0.0
+        || std::abs (ppq - previousPpq) > 0.025); // loop, seek or discontinuity
+
+    // Explicit note-off on stop, disabling a lane or switching its pattern.
+    // Does not interfere with the other lane's MIDI channel.
+    for (int lane = 0; lane < 2; ++lane)
+    {
+        if (lastNote[lane] >= 0 && (timelineJump || ! playing || ! enabled[lane]
+                                    || ! oldEnabled[lane] || oldPattern[lane] != patterns[lane]))
+        {
+            output.addEvent (juce::MidiMessage::noteOff (lane + 1, lastNote[lane]), 0);
+            lastNote[lane] = -1;
+        }
+        oldPattern[lane] = patterns[lane];
+        oldEnabled[lane] = enabled[lane];
+    }
+    previousPpq = endPpq;
+    previousPlaying = playing;
+    if (! playing) return;
+
+    for (int lane = 0; lane < 2; ++lane)
+    {
+        if (! enabled[lane]) continue;
+        const int pattern = juce::jlimit (0, SequencerState::maximumSequences - 1, patterns[lane]);
+        const auto& bank = banks[static_cast<size_t> (lane)];
+        const auto config = bank.getConfig (pattern);
+        const int start = juce::jlimit (1, 128, config.startStep) - 1;
+        const int finish = juce::jlimit (start + 1, 128, config.endStep);
+        const int patternLength = finish - start;
+        const auto division = juce::jlimit (0.125, 32.0, static_cast<double> (config.bpmDivision));
+        const double stepBeats = 1.0 / division;
+        // LJuno's Launch Step is a delayed pattern start, not the note number
+        // of the first step. Keep phase/launch independent for each bank.
+        const double launchDelay = (juce::jlimit (1, 128, config.launchStep) - 1) * stepBeats
+            + static_cast<double> (config.launchOffsetMs) * bpm / 60000.0;
+        const std::int64_t first = static_cast<std::int64_t> (
+            std::floor ((ppq - launchDelay) / stepBeats)) - 2;
+        const std::int64_t last = static_cast<std::int64_t> (
+            std::ceil ((endPpq - launchDelay) / stepBeats)) + 2;
+        // Bound CPU for pathological host jumps or extreme divisions.
+        for (std::int64_t tick = first; tick <= last && tick < first + 1024; ++tick)
+        {
+            const int stepInPattern = positiveModulo (tick, patternLength);
+            const auto step = bank.getStep (pattern, start + stepInPattern);
+            if (step.note >= 128 || step.velocity <= 0 || shouldSkip (
+                lane, pattern, tick, config.noteSkipProbability)) continue;
+            const int note = juce::jlimit (0, 127, step.note + config.semitoneShift + 12 * config.octaveShift);
+            const int velocity = juce::jlimit (1, 127, step.velocity);
+            const int repeats = juce::jlimit (1, 16, step.repeat);
+            const double repeatBeats = stepBeats / repeats;
+            const double swing = (positiveModulo (tick, 2) != 0)
+                ? juce::jlimit (-0.45, 0.45, static_cast<double> (config.shuffle)) * stepBeats : 0.0;
+            const double shift = juce::jlimit (-0.45, 0.45,
+                static_cast<double> (step.shift - 0.5f)) * repeatBeats;
+            for (int repeat = 0; repeat < repeats; ++repeat)
+            {
+                const double onPpq = launchDelay + tick * stepBeats + repeat * repeatBeats + swing + shift;
+                const double offPpq = onPpq + repeatBeats
+                    * (step.length > 100 ? 1.02 : juce::jlimit (0.01, 1.0, step.length / 100.0));
+                const auto emit = [&] (bool noteOn, double eventPpq)
+                {
+                    if (eventPpq < ppq || eventPpq >= endPpq) return;
+                    const int sample = juce::jlimit (0, samples - 1,
+                        static_cast<int> (std::floor ((eventPpq - ppq) / beatsPerSample + 0.5)));
+                    output.addEvent (noteOn
+                        ? juce::MidiMessage::noteOn (lane + 1, note, static_cast<juce::uint8> (velocity))
+                        : juce::MidiMessage::noteOff (lane + 1, note), sample);
+                    if (noteOn) lastNote[lane] = note;
+                    else if (lastNote[lane] == note) lastNote[lane] = -1;
+                };
+                emit (true, onPpq);
+                emit (false, offPpq);
+            }
+        }
+    }
+}
+}

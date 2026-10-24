@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(LB303 VERSION 0.0.1 LANGUAGES C CXX)
+project(LB303 VERSION 0.0.2 LANGUAGES C CXX)
 
 # Same JUCE 8 and static Windows CRT policy as LJuno-116 TEST95.
 if(MSVC)
@@ -37,8 +37,14 @@ target_sources(LB303 PRIVATE
     Source/ParameterCatalog.cpp
     Source/BassEngine.h
     Source/BassEngine.cpp
+    Source/SequencerState.h
+    Source/SequencerState.cpp
+    Source/SequencerPlayback.h
+    Source/SequencerPlayback.cpp
     Source/PluginProcessor.h
     Source/PluginProcessor.cpp
+    Source/SequencerStepEditor.h
+    Source/SequencerStepEditor.cpp
     Source/PluginEditor.h
     Source/PluginEditor.cpp
     Source/ScreenReaderAnnouncer.h

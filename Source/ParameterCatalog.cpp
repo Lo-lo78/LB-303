@@ -12,6 +12,10 @@ constexpr const char* transientChoices[] = { "Loose", "Neutral", "Tight" };
 constexpr const char* syncChoices[] = { "Off", "1/16", "1/12T", "1/8", "1/6T", "1/4", "1/3T", "1/2", "1/1" };
 constexpr const char* delayModeChoices[] = { "Normal", "Ping-Pong" };
 constexpr const char* responseChoices[] = { "Gate", "Lowpass Gate" };
+constexpr const char* patternChoices[] = { "1", "2", "3", "4", "5", "6", "7", "8",
+                                          "9", "10", "11", "12", "13", "14", "15", "16" };
+constexpr const char* switchChoices[] = { "Off", "On" };
+constexpr const char* trackChoices[] = { "Bassline 1", "Bassline 2" };
 }
 
 const std::array<ParameterInfo, parameterCount>& catalog()
@@ -74,6 +78,11 @@ const std::array<ParameterInfo, parameterCount>& catalog()
                 voice == 0 ? "b1_pan" : "b2_pan", "Pan",
                 -100.0f, 100.0f, 1.0f, 0.0f, "%" };
         }
+        result[pattern1Index] = { "seq_b1_pattern", "Pattern Bassline 1", 0, 15, 1, 0, "", patternChoices, 16 };
+        result[pattern2Index] = { "seq_b2_pattern", "Pattern Bassline 2", 0, 15, 1, 0, "", patternChoices, 16 };
+        result[sequencer1EnabledIndex] = { "seq_b1_enable", "Play Bassline 1", 0, 1, 1, 0, "", switchChoices, 2 };
+        result[sequencer2EnabledIndex] = { "seq_b2_enable", "Play Bassline 2", 0, 1, 1, 0, "", switchChoices, 2 };
+        result[editTrackIndex] = { "seq_edit_track", "Editor Track", 0, 1, 1, 0, "", trackChoices, 2 };
         return result;
     }();
     return values;
@@ -87,8 +96,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         const auto& p = catalog()[index];
         // Distinguish automated parameters in REAPER's global FX parameter list,
         // without adding redundant prefixes to the accessible per-bassline grids.
-        const auto hostName = "Bassline " + juce::String (1 + index / voiceParameterCount)
-                              + " - " + p.name;
+        const auto hostName = index < audioParameterCount
+            ? ("Bassline " + juce::String (1 + index / voiceParameterCount) + " - " + p.name)
+            : ("Sequencer - " + p.name);
         if (p.choiceCount)
         {
             juce::StringArray options;

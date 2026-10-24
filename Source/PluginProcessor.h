@@ -2,6 +2,8 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "BassEngine.h"
+#include "SequencerState.h"
+#include "SequencerPlayback.h"
 #include <array>
 #include <atomic>
 
@@ -32,9 +34,22 @@ public:
     juce::AudioProcessorValueTreeState parameters;
     float value (size_t index) const;
     juce::RangedAudioParameter* parameter (size_t index);
+    // Track 0: channel 1 / Pattern Bassline 1. Track 1: channel 2 / Pattern Bassline 2.
+    int currentPattern (size_t lane) const noexcept;
+    void requestSequencerPreview (int lane) noexcept
+    { previewLane.store (lane >= 0 && lane < 2 ? lane : -1, std::memory_order_relaxed); }
+    lb303::SequencerState& patternBank (size_t lane) noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
+    const lb303::SequencerState& patternBank (size_t lane) const noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
 
 private:
     std::array<lb303::BassEngine, lb303::basslineCount> engines;
+    std::array<lb303::SequencerState, lb303::basslineCount> sequenceBanks;
+    lb303::SequencerPlayback sequencerPlayback;
+    double sampleRateHz = 44100.0;
+    double fallbackPpq = 0.0;
+    double previewPpq = 0.0;
+    bool previousPreview = false;
+    std::atomic<int> previewLane { -1 };
     std::array<std::atomic<float>*, lb303::parameterCount> rawParameters {};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessor)
 };

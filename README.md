@@ -1,3 +1,47 @@
+# LB-303 0.0.2 — TEST2.2.5 (parameter picker can change bassline)
+
+- **Page 7 — Parameters** (zero-based code index `6`): on a selected step, **Enter** opens a separate accessible selection view listing **37 parameters of the current bassline only** in columns of eight rows. Page 6 remains Launch Step.
+- In the selector use Up/Down (rows), Left/Right (columns), Home/End (column edges), Ctrl+Home/End (first/last), PageUp/PageDown (five rows), or initial letters to find parameters. **Enter** assigns/selects one of up to 32 locks for the step and returns to Parameters; **Alt+Enter** adds/removes the highlighted lock without closing the selector; **Esc** returns without changing selections. Boundary keys are silent.
+- On the Parameters page, Up/Down edits the highlighted lock value using the parameter's documented range/step, Alt+Home/End changes current lock, Delete removes one, Alt+Delete clears all, Backspace resets one to its initial value. Changes participate in the existing step Undo/Redo and are stored in the pattern bank; they never modify the APVTS base parameter values. Lock playback in the audio engine is **not yet enabled** (TEST2.3).
+- All 32 patterns are independent and pattern selectors remain automatable. No synth DSP modifications, parameter ID changes, or new requirements for local compilation. Only static checks have run: GitHub Actions and NVDA/REAPER test pending.
+
+---
+
+## TEST2.2.3 — Tab follows the active Start/End Step range
+
+In Alt+Q, the current pattern on the current bassline has a separate playback
+range: **Z** decreases Start Step, **X** increases Start Step, **C** decreases
+End Step, and **V** increases End Step (1–128), matching LJuno. This range is
+saved with that pattern. If Start=1 and End=32, **Tab** traverses only the
+1–16 and 17–32 blocks; at the final block Tab is silent, and Shift+Tab is
+silent at the first block. Different patterns on Bassline 1 and Bassline 2
+retain independent limits. The editor also does not select or modify steps
+outside the active range, and automatically moves selection into range when
+Start/End, track, or pattern changes. Editing the range never erases step data
+outside it; lengthening the pattern exposes those steps again.
+
+All existing shortcuts remain: Home/End choose track, Ctrl+Up/Down choose the
+current track's pattern, and Ctrl+Tab remains unassigned inside Alt+Q.
+No synthesizer DSP or VST parameter IDs changed. Static checks only: compile
+using GitHub Actions and test behavior with NVDA/REAPER.
+
+---
+
+# LB-303 — VST3 0.0.2 TEST2.2.3 (Active step range)
+
+**Two independent pattern selectors:** Pattern Bassline 1 (1–16) and Pattern Bassline 2 (1–16). Selecting a new pattern in either lane never changes the other. There are **32 patterns total** (16 per bassline), each with 128 steps and up to 32 parameter-lock slots per step. Both use REAPER's transport clock, but have independent pattern lengths, playback positions and note events. Bassline 1 outputs MIDI channel 1; Bassline 2 outputs MIDI channel 2.
+
+Use **Ctrl+Tab** to open the Sequencer parameter grid (Bassline 1 → Bassline 2 → Sequencer). This grid has **Pattern Bassline 1, Pattern Bassline 2, Play Bassline 1, Play Bassline 2, Editor Track**. Navigation remains Grid/Value/Edit with silent bounds and NVDA announcements. The two Play controls default to Off, so existing projects remain unaffected. Bassline 2 Level still defaults to 0; raise it to hear track 2.
+
+**TEST2.2:** Alt+Q opens the accessible step editor and can now program both
+independent 16-pattern banks: Note, Length, Velocity, Repeat, Shift and Launch Step.
+The seventh page shows Parameter Lock counts only; adding/applying locks is
+planned for TEST2.3. Pattern content is retained when a project is reopened.
+All 32 new patterns start as rests until you program them. GitHub Actions
+compilation and actual testing with NVDA/REAPER have not yet been performed.
+
+---
+
 # LB-303 (VST3) — version 0.0.1 TEST1.7
 
 Accessible dual-engine bassline synthesizer for REAPER, ported from **LB-303.jsfx**
@@ -59,8 +103,8 @@ keeps them, rather than silently modifying the character.
 | Left / Right (Value) | Change the step width, as in LJuno |
 | Ctrl+Home / Ctrl+End | First / last parameter |
 | Alt+L / Alt+V / Alt+E | Focus Grid / Value / Edit |
-| Alt+Q | TEST1 announces that sequencer editor is scheduled for TEST2 |
-| Ctrl+Tab | Cycle Bassline 1 → Bassline 2 → Sequencer placeholder → Bassline 1 |
+| Alt+Q | Open the accessible two-track step editor (TEST2.2) |
+| Ctrl+Tab | Cycle Bassline 1 → Bassline 2 → Sequencer → Bassline 1 |
 
 The focused parameter name and value are also set as native accessibility text,
 so screen-reader line reading has a concise value. Host interception of global
@@ -107,7 +151,7 @@ shortcuts may vary; please test Alt+L and arrow focus with NVDA/OSARA in REAPER.
    `.github/workflows/build-windows.yml` hierarchy.
 3. Open **Actions → Build LB-303 Windows x64**. The `push` starts the build,
    or use `Run workflow` manually.
-4. Download the `LB-303-0.0.1-TEST1.7-Windows-x64` artifact after it succeeds.
+4. Download the `LB-303-0.0.2-TEST2.2.5-Windows-x64` artifact after it succeeds.
 5. Extract the VST3 directory under the usual VST3 folder, e.g.
    `C:\Program Files\Common Files\VST3\`, and scan in REAPER.
 
@@ -191,10 +235,10 @@ Reference files are not compiled directly into the VST3.
 - In TEST1.6, incoming MIDI was layered to both basslines. Starting in TEST1.7,
   Bassline 1 receives MIDI channel 1 exclusively and Bassline 2 channel 2.
   The future two-track sequencer will address them independently. TEST1.7 still
-  does not contain a functional sequencer engine, clocks or patterns.
+  did not contain a functional sequencer engine, clocks or patterns (now added in TEST2).
 - `Ctrl+Tab` rotates **Bassline 1 → Bassline 2 → Sequencer → Bassline 1**.
   The Sequencer context displays a descriptive placeholder without bogus
-  editable controls. Alt+Q continues to report that step editing is not yet
+  editable controls. Earlier TEST2.1 still reported that step editing was not yet
   implemented. The two bassline grids remember their selections separately.
 - Grid → Value → Edit, Enter, Alt+Left/Right, Alt+PageUp/PageDown, Alt+Home/End,
   silent borders, NVDA/OSARA speech and no-focus-steal-on-load are preserved.
@@ -216,3 +260,96 @@ Reference files are not compiled directly into the VST3.
   have been changed. Only MIDI event routing, tests and build artifact naming.
 - Static checks only. GitHub Actions must compile; REAPER must verify
   channel isolation, including overlapping notes and Note Off messages.
+
+
+## TEST2.2 — accessible two-track step editor
+
+Press **Alt+Q** while focused in Grid, Value or Edit. The current Bassline
+context chooses the track; from Sequencer context the independent **Editor
+Track** parameter chooses it. **Esc** returns to the exact control used to
+open the editor. Loading the plug-in still does not steal focus from REAPER.
+
+Within the editor:
+
+- **1–7**: Note, Length, Velocity, Repeat, Shift, Launch Step, Parameters.
+- **Q W E R T Y U I / A S D F G H J K**: select one of 16 visible steps.
+- Double-press a step key to select/deselect it for multi-step edits.
+- **Tab / Shift+Tab**: move between the eight blocks of 16 steps (128 total).
+- **Home / End**: previous/next bassline editing track (Home selects Bassline 1; End selects Bassline 2). Silent at boundaries. Ctrl+Tab has no action inside the step editor; outside it still switches the three parameter grids.
+- **Ctrl+Up / Ctrl+Down**: next/previous pattern (1–16) for the **currently edited bassline only**; the other pattern stays unchanged. The new selection is announced to NVDA/OSARA and updates the corresponding host-automatable VST3 parameter.
+- **Up/Down**: edit step; **Left/Right**: increment width 1,5,10,...40;
+  **PageUp/PageDown**: move by chosen increment.
+- **Enter on Note page**: toggle Pause / C4 (note 60); useful to program an initially empty pattern.
+- **Backspace**: reset musical properties of selected steps (rest = MIDI note 128).
+- **Ctrl+C, Ctrl+X, Ctrl+V**: copy/cut/paste one or selected steps;
+  **Ctrl+Z / Ctrl+Shift+Z**: undo/redo (50 actions).
+- **Space**: preview selected bassline even with REAPER stopped; pressing
+  again or leaving the editor stops preview. Existing MIDI 1/2 routing is kept.
+- **Alt+I**: read track, pattern, page, step and current playback range.
+
+All 32 patterns are independent and are stored in the REAPER project via the
+existing TEST2.1 state format. **Page 7 Parameters** displays lock counts,
+but Parameter Lock assignment and playback are intentionally reserved for
+TEST2.3. The synth audio path and original parameter IDs are unchanged.
+
+Compiled only through GitHub Actions; no local build or REAPER audio test performed.
+
+
+## TEST2.2.1 — separate track and pattern shortcuts
+
+This release changes **only** the keyboard behavior in the sequencer step editor:
+
+- **Home** moves to the previous bassline (only two: 1 and 2); **End** to the next.
+  At Bassline 1 with Home and Bassline 2 with End the navigation is silent.
+- **Ctrl+Up** selects the next pattern 1–16 of the edited bassline; **Ctrl+Down**
+  the preceding pattern, with silent limits. The other bassline's pattern
+  selection is untouched.
+- Both **Pattern Bassline 1** (`seq_b1_pattern`) and **Pattern Bassline 2**
+  (`seq_b2_pattern`) are already present in the **Sequencer** Grid/Value/Edit
+  parameter context (reach it with Ctrl+Tab from Bassline 1, then Ctrl+Tab
+  from Bassline 2) as two separate JUCE AudioParameterChoice VST3 parameters.
+  They can be automated independently in REAPER, and the editor shortcuts
+  update the **same** automatable parameter, not a private editor value.
+- The two pattern banks still hold 16 patterns each (32 total); MIDI routes to
+  channels 1 and 2. Synth DSP, parameter IDs, project persistence, editor
+  focus, Grid/Value/Edit, and Parameter Locks roadmap are unchanged.
+- The matching **LJuno-116** shortcut change is *proposed for a future update*;
+  it is not part of this LB-303 patch.
+
+This source has static checks only: compile using GitHub Actions and check the
+keyboard/screen-reader behavior in REAPER before considering the change verified.
+
+
+## TEST2.2.5 — Assign locks across both basslines without exiting the picker
+
+In Alt+Q step editor, press 7 for Parameters, then Enter for the picker:
+
+- **Ctrl+Up / Ctrl+Down while the picker is OPEN:** switch to Bassline 2 / Bassline 1. This does **not** change either pattern; each lane retains its own pattern selector (1–16) and step bounds.
+- **Alt+Enter:** toggle the highlighted parameter lock **in the current bassline** and keep the picker open. Repeat to assign multiple locks. If the same parameter is already locked, Alt+Enter removes it (as in LJuno).
+- **Enter:** select/add the highlighted parameter lock in the current bassline, then close the picker, returning to page 7. If that lock is already present, Enter simply selects it and closes; it does **not** add a duplicate.
+- **Esc:** close the picker without deleting locks already assigned.
+- **Ctrl+Up / Ctrl+Down when picker is CLOSED:** unchanged; change pattern 1–16 of the current bassline. **Home/End** in the step editor still switch tracks. All boundary attempts remain silent.
+
+For example, add three locks on Bassline 1 using Alt+Enter, Ctrl+Up to Bassline 2, add two locks with Alt+Enter, then Enter while an already-assigned parameter is highlighted. The result is **3 locks on Bassline 1 and 2 on Bassline 2**, both on their respective currently selected patterns and step positions. The picker remembers the selected step separately for each lane, clamped to that lane's Start/End range, and announces bassline, pattern, step and parameter when switching. Undo/Redo and project-state storage remain independent per lane/pattern/step.
+
+**Parameter Lock playback is still deferred to TEST2.3.** Static tests only; GitHub Actions and real NVDA/REAPER tests still required. LJuno itself is not modified.
+
+## TEST2.2.6 — Simplified parameter picker and selected announcements
+
+This release supersedes the **picker-only** Ctrl+Up/Down track switching added
+in TEST2.2.5. In the open picker, Ctrl+Up/Down now has **no action** (silently
+consumed); it cannot switch basslines or accidentally adjust a pattern. Choose
+Bassline 1 or 2 with **Home/End in the step editor before opening the picker**.
+With the picker closed, Ctrl+Up/Down still changes the independent 1–16 pattern
+of the current bassline, exactly as before.
+
+On page 7 (Parameters), Enter opens the picker. Any parameter **already assigned
+as a Parameter Lock to the current step** now has the literal prefix **`selected `**
+BEFORE its name, both in the grid and in the NVDA/OSARA announcement, matching
+LJuno's convention. Non-assigned parameters are read by name only. This status
+updates immediately when Alt+Enter toggles the lock, without closing the picker.
+Enter adds/selects and closes; Escape closes without discarding locks already
+added. The separate 16-pattern banks and saved parameters are unchanged.
+
+Parameter Lock **playback** is still planned for TEST2.3. Only static checks
+have been run; build on GitHub Actions and test announcements in REAPER/NVDA.
