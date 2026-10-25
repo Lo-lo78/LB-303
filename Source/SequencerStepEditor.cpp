@@ -452,9 +452,9 @@ juce::String SequencerStepEditor::currentLockText() const
     const int index = juce::jlimit (0, count - 1, selectedLockIndex);
     const auto lock = bank().getStepParameterLock (pattern(), currentStep, index);
     const int local = lock.sliderNumber - 1;
-    if (! juce::isPositiveAndBelow (local, static_cast<int> (lb303::voiceParameterCount)))
+    if (! juce::isPositiveAndBelow (local, static_cast<int> (lb303::voiceLocalParameterCount)))
         return juce::String (count) + " parameter locks";
-    const auto catalogIndex = lb303::parameterIndex (static_cast<size_t> (track),
+    const auto catalogIndex = lb303::voiceParameterGlobalIndex (static_cast<size_t> (track),
                                                    static_cast<size_t> (local));
     return juce::String (index + 1) + " of " + juce::String (count) + ", "
         + lb303::catalog()[catalogIndex].name + " "
@@ -486,7 +486,7 @@ juce::String SequencerStepEditor::pickerItemText (int localIndex) const
 {
     const auto local = lb303::displayToLocal (static_cast<size_t> (track),
                                                static_cast<size_t> (localIndex));
-    const auto index = lb303::parameterIndex (static_cast<size_t> (track), local);
+    const auto index = lb303::voiceParameterGlobalIndex (static_cast<size_t> (track), local);
     const bool assigned = bank().findStepParameterLock (pattern(), currentStep,
                                                         static_cast<int> (local) + 1) >= 0;
     // The prefix refers to a parameter already locked on the current step,
@@ -544,7 +544,7 @@ void SequencerStepEditor::selectPickerParameter (bool toggle)
         selectedLockIndex = prior;
     else
     {
-        const auto index = lb303::parameterIndex (static_cast<size_t> (track),
+        const auto index = lb303::voiceParameterGlobalIndex (static_cast<size_t> (track),
                                                     static_cast<size_t> (local));
         const int added = bank().addStepParameterLock (pat, stepIndex, local + 1,
                                                        processor.value (index));
@@ -569,8 +569,8 @@ void SequencerStepEditor::editSelectedLock (int direction, int amount)
     selectedLockIndex = juce::jlimit (0, count - 1, selectedLockIndex);
     const auto lock = bank().getStepParameterLock (pattern(), currentStep, selectedLockIndex);
     const int local = lock.sliderNumber - 1;
-    if (! juce::isPositiveAndBelow (local, static_cast<int> (lb303::voiceParameterCount))) return;
-    const auto& info = lb303::catalog()[lb303::parameterIndex (static_cast<size_t> (track),
+    if (! juce::isPositiveAndBelow (local, static_cast<int> (lb303::voiceLocalParameterCount))) return;
+    const auto& info = lb303::catalog()[lb303::voiceParameterGlobalIndex (static_cast<size_t> (track),
                                                                static_cast<size_t> (local))];
     const float delta = (info.choiceCount > 0 ? 1.0f : info.step) * direction * amount;
     const float next = juce::jlimit (info.minimum, info.maximum, lock.value + delta);
@@ -621,8 +621,8 @@ void SequencerStepEditor::resetSelectedLock()
     selectedLockIndex = juce::jlimit (0, count - 1, selectedLockIndex);
     const auto lock = bank().getStepParameterLock (pattern(), currentStep, selectedLockIndex);
     const int local = lock.sliderNumber - 1;
-    if (! juce::isPositiveAndBelow (local, static_cast<int> (lb303::voiceParameterCount))) return;
-    const float initial = lb303::catalog()[lb303::parameterIndex (
+    if (! juce::isPositiveAndBelow (local, static_cast<int> (lb303::voiceLocalParameterCount))) return;
+    const float initial = lb303::catalog()[lb303::voiceParameterGlobalIndex (
         static_cast<size_t> (track), static_cast<size_t> (local))].initial;
     if (std::abs (initial - lock.value) < 0.0000001f) return;
     Action action; action.track = track; action.pattern = pattern();
@@ -670,7 +670,7 @@ bool SequencerStepEditor::handlePickerKey (const juce::KeyPress& key)
             for (int i = 1; i <= count; ++i)
             {
                 const int candidate = (pickerIndex + delta * i + count * 2) % count;
-                const auto index = lb303::parameterIndex (static_cast<size_t> (track),
+                const auto index = lb303::voiceParameterGlobalIndex (static_cast<size_t> (track),
                     lb303::displayToLocal (static_cast<size_t> (track),
                                            static_cast<size_t> (candidate)));
                 const auto& name = lb303::catalog()[index].name;

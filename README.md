@@ -1,3 +1,18 @@
+# LB-303 0.0.2 — TEST2.4.12 | Dual LFO and Volume-first grids
+
+This update builds on TEST2.4.11. **Do not extract its patch over an older version.**
+
+- **Volume (historic `slider008`) is now first** in both Bassline parameter grids, immediately before Waveform. The redundant post-synth `Level` control is removed from both accessible grids and from output gain. The historic `b1_level` / `b2_level` parameter IDs are retained as inert legacy slots so previously saved indices are not shifted; their automation no longer affects sound.
+- **Two independent LFOs**, one assigned to each bassline. Their VST IDs are `b1_lfo_*` and `b2_lfo_*`, appended after every previous ID. The default depth for each modulation target is 0, preserving the sound of existing presets unless LFO depth is explicitly enabled.
+- Each LFO has **Mode** (Free or Triggered), **Rate** (0.125–128 Hz), **BPM Sync**, **Wave** (Sine, Triangle, Saw Up, Saw Down, Square, Sample Hold), **Square PWM** for the LFO's square duty cycle, **Delay**, **Phase**, **Upper Squash**, **Lower Squash**, **Smooth**, **One Shot** and **One Shot Percent**.
+- Only four **bipolar modulation depths**: **Pitch Depth** (−48..+48 semitones), **Volume Depth** (−1..+1), **Filter Depth** (−1..+1 normalized cutoff) and **Pan Depth** (−1..+1). All start at 0. The old *PWM Rate* and *PWM Depth* of the oscillator are untouched and remain independent of the new LFO: the new **LFO Square PWM** shapes the modulation waveform, not the oscillator pulse width.
+- The LFO parameters appear in the existing two Bassline grids, with the same Grid/Value/Edit accessibility, character navigation, shortcuts and eight rows per column. Page 7's lock picker can now lock LFO parameters independently per step/track, reusing virtual local slots 38–53 without altering old lock numbers 1–37.
+- No changes to the four main contexts, sequencer, FX routing, browser, `.lb` format, or 32 patterns. Both LFOs are included automatically in complete preset/project state snapshots.
+
+**Validation:** static regression checks only. GitHub Actions Windows build and REAPER/NVDA audio and focus tests still required.
+
+---
+
 # TEST2.4.11 — Dynamic FX grid and fixed effect order
 
 - The FX page has six stable columns: **Dry Level**, **Distortion 1**, **Distortion 2**, **Chorus**, **Delay** and **Reverb**. This FX-only layout supports varying column lengths (up to 16 controls); all other grids continue to use eight rows per column.

@@ -28,7 +28,23 @@ constexpr size_t sequencerPerformancePerLane = 10;
 constexpr size_t sequencerPerformanceCount = basslineCount * sequencerPerformancePerLane;
 constexpr size_t sequencerPerformanceBase = legacyParameterCount + fxParameterCount;
 constexpr size_t sequencerDisplayParameterCount = sequencerParameterCount + sequencerPerformanceCount;
-constexpr size_t parameterCount = sequencerPerformanceBase + sequencerPerformanceCount;
+// Append the two LFOs AFTER every previously published VST3 parameter ID.
+// Older voice local lock IDs 1..37 remain untouched; new LFO lock IDs start at 38.
+constexpr size_t lfoParameterCount = 16;
+constexpr size_t lfoParameterBase = sequencerPerformanceBase + sequencerPerformanceCount;
+constexpr size_t parameterCount = lfoParameterBase + basslineCount * lfoParameterCount;
+constexpr size_t lfoParameterIndex (size_t lane, size_t control)
+{ return lfoParameterBase + lane * lfoParameterCount + control; }
+namespace lfo
+{
+enum Control : size_t { mode, rate, bpmSync, wave, squarePwm, delay, phase,
+                        upperSquash, lowerSquash, smooth, oneShot, oneShotPercent,
+                        pitchDepth, volumeDepth, filterDepth, panDepth };
+}
+constexpr size_t voiceLocalParameterCount = voiceParameterCount + lfoParameterCount;
+constexpr size_t voiceParameterGlobalIndex (size_t voice, size_t local)
+{ return local < voiceParameterCount ? voice * voiceParameterCount + local
+                                    : lfoParameterIndex (voice, local - voiceParameterCount); }
 constexpr size_t seqPerformanceIndex (size_t lane, size_t control)
 { return sequencerPerformanceBase + lane * sequencerPerformancePerLane + control; }
 namespace seqPerformance
@@ -37,7 +53,7 @@ enum Control : size_t { bpmDivision, shuffle, legato, skipProbability, noteRando
                          velocityRandom, lengthRandom, repeatRandom, octaveShift, semitoneShift };
 }
 constexpr size_t fxParameterIndex (size_t local) { return legacyParameterCount + local; }
-constexpr size_t voiceVisibleParameterCount = 23; // voice parameters shown in parameter-lock picker
+constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount; // old Level is hidden; Volume is first // voice parameters shown in parameter-lock picker
 constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 1; // existing MIDI channel shown too
 constexpr int voiceMidiDisplayIndex = 3; // Level, Waveform, Pan, MIDI Channel, ...
 constexpr size_t classicDelayParameterCount = 14;

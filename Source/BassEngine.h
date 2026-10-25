@@ -5,6 +5,7 @@
 #include <vector>
 #include <utility>
 #include <cstddef>
+#include <cstdint>
 
 namespace lb303
 {
@@ -15,6 +16,8 @@ public:
     void prepare (double sampleRate);
     void reset();
     void setParameters (const Values& values, double bpm);
+    using LfoValues = std::array<float, lfoParameterCount>;
+    void setLfoParameters (const LfoValues& values) noexcept { lfoParameters = values; }
     void midi (const juce::MidiMessage& event);
     void releaseNote() noexcept; // stop a direct note when switching to sequencer mode
     std::pair<float, float> tick (float inputL, float inputR);
@@ -51,6 +54,15 @@ private:
     };
     double fs = 44100.0, tempo = 120.0;
     Values p {};
+    LfoValues lfoParameters {};
+    struct LfoState
+    {
+        double phase = 0.0, shotPosition = 0.0;
+        double previousPhase = 0.0, held = 0.0, smooth = 0.0, delayEnvelope = 0.0;
+        std::uint32_t rng = 0x9e3779b9u;
+        bool shotDone = false;
+    } lfo;
+    double nextLfoSample() noexcept;
     double freq = 0, targetFreq = 0, phase = 0, pwmPhase = 0;
     double envelope = 0, velNorm = 1, accentEnvelope = 0, lpgMemory = 0;
     double stage3 = 0, stage4 = 0;

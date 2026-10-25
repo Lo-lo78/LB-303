@@ -269,7 +269,7 @@ size_t LB303AudioProcessorEditor::globalIndex (int local) const
         const int voiceDisplay = local > lb303::voiceMidiDisplayIndex ? local - 1 : local;
         const auto actual = lb303::displayToLocal (static_cast<size_t> (context),
                                                    static_cast<size_t> (voiceDisplay));
-        return lb303::parameterIndex (static_cast<size_t> (context), actual);
+        return lb303::voiceParameterGlobalIndex (static_cast<size_t> (context), actual);
     }
     return lb303::sequencerParameterIndex (lb303::displayToLocal (
         static_cast<size_t> (context), static_cast<size_t> (local)));

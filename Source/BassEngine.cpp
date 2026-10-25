@@ -149,6 +149,7 @@ void BassEngine::prepare (double sampleRate)
 void BassEngine::reset()
 {
     freq = targetFreq = phase = pwmPhase = 0;
+    lfo = {};
     envelope = lpgMemory = accentEnvelope = velNorm = 0;
     envelopeStage = 3;
     stage3 = stage4 = 0;
@@ -192,6 +193,14 @@ void BassEngine::midi (const juce::MidiMessage& message)
     }
     if (message.isNoteOn())
     {
+        if (lfoParameters[lb303::lfo::mode] >= .5f || lfoParameters[lb303::lfo::oneShot] >= .5f)
+        {
+            lfo.phase = 0.0;
+            lfo.shotPosition = 0.0;
+            lfo.shotDone = false;
+            lfo.delayEnvelope = 0.0;
+            lfo.previousPhase = 1.0;
+        }
         targetFreq = 440.0 * std::pow (2.0, (message.getNoteNumber() - 69.0) / 12.0);
         const auto velocity = message.getVelocity();
         velNorm = std::pow (velocity / 127.0, 0.6);
@@ -210,13 +219,82 @@ void BassEngine::midi (const juce::MidiMessage& message)
     }
 }
 
+double BassEngine::nextLfoSample() noexcept
+{
+    // LJuno-116 LFO wave, PWM, phase, one-shot, delay and smoothing logic,
+    // adapted for one monophonic LFO per bassline without allocations.
+    const auto& v = lfoParameters;
+    const auto syncedRate = v[lb303::lfo::rate] *
+        (v[lb303::lfo::bpmSync] >= .5f ? tempo / 120.0 : 1.0);
+    const double step = std::max (0.0, syncedRate) / fs;
+    const bool shot = v[lb303::lfo::oneShot] >= .5f && v[lb303::lfo::oneShotPercent] > 0;
+    if (! (shot && lfo.shotDone))
+    {
+        double increment = step;
+        if (shot)
+        {
+            const auto limit = clamp (v[lb303::lfo::oneShotPercent] * .01, 0.0, 1.0);
+            increment = std::min (step, std::max (0.0, limit - lfo.shotPosition));
+            lfo.shotPosition += increment;
+            if (lfo.shotPosition >= limit) lfo.shotDone = true;
+        }
+        lfo.phase += increment;
+        lfo.phase -= std::floor (lfo.phase);
+    }
+    const double phi = lfo.phase + v[lb303::lfo::phase] -
+                       std::floor (lfo.phase + v[lb303::lfo::phase]);
+    double raw = 0.0;
+    switch (juce::roundToInt (v[lb303::lfo::wave]))
+    {
+        case 0: raw = std::sin (2.0 * pi * phi); break;
+        case 1: raw = phi < .5 ? phi * 4.0 - 1.0 : 3.0 - phi * 4.0; break;
+        case 2: raw = phi * 2.0 - 1.0; break;
+        case 3: raw = 1.0 - phi * 2.0; break;
+        case 4: raw = phi < clamp (v[lb303::lfo::squarePwm], .05, .95) ? 1.0 : -1.0; break;
+        default:
+            if (phi < lfo.previousPhase)
+            {
+                lfo.rng ^= lfo.rng << 13;
+                lfo.rng ^= lfo.rng >> 17;
+                lfo.rng ^= lfo.rng << 5;
+                lfo.held = static_cast<double> (lfo.rng) / 2147483648.0 - 1.0;
+            }
+            raw = lfo.held;
+            break;
+    }
+    lfo.previousPhase = phi;
+    const auto smooth = static_cast<double> (v[lb303::lfo::smooth]);
+    if (smooth > 0.0)
+    {
+        // LJuno stores a 0..100 Smooth parameter; scale to its 0..1 DSP unit.
+        const auto amount = smooth * .01;
+        const double coefficient = 1.0 /
+            (1.0 + amount*amount * (v[lb303::lfo::wave] >= 4.5f ? 2000.0 : 400.0));
+        lfo.smooth += (raw - lfo.smooth) * coefficient;
+    }
+    else lfo.smooth = raw;
+    double output = lfo.smooth;
+    output *= output >= 0.0 ? 1.0 - v[lb303::lfo::upperSquash]
+                            : 1.0 - v[lb303::lfo::lowerSquash];
+    if (v[lb303::lfo::delay] > 0.0f)
+    {
+        lfo.delayEnvelope += (1.0 - lfo.delayEnvelope) /
+            std::max (1.0, static_cast<double> (v[lb303::lfo::delay]) * fs);
+        output *= lfo.delayEnvelope;
+    }
+    else lfo.delayEnvelope = 1.0;
+    return output;
+}
+
 std::pair<float, float> BassEngine::tick (float inputL, float inputR)
 {
     // Oscillator, amplitude/LP envelopes and nonlinear filter track the JSFX.
     const bool glide = p[5] > 0 && (p[6] < 0.5f || legato);
     const auto glideCoeff = glide ? std::max (1.0 / (1.0 + p[5]*150.0), 0.0002) : 1.0;
     freq += (targetFreq - freq) * glideCoeff;
-    const auto tuned = freq * std::pow (2.0, p[14] / 12.0);
+    const auto modulation = nextLfoSample();
+    const auto tuned = freq * std::pow (2.0,
+        (p[14] + modulation * lfoParameters[lb303::lfo::pitchDepth]) / 12.0);
     const auto dt = clamp ((tuned * 0.5) / fs, 0.000001, 0.49);
     phase += dt; if (phase >= 1.0) phase -= 1.0;
 
@@ -272,7 +350,8 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     const auto velDepth = p[17] / 127.0;
     const auto shaped = std::pow (velNorm, 1.0 + velDepth*3.0);
     const auto velFactor = 1.0 - velDepth + shaped*velDepth;
-    const auto signal = osc*ampFinal*lpgGain*p[7]*(accent ? 1.35 : 1.0)*velFactor;
+    const auto lfoVolume = clamp (1.0 + modulation * lfoParameters[lb303::lfo::volumeDepth], 0.0, 2.0);
+    const auto signal = osc*ampFinal*lpgGain*p[7]*lfoVolume*(accent ? 1.35 : 1.0)*velFactor;
 
     // Preserve source accent envelope, including its repeated renewal on
     // accented notes (quirk of the original implementation).
@@ -281,7 +360,8 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     if (accent) accentEnvelope = 1.0;
     accentEnvelope -= accentEnvelope * (1.0 - std::exp (-1.0 / (0.01*fs)));
     if (accentEnvelope < 0.0001) accentEnvelope = 0;
-    const auto classicCut = p[8] + cutEnv*p[10] + accentEnvelope*(p[16]*0.18);
+    const auto classicCut = p[8] + cutEnv*p[10] + accentEnvelope*(p[16]*0.18)
+                            + modulation * lfoParameters[lb303::lfo::filterDepth];
     const auto reduction = !inLpg ? (1.0-velNorm)*(p[34]/127.0)*p[10] : 0.0;
     const auto combined = clamp (classicCut-reduction, 0.0, 1.0);
     const auto cut = std::min ((std::pow (2.0, combined*14.28771)*2.0)/fs, 0.99);
@@ -301,7 +381,9 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     const auto synthR = outputLpfR.process (2.0f*clip (filteredR));
 
     // Raw stereo synth; both historic delay instances are now removed from the voice bus.
-    return { synthL, synthR };
+    const auto panLfo = clamp (modulation * lfoParameters[lb303::lfo::panDepth], -1.0, 1.0);
+    return { static_cast<float> (synthL * (panLfo > 0 ? 1.0 - panLfo : 1.0)),
+             static_cast<float> (synthR * (panLfo < 0 ? 1.0 + panLfo : 1.0)) };
 }
 
 std::pair<float, float> BassEngine::processClassicDelay (float synthL, float synthR)

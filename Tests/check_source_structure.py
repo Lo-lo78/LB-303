@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.11-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.12-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -249,7 +249,7 @@ assert 'else if (page == 6) openParameterPicker();' in step
 assert 'if (pickerOpen) return handlePickerKey (key);' in step
 assert 'lb303::voiceVisibleParameterCount' in step
 assert 'selectPickerParameter (mods.isAltDown())' in step
-assert 'const auto index = lb303::parameterIndex (static_cast<size_t> (track),' in step
+assert 'const auto index = lb303::voiceParameterGlobalIndex (static_cast<size_t> (track),' in step
 assert 'bank().addStepParameterLock (pat, stepIndex, local + 1,' in step
 assert 'bank().setStepParameterLockValue (pattern(), currentStep, selectedLockIndex, next);' in step
 assert 'closeParameterPicker(); return true;' in step
@@ -340,7 +340,7 @@ assert 'engines[voice].setParameters (synth, bpm)' in processor
 assert 'renderSamplesTo (event.sample);' in processor
 assert processor.index('applyVoiceParameters (lane);', processor.index('const auto renderTo')) < processor.index('engines[static_cast<size_t> (midiChannel - 1)].midi (message);')
 assert 'param->setValueNotifyingHost' not in processor
-assert 'const auto level = std::clamp (effective[lb303::outputLevelOffset]' in processor
+assert 'const auto level = 1.0f;' in processor  # redundant historic Level disabled; Volume is the only level
 assert 'effective[lb303::outputPanOffset]' in processor
 assert 'activeLockStep = { -1, -1 };' in processor
 # Value/grid share the same search; edit remains native. Picker supports reverse too.
@@ -359,8 +359,8 @@ mapsrc = param_cpp
 match = re.search(r'constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder\s*\{\{([^}]+)\}\}', param_cpp)
 assert match
 voice_order = [int(n) for n in re.findall(r'\b\d+\b', re.sub(r'//[^\n]*', '', match.group(1)))]
-assert len(voice_order) == 23 and len(set(voice_order)) == 23
-assert voice_order[:2] == [35, 0] # Level before Waveform
+assert len(voice_order) == 38 and len(set(voice_order)) == 38
+assert voice_order[:2] == [7, 0] # Volume before Waveform; historic Level is hidden
 assert 'sequencerDisplayParameterCount> seqDisplayOrder' in param_cpp
 assert 'midiChannel1Index = audioParameterCount + 5' in param_h
 assert 'midiChannel2Index = audioParameterCount + 6' in param_h
@@ -419,12 +419,12 @@ assert 'fxParameterCount = 35' in param_h
 assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount' in param_h
 assert 'legacyParameterCount = audioParameterCount + sequencerParameterCount' in param_h
 assert 'fxDisplayOrder' in param_cpp
-assert 'voiceVisibleParameterCount = 23' in param_h
+assert 'voiceVisibleParameterCount = 22 + lfoParameterCount' in param_h
 assert 'std::array<int, lb303::basslineCount + 2>' in (root / 'Source/PluginEditor.h').read_text(encoding='utf-8')
 assert 'return context == 2 ? "Sequencer" : "FX"' in editor
 assert 'visibleFxParameters.at' in editor and 'Source/SharedEffects.cpp' in cmake
 assert 'std::pair<float, float> BassEngine::processClassicDelay' in engine
-assert 'return { synthL, synthR };' in engine
+assert 'const auto panLfo = clamp (' in engine  # two stereo stems are now panned by the independent LFO
 assert 'BassEngine classic' in fxheader
 assert 'classic.processClassicDelay (l, r)' in fxcpp
 assert 'SharedEffects::dualDelay' in fxcpp and 'SharedEffects::chorus' in fxcpp
@@ -658,7 +658,7 @@ assert 'const float s1 = c[fx::chorusSend1] * .01f;' in fxcpp
 assert 'std::pair<float, float> chorus (float, float, size_t voice)' in fxheader
 assert 'fxParameterIndex (fx::effectOrder)' in param_cpp
 assert '31, // Dry Level' in param_cpp
-assert '35, 0, 36,' in param_cpp
+assert '7, 0, 36,' in param_cpp  # Volume, Waveform, Pan; no duplicated Level
 for idstub in ('bpm_division','shuffle','legato','skip_probability','note_random',
                'velocity_random','length_random','repeat_random','octave_shift','semitone_shift'):
     assert f'"{idstub}"' in param_cpp, idstub
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.11-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.12-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -702,3 +702,32 @@ assert 'delayFirst' not in fxcpp
 assert 'fx_delay_reverb_order' in param_cpp # legacy parameter ID for old projects
 assert 'addFx (4, lb303::fx::effectOrder)' not in editor # legacy selector hidden from dynamic FX grid
 print('PASS: TEST2.4.11 six independently collapsing FX columns, Type-dependent delay, stable IDs and fixed Delay->Reverb.')
+
+# TEST2.4.12 — two fully independent LJuno-derived LFOs, no duplicate Level.
+assert 'lfoParameterBase = sequencerPerformanceBase + sequencerPerformanceCount' in param_h
+assert 'parameterCount = lfoParameterBase + basslineCount * lfoParameterCount' in param_h
+assert 'constexpr size_t voiceLocalParameterCount = voiceParameterCount + lfoParameterCount' in param_h
+assert 'constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount' in param_h
+assert len(voice_order) == 38 and voice_order[0] == 7 and 35 not in voice_order
+assert voice_order[-16:] == list(range(37, 53))
+assert '"Legacy Level (unused)"' in param_cpp
+for suffix in ('mode','rate','bpm_sync','wave','square_pwm','delay','phase','upper_squash',
+               'lower_squash','smooth','one_shot','one_shot_percent','pitch_depth',
+               'volume_depth','filter_depth','pan_depth'):
+    assert f'"{suffix}"' in param_cpp
+assert 'const juce::String id = lane == 0 ? "b1_lfo_" : "b2_lfo_";' in param_cpp
+assert 'voiceParameterGlobalIndex (static_cast<size_t> (context), actual)' in editor
+assert 'voiceParameterGlobalIndex' in step and 'voiceLocalParameterCount' in step
+assert 'engines[voice].setLfoParameters (voiceLfo)' in processor
+assert 'lb303::voiceParameterCount' in processor and 'lock.sliderNumber' in processor
+assert 'nextLfoSample() noexcept' in engine
+assert 'lfoParameters[lb303::lfo::pitchDepth]' in engine
+assert 'lfoParameters[lb303::lfo::volumeDepth]' in engine
+assert 'lfoParameters[lb303::lfo::filterDepth]' in engine
+assert 'lfoParameters[lb303::lfo::panDepth]' in engine
+assert 'pwmIncrement' in engine and 'p[11]' in engine  # original PWM Rate independent
+assert 'if (lfoParameters[lb303::lfo::mode] >= .5f' in engine
+assert 'const auto modulation = nextLfoSample();' in engine
+assert 'double BassEngine::nextLfoSample() noexcept' in engine
+assert 'return { static_cast<float> (synthL *' in engine
+print('PASS: TEST2.4.12 Volume-first, 2 independent LFOs, bipolar targets, PWM wave, step locks and all existing IDs.')

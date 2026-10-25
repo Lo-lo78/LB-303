@@ -342,7 +342,29 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         // 14 historic delay controls are routed to one shared classic FX bus.
         synth[31] = 100.0f; synth[32] = 0.0f;
         engines[voice].setParameters (synth, bpm);
-        const auto level = std::clamp (effective[lb303::outputLevelOffset], 0.0f, 1.0f);
+        lb303::BassEngine::LfoValues voiceLfo {};
+        for (size_t c = 0; c < voiceLfo.size(); ++c)
+            voiceLfo[c] = value (lb303::lfoParameterIndex (voice, c));
+        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] == currentPattern (voice))
+        {
+            const auto step = sequenceBanks[voice].getStep (
+                activeLockPattern[voice], activeLockStep[voice]);
+            for (int i = 0; i < step.parameterLockCount; ++i)
+            {
+                const auto& lock = step.parameterLocks[static_cast<size_t> (i)];
+                const int c = lock.sliderNumber - 1 - static_cast<int> (lb303::voiceParameterCount);
+                if (! juce::isPositiveAndBelow (c, static_cast<int> (voiceLfo.size()))
+                    || ! std::isfinite (lock.value)) continue;
+                const auto& info = lb303::catalog()[lb303::lfoParameterIndex (
+                    voice, static_cast<size_t> (c))];
+                voiceLfo[static_cast<size_t> (c)] =
+                    juce::jlimit (info.minimum, info.maximum, lock.value);
+            }
+        }
+        engines[voice].setLfoParameters (voiceLfo);
+        // The historical Level ID remains loadable for old sessions but no
+        // longer changes gain: slider008 Volume is the sole bassline level.
+        const auto level = 1.0f;
         const auto pan = std::clamp (
             effective[lb303::outputPanOffset] / 100.0f, -1.0f, 1.0f);
         leftGain[voice] = level * (pan > 0.0f ? 1.0f - pan : 1.0f);

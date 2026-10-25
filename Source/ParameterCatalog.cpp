@@ -21,13 +21,19 @@ constexpr const char* fxSyncChoices[] = { "Off", "1/32", "1/24T", "1/16", "1/12T
 constexpr const char* fxDistChoices[] = { "Off", "Soft Clip", "Warm Tube", "Tape Drive", "Classic Overdrive", "Hard Clip", "Diode Crunch", "Thick Fuzz", "Wave Fold", "Rectifier", "Bit Crush", "Sine Warp", "Broken Radio" };
 constexpr const char* fxOrderChoices[] = { "Delay then Reverb", "Reverb then Delay" };
 constexpr const char* fxReverbChoices[] = { "Off", "Room", "Plate", "Hall", "Cathedral" };
+constexpr const char* lfoModeChoices[] = { "Free", "Triggered" };
+constexpr const char* lfoWaveChoices[] = { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Sample Hold" };
 constexpr const char* midiChannelChoices[] = { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9",
                                                "10", "11", "12", "13", "14", "15", "16" };
 // Group tone, envelopes and response; delay is accessible only in shared FX.
 constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder {{
-    35, 0, 36, 7, 8, 9, 10, 14,
-    1, 2, 3, 4, 5, 6, 15, 16,
-    17, 18, 33, 34, 11, 12, 13
+    // No duplicate Level: the original synth Volume slider007 now leads each grid.
+    7, 0, 36, 8, 9, 10, 14, 1,
+    2, 3, 4, 5, 6, 15, 16, 17,
+    18, 33, 34, 11, 12, 13,
+    // Each bassline owns its own LFO, stored as virtual local lock slots 38..53.
+    37, 38, 39, 40, 41, 42, 43, 44,
+    45, 46, 47, 48, 49, 50, 51, 52
 }};
 // One classic delay: reuse B1's 14 historic, stable VST3 IDs; all other FX append new IDs.
 // Historic B2 delay params remain in the state for legacy loading, not in either grid.
@@ -130,7 +136,7 @@ const std::array<ParameterInfo, parameterCount>& catalog()
                     result[base + i].id = juce::String ("b2_") + originals[i].id;
             }
             result[base + outputLevelOffset] = {
-                voice == 0 ? "b1_level" : "b2_level", "Level",
+                voice == 0 ? "b1_level" : "b2_level", "Legacy Level (unused)",
                 0.0f, 1.0f, 0.01f, 1.0f, "" };
             result[base + outputPanOffset] = {
                 voice == 0 ? "b1_pan" : "b2_pan", "Pan",
@@ -210,6 +216,37 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             addSeq (seqPerformance::octaveShift, "octave_shift", "Global Octave Shift", -4, 4, 1, 0);
             addSeq (seqPerformance::semitoneShift, "semitone_shift", "Global Semitone Shift", -12, 12, 1, 0);
         }
+        // Two identical LFO catalogs, with completely independent runtime state.
+        // Depth is bipolar only for Pitch, Volume, Filter and Pan. The LFO
+        // Square PWM control shapes its square waveform, not oscillator PWM.
+        for (size_t lane = 0; lane < basslineCount; ++lane)
+        {
+            const juce::String id = lane == 0 ? "b1_lfo_" : "b2_lfo_";
+            const auto addLfo = [&] (size_t control, const char* suffix, const char* label,
+                                    float lo, float hi, float step, float initial,
+                                    const char* unit = "", const char* const* choices = nullptr, int choiceCount = 0)
+            {
+                result[lfoParameterIndex (lane, control)] = {
+                    id + suffix, juce::String ("LFO ") + label, lo, hi,
+                    step, initial, unit, choices, choiceCount };
+            };
+            addLfo (lfo::mode, "mode", "Mode", 0, 1, 1, 0, "", lfoModeChoices, 2);
+            addLfo (lfo::rate, "rate", "Rate", .125f, 128, .125f, 6, "Hz");
+            addLfo (lfo::bpmSync, "bpm_sync", "BPM Sync", 0, 1, 1, 0, "", switchChoices, 2);
+            addLfo (lfo::wave, "wave", "Wave", 0, 5, 1, 0, "", lfoWaveChoices, 6);
+            addLfo (lfo::squarePwm, "square_pwm", "Square PWM", .05f, .95f, .001f, .5f);
+            addLfo (lfo::delay, "delay", "Delay", 0, 20, .01f, 0, "s");
+            addLfo (lfo::phase, "phase", "Phase", 0, 1, .01f, 0);
+            addLfo (lfo::upperSquash, "upper_squash", "Upper Squash", 0, 1, .01f, 0);
+            addLfo (lfo::lowerSquash, "lower_squash", "Lower Squash", 0, 1, .01f, 0);
+            addLfo (lfo::smooth, "smooth", "Smooth", 0, 100, .1f, 0);
+            addLfo (lfo::oneShot, "one_shot", "One Shot", 0, 1, 1, 0, "", switchChoices, 2);
+            addLfo (lfo::oneShotPercent, "one_shot_percent", "One Shot Percent", 0, 100, .01f, 100, "%");
+            addLfo (lfo::pitchDepth, "pitch_depth", "Pitch Depth", -48, 48, .01f, 0, "st");
+            addLfo (lfo::volumeDepth, "volume_depth", "Volume Depth", -1, 1, .01f, 0);
+            addLfo (lfo::filterDepth, "filter_depth", "Filter Depth", -1, 1, .01f, 0);
+            addLfo (lfo::panDepth, "pan_depth", "Pan Depth", -1, 1, .01f, 0);
+        }
         return result;
     }();
     return values;
@@ -250,7 +287,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         const auto& p = catalog()[index];
         // Distinguish automated parameters in REAPER's global FX parameter list,
         // without adding redundant prefixes to the accessible per-bassline grids.
-        const auto hostName = index == parameterIndex (0, 31)
+        const auto hostName = index >= lfoParameterBase
+            ? ("Bassline " + juce::String (1 + (index - lfoParameterBase) / lfoParameterCount)
+               + " - " + p.name)
+            : index == parameterIndex (0, 31)
             ? ("FX - " + p.name) // Historic slider032 ID, but now global direct bus.
             : (index < audioParameterCount
                 ? ("Bassline " + juce::String (1 + index / voiceParameterCount) + " - " + p.name)
