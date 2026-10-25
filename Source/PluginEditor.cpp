@@ -140,6 +140,22 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
     numericEdit.setDescription (juce::String());
     addAndMakeVisible (numericEdit);
 
+    // Same main keyboard commands as LJuno: Alt+B browser, Alt+S save,
+    // Alt+minus/plus previous/next. Buttons stay outside the 3-item Tab cycle.
+    previousPreset.onClick = [this] { changePreset (-1); };
+    nextPreset.onClick = [this] { changePreset (1); };
+    browserButton.onClick = [this] { openPresetBrowser (false); };
+    saveButton.onClick = [this] { openPresetBrowser (true); };
+    for (auto* button : { &previousPreset, &nextPreset, &browserButton, &saveButton })
+    {
+        button->setWantsKeyboardFocus (false);
+        addAndMakeVisible (*button);
+    }
+    presetBrowser = std::make_unique<lb303::PresetBrowser> (processor.presetManager);
+    addAndMakeVisible (*presetBrowser);
+    presetBrowser->setVisible (false);
+    presetBrowser->onClose = [this] { focusBackFromPreset(); };
+    presetBrowser->onPresetLoaded = [this] { refreshLabels (true); selectParameter(); };
     stepEditor = std::make_unique<SequencerStepEditor> (processor);
     addAndMakeVisible (*stepEditor);
     stepEditor->setVisible (false);
@@ -154,6 +170,7 @@ LB303AudioProcessorEditor::~LB303AudioProcessorEditor()
 {
     stopTimer();
     if (stepEditor != nullptr) stepEditor->close();
+    if (presetBrowser != nullptr) { presetBrowser->onClose = {}; presetBrowser->onPresetLoaded = {}; presetBrowser->close(); }
     valueAttachment.reset();
 }
 std::unique_ptr<juce::AccessibilityHandler> LB303AudioProcessorEditor::createAccessibilityHandler()
@@ -164,9 +181,11 @@ std::unique_ptr<juce::AccessibilityHandler> LB303AudioProcessorEditor::createAcc
 
 size_t LB303AudioProcessorEditor::globalIndex (int local) const
 {
+    const auto actual = lb303::displayToLocal (static_cast<size_t> (context),
+                                               static_cast<size_t> (local));
     return context < 2
-        ? lb303::parameterIndex (static_cast<size_t> (context), static_cast<size_t> (local))
-        : lb303::sequencerParameterIndex (static_cast<size_t> (local));
+        ? lb303::parameterIndex (static_cast<size_t> (context), actual)
+        : lb303::sequencerParameterIndex (actual);
 }
 juce::String LB303AudioProcessorEditor::contextName() const
 {
@@ -244,13 +263,22 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
     }
     g.setColour (juce::Colour (0xffb5c9e2));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::plain)));
-    g.drawText ("Arrows: grid | Enter: Value | Tab: Grid / Value / Edit | Alt+L / Alt+V / Alt+E | Alt+Q: step editor",
+    g.drawText ("Grid / Value / Edit | Alt+Q: steps | Alt+B: browser | Alt+S: save | Alt+- / Alt++: presets",
                 18, getHeight() - 26, getWidth() - 36, 18, juce::Justification::centredLeft);
 }
 void LB303AudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced (18);
     area.removeFromTop (41);
+    auto presetRow = area.removeFromTop (32);
+    previousPreset.setBounds (presetRow.removeFromLeft (98));
+    presetRow.removeFromLeft (7);
+    nextPreset.setBounds (presetRow.removeFromLeft (98));
+    presetRow.removeFromLeft (7);
+    browserButton.setBounds (presetRow.removeFromLeft (105));
+    presetRow.removeFromLeft (7);
+    saveButton.setBounds (presetRow.removeFromLeft (135));
+    area.removeFromTop (8);
     parameterGrid.setBounds (area.removeFromTop (36));
     area.removeFromTop (7);
     auto controls = area.removeFromTop (38);
@@ -262,6 +290,7 @@ void LB303AudioProcessorEditor::resized()
     area.removeFromBottom (32);
     drawnGrid = area;
     if (stepEditor != nullptr) stepEditor->setBounds (getLocalBounds().reduced (24));
+    if (presetBrowser != nullptr) presetBrowser->setBounds (getLocalBounds().reduced (12));
 }
 void LB303AudioProcessorEditor::mouseDown (const juce::MouseEvent& event)
 {
@@ -509,6 +538,31 @@ void LB303AudioProcessorEditor::cancelEdit()
                                               processor.value (globalIndex())),
                          juce::dontSendNotification);
 }
+void LB303AudioProcessorEditor::openPresetBrowser (bool save)
+{
+    if (presetBrowser == nullptr || (stepEditor != nullptr && stepEditor->isOpen())) return;
+    if (presetBrowser->active()) { presetBrowser->close(); return; }
+    if (numericEdit.hasKeyboardFocus (true)) presetReturnControl = Control::edit;
+    else if (parameterValue.hasKeyboardFocus (true)) presetReturnControl = Control::value;
+    else presetReturnControl = Control::grid;
+    // Store grid selection; do not steal focus from REAPER just by constructing.
+    if (save) presetBrowser->saveAs(); else presetBrowser->browse();
+}
+void LB303AudioProcessorEditor::focusBackFromPreset()
+{
+    if (presetBrowser != nullptr && presetBrowser->active()) return;
+    refreshLabels (true);
+    selectParameter();
+    focusControl (presetReturnControl, true);
+}
+void LB303AudioProcessorEditor::changePreset (int direction)
+{
+    if (presetBrowser == nullptr || (stepEditor != nullptr && stepEditor->isOpen())) return;
+    if (presetBrowser->active()) return;
+    presetBrowser->previousNext (direction);
+    refreshLabels (true);
+    selectParameter();
+}
 void LB303AudioProcessorEditor::openStepEditor()
 {
     if (stepEditor == nullptr || stepEditor->isOpen()) return;
@@ -528,6 +582,18 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
     {
         return ch == c || code == juce::CharacterFunctions::toUpperCase (c);
     };
+    // LJuno preset shortcuts work from Grid, Value and Edit, while preserving
+    // the current parameter, context and the native three-control Tab cycle.
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown())
+    {
+        if (letter ('b')) { openPresetBrowser (false); return true; }
+        if (letter ('s')) { openPresetBrowser (true); return true; }
+        if (letter ('+') || code == juce::KeyPress::numberPadAdd
+            || (code == '=' && mods.isShiftDown()))
+        { changePreset (1); return true; }
+        if (letter ('-') || code == '-' || code == juce::KeyPress::numberPadSubtract)
+        { changePreset (-1); return true; }
+    }
     if (mods.isCtrlDown() && code == juce::KeyPress::tabKey)
     {
         if (current == Control::edit && editDirty && ! commitEdit()) return true;

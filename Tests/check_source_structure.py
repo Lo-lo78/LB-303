@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static regressions for LB-303 TEST1.7. No local compilation."""
+"""Static regressions for LB-303 TEST2.3.2. No local compilation."""
 from pathlib import Path
 import re
 root = Path(__file__).resolve().parents[1]
@@ -19,7 +19,7 @@ editor = (root / 'Source' / 'PluginEditor.cpp').read_text(encoding='utf-8')
 assert 'struct ParameterGrid final : juce::ComboBox' in header
 assert 'struct ParameterValue final : juce::Slider' in header
 assert 'struct NumericEdit final : juce::TextEditor' in header
-assert 'struct ParameterCell' not in header and 'juce::TextButton' not in header
+assert 'struct ParameterCell' not in header and 'std::array<std::unique_ptr<ParameterCell>' not in header
 assert 'std::array<std::unique_ptr<ParameterCell>' not in header
 assert 'rowsPerColumn = 8' in editor
 assert 'valueAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>' in editor
@@ -108,7 +108,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.3-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.3.2-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -140,7 +140,7 @@ assert 'std::array<lb303::SequencerState, lb303::basslineCount> sequenceBanks' i
 assert 'LB303PatternBank1' in processor and 'LB303PatternBank2' in processor
 assert 'sequenceBanks[0].serialiseToBase64()' in processor
 assert 'sequenceBanks[1].serialiseToBase64()' in processor
-assert 'midi.addEvents (generated' in processor
+assert 'engineMidi.addEvents (generated' in processor
 assert 'if (! enabled[lane]) continue;' in playback
 assert 'const auto& bank = banks[static_cast<size_t> (lane)]' in playback
 assert 'const int pattern = juce::jlimit' in playback
@@ -159,7 +159,7 @@ step_h = (root / 'Source/SequencerStepEditor.h').read_text(encoding='utf-8')
 step = (root / 'Source/SequencerStepEditor.cpp').read_text(encoding='utf-8')
 assert 'struct StepChange' in step_h and 'std::vector<Action> undoStack, redoStack' in step_h
 assert 'returnControl = focus;' in step and 'safe->grabKeyboardFocus()' in step
-assert 'requestSequencerPreview (-1)' in step
+assert 'requestSequencerPreview (false)' in step
 assert 'getRevision()' in step
 assert 'const auto index = track == 0 ? lb303::pattern1Index : lb303::pattern2Index;' in step
 assert 'processor.parameter (lb303::editTrackIndex)' in step
@@ -168,7 +168,7 @@ assert 'bank().replaceStep (pattern(), index, clipboard[i])' in step
 assert 'juce::KeyPress::homeKey' in step and 'juce::KeyPress::endKey' in step
 assert 'coarseSteps' in step and 'topKeys' in step and 'lowerKeys' in step
 assert 'LB-303 SEQUENCER' in step and 'Page ' in step and 'Launch Step' in step
-assert 'TEST2.3' in step # intentionally not yet applying Parameter Locks
+assert 'activeStepBounds()' in step # active 128-step editor
 assert 'void SequencerStepEditor::toggleCurrentNote()' in step
 assert 'Source/SequencerStepEditor.cpp' in (root / 'CMakeLists.txt').read_text()
 assert 'void SequencerState::replaceStep' in seqcpp
@@ -231,7 +231,7 @@ assert 'currentStep = juce::jlimit (firstActive, lastActive, currentStep);' in s
 assert "if (code == juce::KeyPress::homeKey) { changeTrack (-1); return true; }" in step
 assert "if (code == juce::KeyPress::upKey) { changePattern (1); return true; }" in step
 assert 'TEST2.2.3' in (root / 'README.md').read_text()
-assert 'TEST2.3' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.3.2' in (root / '.github/workflows/build-windows.yml').read_text()
 
 # Example active ranges, zero-based block bounds. Every permitted Tab block
 # intersects [Start Step, End Step], never stepping past the recorded End.
@@ -290,7 +290,7 @@ assert '"seq_b1_enable", "Sequencer Bassline 1"' in param_cpp
 assert '"seq_b2_enable", "Sequencer Bassline 2"' in param_cpp
 assert 'const juce::MidiBuffer physicalInput (midi);' in processor
 assert 'if (sequencerOn[lane] && message.isNoteOnOrOff())' in processor
-assert 'Physical Note On/Off is consumed' in processor
+assert 'Note is a trigger, never a direct oscillator note' in processor
 assert 'triggerOriginPpq[lane] = ppq + offset * beatsPerSample;' in processor
 assert 'audible[0] || audible[1]' in processor
 assert 'engines[lane].releaseNote();' in processor
@@ -298,7 +298,7 @@ assert 'void BassEngine::releaseNote() noexcept' in (root / 'Source/BassEngine.c
 assert 'const std::array<double, 2>& triggerOrigins' in playback
 assert 'const double lanePpq = ppq - triggerOrigins[' in playback
 assert 'if (! playing) ppq = activePreview ? previewPpq : fallbackPpq;' in processor
-assert 'midi.addEvents (generated, 0, segmentLength, beginSample);' in processor
+assert 'engineMidi.addEvents (generated, 0, segmentLength, beginSample);' in processor
 print('PASS: TEST2.2.8 Off = direct MIDI, On = MIDI-triggered sequencer, no double notes, independent lanes.')
 
 # TEST2.2.9 — LJuno-style keyboard transposition, two independent lanes.
@@ -310,16 +310,16 @@ assert 'keyboardTranspose' in processor_h and 'heldKeyAge' in processor_h
 assert 'std::array<int, lb303::basslineCount> lastKeyboardNote {{ 60, 60 }}' in processor_h
 assert 'keyboardTranspose[lane] = note - 60;' in processor
 assert 'keyboardTranspose[lane] = newestNote - 60;' in processor
-assert 'heldKeys[lane][index] && heldKeyAge[lane][index] > newestAge' in processor
+assert 'heldKeyAge[lane][static_cast<size_t> (channel)]' in processor
 assert 'heldKeyCount[lane] == 0' in processor  # only first key retriggers step 1
-assert 'previewingTrack == 0 ? lastKeyboardNote[0] - 60' in processor
+assert 'activePreview ? lastKeyboardNote[0] - 60' in processor
 assert 'const std::array<int, 2>& keyboardTransposes' in playback_h
 assert 'step.note + keyboardTransposes[lane]' in playback
 assert 'lastSourceNote[lane] == step.note' in playback
 assert 'lane + 1, lastNote[lane])' in playback
 assert 'oldPattern[lane] = patterns[lane]' in playback
-assert 'Physical Note On/Off is consumed' not in processor or 'transposed pattern notes play' in processor
-assert 'TEST2.3' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'Note is a trigger, never a direct oscillator note' in processor
+assert 'TEST2.3.2' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.2.9 keyboard transpose reference C4, MIDI1/MIDI2 independence, newest-held priority and matching Note Off (static).')
 
 # TEST2.3 — locks drive actual audio snapshots per step, including paused steps.
@@ -351,3 +351,61 @@ assert 'const int delta = mods.isShiftDown() ? -1 : 1;' in step
 assert "mods.isShiftDown() && code >= '0' && code <= '9'" in editor
 assert "mods.isShiftDown() && code >= '0' && code <= '9'" in step
 print('PASS: TEST2.3 sample-position lock overlay, baseline persistence, dual-lane separation and cyclic character search (static).')
+
+# TEST2.3.1 — independently addressable MIDI channels + persistent UI order.
+import ast
+mapsrc = param_cpp
+for marker, size in [('voiceDisplayOrder', 37), ('seqDisplayOrder', 7)]:
+    match = re.search(r'constexpr std::array<size_t, (?:voiceParameterCount|sequencerParameterCount)> '
+                      + marker + r'\s*\{\{([^}]+)\}\}', mapsrc)
+    assert match, marker
+    nums = [int(n) for n in re.findall(r'\b\d+\b', re.sub(r'//[^\n]*', '', match.group(1)))]
+    assert len(nums) == size and sorted(nums) == list(range(size)), (marker, nums)
+assert 'midiChannel1Index = audioParameterCount + 5' in param_h
+assert 'midiChannel2Index = audioParameterCount + 6' in param_h
+assert '"Omni", "1", "2"' in param_cpp
+assert '"b1_midi_channel"' in param_cpp and '"b2_midi_channel"' in param_cpp
+assert 'const std::array<int, 2> inputChannels' in processor
+assert '(inputChannels[lane] != 0 && inputChannels[lane] != midiChannel)' in processor
+assert 'heldKeys[lane][channelSlot][key]' in processor
+assert 'routedMessage.setChannel (static_cast<int> (lane) + 1);' in processor
+assert 'engineMidi.addEvents (generated' in processor
+assert 'outputMessage.setChannel (outputChannel);' in processor
+assert 'juce::MidiBuffer engineMidi;' in processor
+assert '.withChannel (' not in processor # JUCE MidiMessage uses setChannel(), not withChannel()
+assert 'previewEnabled.store (enabled' in processor_h
+assert '(sequencerOn[0] && heldKeyCount[0] > 0) || activePreview' in processor
+assert '(sequencerOn[1] && heldKeyCount[1] > 0) || activePreview' in processor
+assert 'requestSequencerPreview (false); preview = false' in step
+assert 'if (preview) { processor.requestSequencerPreview (false); preview = false; }\n    track = target;' not in step
+assert 'page = 0; // Always open on Note' in step
+assert 'lastPickerPosition[static_cast<size_t> (track)]' in step
+assert 'returnControl = focus;' in step
+assert 'key.getModifiers().isAltDown()' in step and 'close(); return true;' in step
+assert 'displayToLocal (static_cast<size_t> (context)' in editor
+assert 'displayToLocal (static_cast<size_t> (track)' in step
+assert 'lastSelected[static_cast<size_t> (context)] = chosen;' in editor
+print('PASS: TEST2.3.1 independent configurable MIDI inputs and Omni, combined preview, UI focus memory and stable IDs.')
+
+# TEST2.3.2 - preset snapshots are the same as the complete DAW state.
+preset = (root / 'Source/PresetManager.cpp').read_text(encoding='utf-8')
+browser = (root / 'Source/PresetBrowser.cpp').read_text(encoding='utf-8')
+cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8')
+assert 'Source/PresetManager.cpp' in cmake and 'Source/PresetBrowser.cpp' in cmake
+assert 'userDocumentsDirectory' in preset and 'getChildFile ("LB-303")' in preset
+assert 'constexpr auto header = "LB-303 Patch Snapshot"' in preset
+assert '.withFileExtension (".lb")' in preset
+assert 'processor.getStateInformation (snapshot.data)' in preset
+assert 'processor.setStateInformation (snapshot.data.getData()' in preset
+assert 'processor.setStateInformation (state.getData()' in preset
+assert 'getXmlFromBinary' in preset and 'xml->hasTagName' in preset
+assert 'juce::Base64::toBase64' in preset
+assert 'original = manager.capture()' in browser and 'manager.restore (original)' in browser
+assert 'manager.preview (item.file)' in browser and 'manager.commit (entry.file)' in browser
+assert 'manager.save (directory' in browser and 'manager.relative (direction' in browser
+assert 'renameSelected()' in browser and 'newFolder()' in browser
+assert 'deleteSelected()' in browser and 'showMenu()' in browser
+assert 'Alt+B' in editor and 'Alt+S' in editor
+assert 'savedBrowserDirectory' in preset and 'saveBrowserDirectory' in preset
+assert 'presetBrowser->onPresetLoaded' in editor
+print('PASS: TEST2.3.2 LJuno-style preset browser, complete state snapshots, .lb library, preview rollback and keyboard UI (static).')

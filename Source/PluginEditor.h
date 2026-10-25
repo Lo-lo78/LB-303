@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+#include "PresetBrowser.h"
 #include <memory>
 #include <array>
 
@@ -57,6 +58,12 @@ private:
     NumericEdit numericEdit { *this };
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> valueAttachment;
     std::unique_ptr<SequencerStepEditor> stepEditor;
+    std::unique_ptr<lb303::PresetBrowser> presetBrowser;
+    juce::TextButton previousPreset { "Previous" };
+    juce::TextButton nextPreset { "Next" };
+    juce::TextButton browserButton { "Browser" };
+    juce::TextButton saveButton { "Save preset" };
+    Control presetReturnControl = Control::grid;
     juce::Rectangle<int> drawnGrid;
     int context = 0; // 0 = Bassline 1, 1 = Bassline 2, 2 = Sequencer
     std::array<int, lb303::basslineCount + 1> lastSelected { 0, 0, 0 };
@@ -88,6 +95,9 @@ private:
     void focusControl (Control, bool defer = false);
     bool handleKey (const juce::KeyPress&, Control);
     void openStepEditor();
+    void openPresetBrowser (bool save);
+    void focusBackFromPreset();
+    void changePreset (int direction);
     juce::String labelFor (int index) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessorEditor)

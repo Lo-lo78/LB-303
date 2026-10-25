@@ -45,6 +45,10 @@ target_sources(LB303 PRIVATE
     Source/PluginProcessor.cpp
     Source/SequencerStepEditor.h
     Source/SequencerStepEditor.cpp
+    Source/PresetManager.h
+    Source/PresetManager.cpp
+    Source/PresetBrowser.h
+    Source/PresetBrowser.cpp
     Source/PluginEditor.h
     Source/PluginEditor.cpp
     Source/ScreenReaderAnnouncer.h

@@ -20,7 +20,7 @@ constexpr size_t synthParameterCount = 35; // original JSFX DSP params per engin
 constexpr size_t voiceParameterCount = synthParameterCount + 2; // plus output Level/Pan
 constexpr size_t basslineCount = 2;
 constexpr size_t audioParameterCount = voiceParameterCount * basslineCount;
-constexpr size_t sequencerParameterCount = 5;
+constexpr size_t sequencerParameterCount = 7;
 constexpr size_t parameterCount = audioParameterCount + sequencerParameterCount;
 constexpr size_t sequencerParameterIndex (size_t local) { return audioParameterCount + local; }
 constexpr size_t pattern1Index = audioParameterCount;
@@ -28,6 +28,12 @@ constexpr size_t pattern2Index = audioParameterCount + 1;
 constexpr size_t sequencer1EnabledIndex = audioParameterCount + 2;
 constexpr size_t sequencer2EnabledIndex = audioParameterCount + 3;
 constexpr size_t editTrackIndex = audioParameterCount + 4;
+// Append to preserve all existing parameter indexes and VST IDs.
+constexpr size_t midiChannel1Index = audioParameterCount + 5;
+constexpr size_t midiChannel2Index = audioParameterCount + 6;
+// Only the accessible GUI order changes, never engine/local indices or lock IDs.
+size_t displayToLocal (size_t context, size_t displayIndex) noexcept;
+size_t localToDisplay (size_t context, size_t localIndex) noexcept;
 constexpr size_t sequencerContextIndex = basslineCount;
 constexpr size_t outputLevelOffset = synthParameterCount;
 constexpr size_t outputPanOffset = synthParameterCount + 1;

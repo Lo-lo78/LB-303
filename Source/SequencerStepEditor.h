@@ -48,7 +48,8 @@ private:
     std::vector<Action> undoStack, redoStack;
     bool preview = false;
     bool pickerOpen = false;
-    int pickerIndex = 0; // local parameter index (0..36), per current bassline
+    int pickerIndex = 0; // display position 0..36 (mapped to stable DSP IDs)
+    std::array<int, lb303::basslineCount> lastPickerPosition {{ 0, 0 }};
     int selectedLockIndex = 0; // current step's lock slot, 0..31
     std::uint64_t lastRevision = 0;
     int lastPattern = -1;

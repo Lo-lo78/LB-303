@@ -31,6 +31,7 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
 {
     if (opened) return;
     track = juce::jlimit (0, 1, selectedTrack);
+    page = 0; // Always open on Note, regardless of the previous editor page.
     returnControl = focus;
     opened = true;
     lastStepKey = -1;
@@ -53,7 +54,7 @@ void SequencerStepEditor::close()
     if (! opened) return;
     opened = false;
     pickerOpen = false;
-    if (preview) { processor.requestSequencerPreview (-1); preview = false; }
+    if (preview) { processor.requestSequencerPreview (false); preview = false; }
     setVisible (false);
     if (returnControl != nullptr)
     {
@@ -148,7 +149,7 @@ void SequencerStepEditor::refresh()
         if (page == 6)
             text << "\nEnter: select a synth parameter, Up/Down: edit current lock. "
                  << "Alt+Home/End: previous/next lock. Delete: remove, Alt+Delete: remove all."
-                 << "\nPlayback of locks: TEST2.3.\n";
+                 << "\nPlayback of locks: enabled.\n";
     }
     text << "\nStart " << config.startStep << "  End " << config.endStep
          << "  Division " << juce::String (config.bpmDivision, 4)
@@ -156,7 +157,7 @@ void SequencerStepEditor::refresh()
          << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Tab: active blocks"
          << "\nZ/X: Start Step -/+  |  C/V: End Step -/+"
          << "\nCtrl+C/V/X: Copy/Paste/Cut  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
-         << "\nSpace: preview  |  Esc: return to parameter grid";
+         << "\nSpace: preview both basslines  |  Esc / Alt+Q: return to original control";
     setText (text, juce::dontSendNotification);
 }
 void SequencerStepEditor::announceCurrent()
@@ -245,7 +246,7 @@ void SequencerStepEditor::changeTrack (int direction)
     const int target = juce::jlimit (0, static_cast<int> (lb303::basslineCount) - 1,
                                      track + (direction < 0 ? -1 : 1));
     if (target == track) return;
-    if (preview) { processor.requestSequencerPreview (-1); preview = false; }
+    // Preview keeps both basslines running when changing the editing track.
     track = target;
     if (auto* param = processor.parameter (lb303::editTrackIndex))
         param->setValueNotifyingHost (param->convertTo0to1 (static_cast<float> (track)));
@@ -460,15 +461,8 @@ void SequencerStepEditor::openParameterPicker()
 {
     if (page != 6 || pickerOpen) return;
     pickerOpen = true;
-    const auto lockCount = bank().getStepParameterCount (pattern(), currentStep);
-    if (lockCount > 0)
-    {
-        const auto lock = bank().getStepParameterLock (pattern(), currentStep,
-            juce::jlimit (0, lockCount - 1, selectedLockIndex));
-        pickerIndex = juce::jlimit (0, static_cast<int> (lb303::voiceParameterCount) - 1,
-                                   lock.sliderNumber - 1);
-    }
-    else pickerIndex = 0;
+    // Restore the last cursor for THIS bassline, even across editor open/close.
+    pickerIndex = lastPickerPosition[static_cast<size_t> (track)];
     renderParameterPicker();
     announce ("Select Parameter. Bassline " + juce::String (track + 1)
         + ", Step " + juce::String (currentStep + 1) + ". "
@@ -478,6 +472,7 @@ void SequencerStepEditor::openParameterPicker()
 void SequencerStepEditor::closeParameterPicker()
 {
     if (! pickerOpen) return;
+    lastPickerPosition[static_cast<size_t> (track)] = pickerIndex;
     pickerOpen = false;
     lastRevision = 0;
     refresh();
@@ -486,10 +481,11 @@ void SequencerStepEditor::closeParameterPicker()
 }
 juce::String SequencerStepEditor::pickerItemText (int localIndex) const
 {
-    const auto index = lb303::parameterIndex (static_cast<size_t> (track),
+    const auto local = lb303::displayToLocal (static_cast<size_t> (track),
                                                static_cast<size_t> (localIndex));
+    const auto index = lb303::parameterIndex (static_cast<size_t> (track), local);
     const bool assigned = bank().findStepParameterLock (pattern(), currentStep,
-                                                        localIndex + 1) >= 0;
+                                                        static_cast<int> (local) + 1) >= 0;
     // The prefix refers to a parameter already locked on the current step,
     // not merely the row currently highlighted with the arrow keys.
     return juce::String (assigned ? "selected " : "") + lb303::catalog()[index].name;
@@ -531,7 +527,8 @@ void SequencerStepEditor::selectPickerParameter (bool toggle)
 {
     const int pat = pattern();
     const int stepIndex = currentStep;
-    const int local = pickerIndex;
+    const int local = static_cast<int> (lb303::displayToLocal (
+        static_cast<size_t> (track), static_cast<size_t> (pickerIndex)));
     const int prior = bank().findStepParameterLock (pat, stepIndex, local + 1);
     Action action; action.track = track; action.pattern = pat;
     StepChange change; change.index = stepIndex; change.before = bank().getStep (pat, stepIndex);
@@ -671,20 +668,31 @@ bool SequencerStepEditor::handlePickerKey (const juce::KeyPress& key)
             {
                 const int candidate = (pickerIndex + delta * i + count * 2) % count;
                 const auto index = lb303::parameterIndex (static_cast<size_t> (track),
-                                                         static_cast<size_t> (candidate));
+                    lb303::displayToLocal (static_cast<size_t> (track),
+                                           static_cast<size_t> (candidate)));
                 const auto& name = lb303::catalog()[index].name;
                 if (name.isNotEmpty() && juce::CharacterFunctions::toLowerCase (name[0]) == ch)
                 { target = candidate; break; }
             }
         }
     }
-    if (target != pickerIndex) { pickerIndex = target; announcePickerItem(); }
+    if (target != pickerIndex)
+    {
+        pickerIndex = target;
+        lastPickerPosition[static_cast<size_t> (track)] = pickerIndex;
+        announcePickerItem();
+    }
     return true;
 }
 
 bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
 {
     if (! opened) return juce::Label::keyPressed (key);
+    // Alt+Q closes the entire editor exactly like Esc, including from the picker.
+    if (key.getModifiers().isAltDown()
+        && (juce::CharacterFunctions::toLowerCase (key.getTextCharacter()) == 'q'
+            || key.getKeyCode() == 'Q' || key.getKeyCode() == 'q'))
+    { close(); return true; }
     if (pickerOpen) return handlePickerKey (key);
     const int code = key.getKeyCode();
     const auto mods = key.getModifiers();
@@ -717,8 +725,8 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
     if (code == juce::KeyPress::spaceKey)
     {
         preview = ! preview;
-        processor.requestSequencerPreview (preview ? track : -1);
-        announce (preview ? "Bassline " + juce::String (track + 1) + " preview on" : "Preview off");
+        processor.requestSequencerPreview (preview);
+        announce (preview ? "Both basslines preview on" : "Preview off");
         return true;
     }
     if (mods.isAltDown() && letter ('i'))

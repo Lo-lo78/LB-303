@@ -4,6 +4,7 @@
 #include "BassEngine.h"
 #include "SequencerState.h"
 #include "SequencerPlayback.h"
+#include "PresetManager.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -33,12 +34,14 @@ public:
     void setStateInformation (const void*, int) override;
 
     juce::AudioProcessorValueTreeState parameters;
+    lb303::PresetManager presetManager;
     float value (size_t index) const;
     juce::RangedAudioParameter* parameter (size_t index);
-    // Track 0: channel 1 / Pattern Bassline 1. Track 1: channel 2 / Pattern Bassline 2.
+    // Independent patterns, independent MIDI input channels (Omni or 1..16).
     int currentPattern (size_t lane) const noexcept;
-    void requestSequencerPreview (int lane) noexcept
-    { previewLane.store (lane >= 0 && lane < 2 ? lane : -1, std::memory_order_relaxed); }
+    // One preview transport for BOTH basslines, regardless of edited track.
+    void requestSequencerPreview (bool enabled) noexcept
+    { previewEnabled.store (enabled, std::memory_order_relaxed); }
     lb303::SequencerState& patternBank (size_t lane) noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
     const lb303::SequencerState& patternBank (size_t lane) const noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
 
@@ -57,17 +60,19 @@ private:
     double previewOriginPpq = 0.0;
     // Physical MIDI keys are only triggers when the corresponding sequencer
     // switch is On; the notes themselves must never reach that bassline.
-    std::array<std::array<bool, 128>, lb303::basslineCount> heldKeys {};
+    // Distinguish input channels in Omni mode: two identical pitches arriving
+    // from different MIDI channels must not release one another.
+    std::array<std::array<std::array<bool, 128>, 16>, lb303::basslineCount> heldKeys {};
     std::array<int, lb303::basslineCount> heldKeyCount {};
-    // LJuno-style last-pressed priority: C4 (MIDI 60) is the untransposed root.
-    // Each MIDI channel keeps an independent stack of held physical keys.
-    std::array<std::array<std::uint64_t, 128>, lb303::basslineCount> heldKeyAge {};
+    // Last-note priority is independent for each bassline.
+    std::array<std::array<std::array<std::uint64_t, 128>, 16>, lb303::basslineCount> heldKeyAge {};
     std::array<std::uint64_t, lb303::basslineCount> keyAgeCounter {{ 1, 1 }};
     std::array<int, lb303::basslineCount> keyboardTranspose {};
     std::array<int, lb303::basslineCount> lastKeyboardNote {{ 60, 60 }};
     std::array<double, lb303::basslineCount> triggerOriginPpq {};
     std::array<bool, lb303::basslineCount> previousSequencerOn {};
-    std::atomic<int> previewLane { -1 };
+    std::array<int, lb303::basslineCount> previousMidiChannel {{ 1, 2 }};
+    std::atomic<bool> previewEnabled { false };
     std::array<std::atomic<float>*, lb303::parameterCount> rawParameters {};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessor)
 };

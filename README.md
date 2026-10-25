@@ -1,3 +1,88 @@
+# LB-303 0.0.2 — TEST2.3.2: Browser preset .lb (da LJuno-116)
+
+## Preset library
+
+On Windows, presets are stored under **Documents\LB-303**, in individual
+**.lb** files. The folder is created on first browse/save. Preset snapshots use
+the same full plugin state as a REAPER project: ALL synth/effects parameters
+for both basslines (including Level and Pan), sequencer enable switches, both
+pattern selectors, configurable MIDI channels (Omni/1–16), both independent
+banks of 16 patterns × 128 steps, all step values and all Parameter Locks.
+There is no dependency on MIDI files, REAPER projects, or external preset paths.
+
+### LJuno-style preset browser and keyboard navigation
+
+- **Alt+B** opens/closes the preset browser; **Alt+S** saves a preset.
+- **Alt+-** and **Alt++** load the previous/next preset from the library.
+- In the browser, **Up/Down**, **Home/End**, **Page Up/Down** navigate; selecting
+  a .lb file previews the ENTIRE patch. **Enter** commits the selected preset.
+- **Escape** (or **Alt+B/Alt+C**) cancels browsing and restores the exact
+  parameters and both sequencer banks from before the browser was opened.
+- **Enter** on a folder enters it; **Backspace** or **Left** goes up one level.
+- Alphanumeric keys cycle presets with the same initial; **Shift+letter**
+  searches backward, with silent navigation limits where applicable.
+- **F2** renames a preset/folder; **Ctrl+N** creates a folder; **Delete** requests
+  confirmation before removing a preset; **Shift+F10** or the Windows Menu key
+  shows the context menu.
+- Saving an existing filename requires explicit overwrite confirmation.
+- Browser folder and row are remembered across sessions/projects.
+- When closed, the main interface STILL cycles **Grid → Value → Edit** with Tab;
+  opening the plugin does not automatically take keyboard focus from REAPER.
+
+No factory .lb bank is included at this stage. LJuno's legacy factory RPL
+presets and its .Ljuno file parser are intentionally **not** imported, because
+they are not LB-303 presets. The interface follows LJuno's browsing workflow,
+while LB-303 stores its own complete native snapshot.
+
+GitHub Actions compiles on Windows; no local compilation was performed for
+this release. Before trusting valuable patches, verify save/load/preview/cancel
+and pattern-lock round-trip in REAPER with NVDA.
+
+---
+
+# LB-303 0.0.2 — TEST2.3.1 (MIDI, navigazione e anteprima)
+
+Questa versione mantiene **due banche indipendenti da 16 pattern** e tutti gli ID VST3
+esistenti, compresi i numeri dei 37 parametri per bassline usati nei Parameter Locks.
+Non modifica il motore sonoro, ma cambia il **solo ordine visibile** dei parametri
+nelle tre griglie e nel selettore della pagina 7.
+
+- **Alt+Q** entra sempre nella **pagina 1 Note**, anche dopo aver chiuso
+  l'editor da un'altra pagina. Da dentro l'editor, anche mentre è aperto il
+  selettore Parameters, **Alt+Q** chiude come Esc e riporta il focus sul
+  controllo originale (Grid, Value o Edit), nella stessa griglia e parametro.
+- Bassline 1 e Bassline 2 ricordano separatamente la selezione mentre si usa
+  Ctrl+Tab. Il selettore Parameters di pagina 7 ricorda l'ultima posizione
+  visitata per ciascuna bassline, anche tornando all'editor successivamente.
+- **Griglia Sequencer:** 1) Sequencer Bassline 1 Off/On, 2) Pattern Bassline 1,
+  3) MIDI Channel Bassline 1, 4) Sequencer Bassline 2 Off/On, 5) Pattern
+  Bassline 2, 6) MIDI Channel Bassline 2, 7) Editor Track.
+- I due nuovi parametri **MIDI Channel Bassline 1/2** sono automatizzabili,
+  ciascuno con i valori **Omni, 1, 2, ..., 16** (predefiniti 1 e 2).
+  Quando entrambe le bassline ricevono dal canale 1, una nota sul canale 1
+  può attivare entrambe; con Off/On indipendenti è possibile anche suonarne
+  una direttamente e attivare la sequenza dell'altra. In Omni ogni bassline
+  ascolta tutti e 16 i canali MIDI.
+- I canali MIDI del synth sono configurabili **in ingresso**; le note
+  generate dal sequencer in uscita MIDI usano il canale scelto e, in Omni,
+  il canale predefinito della rispettiva bassline (1 o 2). Internamente
+  restano isolate, anche quando condividono un canale esterno.
+- **Spazio nell'editor** avvia/ferma **l'anteprima di entrambi i pattern**,
+  contemporaneamente. Home/End cambia soltanto la traccia in modifica,
+  senza fermare l'anteprima. C4 resta la nota neutra per la trasposizione.
+- Griglie Bassline riordinate: prima Waveform, **Level, Pan, Volume, Cutoff,
+  Resonance**, poi i controlli del filtro, inviluppi, portamento, accento,
+  risposta, PWM e infine il delay. L'ordine è identico nel selettore
+  Parameter Locks; i lock salvati restano associati agli ID originari.
+- **Attenzione:** Level Bassline 2 rimane a 0 per compatibilità: impostalo
+  a 1 per sentire la seconda bassline.
+
+**Verifiche:** test statici Python superati, nessuna compilazione locale.
+Compilare usando GitHub Actions e verificare in REAPER: suono condiviso sul
+canale 1, Omni, selettore pagina 7, Alt+Q/Esc, preview con entrambi i pattern.
+
+---
+
 # LB-303 0.0.2 — TEST2.3: Parameter Locks in playback and alphabetic search
 
 - Step Parameter Locks (up to 32 per step) are applied to the audio engine at the corresponding step, on either MIDI channel independently, including paused steps. Locks override parameters for the active step, then non-locked parameters return to REAPER's current host-automated base values on the next step. The base VST parameters/host automation are never modified.

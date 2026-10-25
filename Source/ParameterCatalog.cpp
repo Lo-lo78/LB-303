@@ -16,6 +16,21 @@ constexpr const char* patternChoices[] = { "1", "2", "3", "4", "5", "6", "7", "8
                                           "9", "10", "11", "12", "13", "14", "15", "16" };
 constexpr const char* switchChoices[] = { "Off", "On" };
 constexpr const char* trackChoices[] = { "Bassline 1", "Bassline 2" };
+constexpr const char* midiChannelChoices[] = { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+                                               "10", "11", "12", "13", "14", "15", "16" };
+// Group tone, envelopes, response, then delay. IDs/lock slider numbers stay fixed.
+constexpr std::array<size_t, voiceParameterCount> voiceDisplayOrder {{
+    0, 35, 36, 7, 8, 9, 10, 14,         // oscillator, output, filter
+    1, 2, 3, 4, 5, 6, 15, 16,           // envelope, glide, accent
+    17, 18, 33, 34, 11, 12, 13, 19,    // performance, PWM, drive, delay
+    20, 21, 22, 23, 31, 32, 24, 25,    // delay sync, mode, dry/wet, EQ
+    26, 27, 28, 29, 30                 // delay EQ and modulation
+}};
+constexpr std::array<size_t, sequencerParameterCount> seqDisplayOrder {{
+    2, 0, 5,   // Sequencer On, Pattern, MIDI channel — Bassline 1
+    3, 1, 6,   // Sequencer On, Pattern, MIDI channel — Bassline 2
+    4          // Editor Track
+}};
 }
 
 const std::array<ParameterInfo, parameterCount>& catalog()
@@ -83,9 +98,33 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         result[sequencer1EnabledIndex] = { "seq_b1_enable", "Sequencer Bassline 1", 0, 1, 1, 0, "", switchChoices, 2 };
         result[sequencer2EnabledIndex] = { "seq_b2_enable", "Sequencer Bassline 2", 0, 1, 1, 0, "", switchChoices, 2 };
         result[editTrackIndex] = { "seq_edit_track", "Editor Track", 0, 1, 1, 0, "", trackChoices, 2 };
+        result[midiChannel1Index] = { "b1_midi_channel", "MIDI Channel Bassline 1", 0, 16, 1, 1, "", midiChannelChoices, 17 };
+        result[midiChannel2Index] = { "b2_midi_channel", "MIDI Channel Bassline 2", 0, 16, 1, 2, "", midiChannelChoices, 17 };
         return result;
     }();
     return values;
+}
+
+size_t displayToLocal (size_t context, size_t displayIndex) noexcept
+{
+    if (context < basslineCount)
+        return voiceDisplayOrder[juce::jmin (displayIndex, voiceDisplayOrder.size() - 1)];
+    return seqDisplayOrder[juce::jmin (displayIndex, seqDisplayOrder.size() - 1)];
+}
+
+size_t localToDisplay (size_t context, size_t localIndex) noexcept
+{
+    if (context < basslineCount)
+    {
+        for (size_t i = 0; i < voiceDisplayOrder.size(); ++i)
+            if (voiceDisplayOrder[i] == localIndex) return i;
+    }
+    else
+    {
+        for (size_t i = 0; i < seqDisplayOrder.size(); ++i)
+            if (seqDisplayOrder[i] == localIndex) return i;
+    }
+    return 0;
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
