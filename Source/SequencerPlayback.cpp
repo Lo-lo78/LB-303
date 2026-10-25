@@ -16,16 +16,20 @@ int positiveModulo (std::int64_t number, int divisor)
 
 // Stable deterministic probability so the same timeline position renders the
 // same result after looped playback, rather than depending on audio block sizes.
-bool shouldSkip (int track, int pattern, std::int64_t step, float chance)
+float randomValue (int track, int pattern, std::int64_t step, std::uint32_t salt)
 {
-    if (chance <= 0.0f) return false;
-    if (chance >= 1.0f) return true;
-    std::uint32_t x = 0x9e3779b9u ^ static_cast<std::uint32_t> (step);
+    std::uint32_t x = salt ^ static_cast<std::uint32_t> (step);
     x ^= static_cast<std::uint32_t> (step >> 32) * 0x85ebca6bu;
     x ^= static_cast<std::uint32_t> (track + 1) * 0x27d4eb2du;
     x ^= static_cast<std::uint32_t> (pattern + 1) * 0x165667b1u;
     x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15;
-    return static_cast<double> (x) / 4294967296.0 < chance;
+    return static_cast<float> (static_cast<double> (x) / 4294967296.0);
+}
+bool shouldSkip (int track, int pattern, std::int64_t step, float chance)
+{
+    if (chance <= 0.0f) return false;
+    if (chance >= 1.0f) return true;
+    return randomValue (track, pattern, step, 0x9e3779b9u) < chance;
 }
 }
 void SequencerPlayback::reset() noexcept
@@ -44,6 +48,7 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                                   const std::array<bool, 2>& enabled,
                                   const std::array<double, 2>& triggerOrigins,
                                   const std::array<int, 2>& keyboardTransposes,
+                                  const std::array<SequencerConfig, 2>& performanceControls,
                                   bool playing, double ppq, double bpm,
                                   double sampleRate, int samples,
                                   std::array<StepEvent, maximumStepEvents>& stepEvents,
@@ -83,11 +88,24 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         const double laneEndPpq = endPpq - triggerOrigins[static_cast<size_t> (lane)];
         const int pattern = juce::jlimit (0, SequencerState::maximumSequences - 1, patterns[lane]);
         const auto& bank = banks[static_cast<size_t> (lane)];
-        const auto config = bank.getConfig (pattern);
+        auto config = bank.getConfig (pattern);
+        // These 10 VST controls are per bassline, regardless of its active
+        // pattern. Pattern-specific start/end, launch and step data remain intact.
+        const auto& controls = performanceControls[static_cast<size_t> (lane)];
+        config.bpmDivision = controls.bpmDivision;
+        config.shuffle = controls.shuffle;
+        config.legato = controls.legato;
+        config.noteSkipProbability = controls.noteSkipProbability;
+        config.noteRandomDepth = controls.noteRandomDepth;
+        config.velocityRandomDepth = controls.velocityRandomDepth;
+        config.noteLengthRandomDepth = controls.noteLengthRandomDepth;
+        config.repeatRandomDepth = controls.repeatRandomDepth;
+        config.octaveShift = controls.octaveShift;
+        config.semitoneShift = controls.semitoneShift;
         const int start = juce::jlimit (1, 128, config.startStep) - 1;
         const int finish = juce::jlimit (start + 1, 128, config.endStep);
         const int patternLength = finish - start;
-        const auto division = juce::jlimit (0.125, 32.0, static_cast<double> (config.bpmDivision));
+        const auto division = juce::jlimit (0.03125, 64.0, static_cast<double> (config.bpmDivision));
         const double stepBeats = 1.0 / division;
         // LJuno's Launch Step is a delayed pattern start, not the note number
         // of the first step. Keep phase/launch independent for each bank.
@@ -103,7 +121,9 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
             const int stepInPattern = positiveModulo (tick, patternLength);
             const int stepIndex = start + stepInPattern;
             const auto step = bank.getStep (pattern, stepIndex);
-            const int repeats = juce::jlimit (1, 16, step.repeat);
+            const float repeatsNoise = (randomValue (lane, pattern, tick, 0x1b873593u) * 2 - 1)
+                * juce::jlimit (0.0f, 1.0f, config.repeatRandomDepth);
+            const int repeats = juce::jlimit (1, 16, juce::roundToInt (step.repeat + repeatsNoise * 8));
             const double repeatBeats = stepBeats / repeats;
             const double swing = (positiveModulo (tick, 2) != 0)
                 ? juce::jlimit (-0.45, 0.45, static_cast<double> (config.shuffle)) * stepBeats : 0.0;
@@ -124,14 +144,23 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                 lane, pattern, tick, config.noteSkipProbability)) continue;
             // Same C4-based keyboard transposition as LJuno. Each lane uses
             // its own physical MIDI channel and independent held-note stack.
-            const int note = juce::jlimit (0, 127, step.note + keyboardTransposes[lane]
+            const int randomSemitones = juce::roundToInt (
+                (randomValue (lane, pattern, tick, 0x3972bc53u) * 2 - 1) *
+                12.0f * juce::jlimit (0.0f, 1.0f, config.noteRandomDepth));
+            const int note = juce::jlimit (0, 127, step.note + randomSemitones + keyboardTransposes[lane]
                 + config.semitoneShift + 12 * config.octaveShift);
-            const int velocity = juce::jlimit (1, 127, step.velocity);
+            const int velocity = juce::jlimit (1, 127, juce::roundToInt (
+                step.velocity + (randomValue (lane, pattern, tick, 0x23ab4e21u) * 2 - 1)
+                * 63.0f * juce::jlimit (0.0f, 1.0f, config.velocityRandomDepth)));
             for (int repeat = 0; repeat < repeats; ++repeat)
             {
                 const double onPpq = launchDelay + tick * stepBeats + repeat * repeatBeats + swing + shift;
-                const double offPpq = onPpq + repeatBeats
-                    * (step.length > 100 ? 1.02 : juce::jlimit (0.01, 1.0, step.length / 100.0));
+                const double randomLength = (randomValue (lane, pattern, tick, 0x4f3b9e12u) * 2 - 1)
+                    * juce::jlimit (0.0f, 1.0f, config.noteLengthRandomDepth) * 0.5;
+                const double lengthFactor = (step.length > 100 || (config.legato && step.length >= 100))
+                    ? 1.02 : juce::jlimit (0.01, 1.0,
+                                         static_cast<double> (step.length) / 100.0 + randomLength);
+                const double offPpq = onPpq + repeatBeats * lengthFactor;
                 const auto emit = [&] (bool noteOn, double eventPpq)
                 {
                     if (eventPpq < lanePpq || eventPpq >= laneEndPpq) return;

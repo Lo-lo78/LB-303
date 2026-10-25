@@ -19,42 +19,62 @@ constexpr const char* trackChoices[] = { "Bassline 1", "Bassline 2" };
 constexpr const char* fxDelayChoices[] = { "Off", "LB-303 Classic", "LJuno Dual Tape" };
 constexpr const char* fxSyncChoices[] = { "Off", "1/32", "1/24T", "1/16", "1/12T", "1/8", "1/6T", "1/4", "1/3T", "1/2", "1/1" };
 constexpr const char* fxDistChoices[] = { "Off", "Soft Clip", "Warm Tube", "Tape Drive", "Classic Overdrive", "Hard Clip", "Diode Crunch", "Thick Fuzz", "Wave Fold", "Rectifier", "Bit Crush", "Sine Warp", "Broken Radio" };
+constexpr const char* fxOrderChoices[] = { "Delay then Reverb", "Reverb then Delay" };
 constexpr const char* fxReverbChoices[] = { "Off", "Room", "Plate", "Hall", "Cathedral" };
 constexpr const char* midiChannelChoices[] = { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9",
                                                "10", "11", "12", "13", "14", "15", "16" };
 // Group tone, envelopes and response; delay is accessible only in shared FX.
 constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder {{
-    0, 35, 36, 7, 8, 9, 10, 14,
+    35, 0, 36, 7, 8, 9, 10, 14,
     1, 2, 3, 4, 5, 6, 15, 16,
     17, 18, 33, 34, 11, 12, 13
 }};
 // One classic delay: reuse B1's 14 historic, stable VST3 IDs; all other FX append new IDs.
 // Historic B2 delay params remain in the state for legacy loading, not in either grid.
 constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
+    31, // Dry Level for both basslines, never a delay parameter.
+    // Physical insert order: distortion -> chorus -> delay/reverb.
+    fxParameterIndex (fx::distortionType), fxParameterIndex (fx::distortionAmount),
+    fxParameterIndex (fx::distortionHarmonics), fxParameterIndex (fx::distortion2Type),
+    fxParameterIndex (fx::distortion2Amount), fxParameterIndex (fx::distortion2Harmonics),
+    fxParameterIndex (fx::chorusOn), fxParameterIndex (fx::chorusLevel),
+    fxParameterIndex (fx::chorusRate), fxParameterIndex (fx::chorusWidth),
+    fxParameterIndex (fx::chorusSend1), fxParameterIndex (fx::chorusSend2),
+    // Select which serial effect comes first; the one downstream also hears
+    // the output of the upstream effect instead of two parallel returns.
+    fxParameterIndex (fx::effectOrder),
     fxParameterIndex (fx::delayType), fxParameterIndex (fx::delaySend1), fxParameterIndex (fx::delaySend2),
-    19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+    19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32,
     fxParameterIndex (fx::dualTime), fxParameterIndex (fx::dualSync),
     fxParameterIndex (fx::dualSpeed1), fxParameterIndex (fx::dualSpeed2),
     fxParameterIndex (fx::dualGlide), fxParameterIndex (fx::dualFeedback1),
     fxParameterIndex (fx::dualFeedback2), fxParameterIndex (fx::dualTone1),
     fxParameterIndex (fx::dualTone2), fxParameterIndex (fx::dualSpread),
     fxParameterIndex (fx::dualDrive),
-    fxParameterIndex (fx::chorusOn), fxParameterIndex (fx::chorusLevel),
-    fxParameterIndex (fx::chorusRate), fxParameterIndex (fx::chorusWidth),
-    fxParameterIndex (fx::chorusSend1), fxParameterIndex (fx::chorusSend2),
-    fxParameterIndex (fx::distortionType), fxParameterIndex (fx::distortionAmount),
-    fxParameterIndex (fx::distortionHarmonics),
-    fxParameterIndex (fx::distortion2Type), fxParameterIndex (fx::distortion2Amount),
-    fxParameterIndex (fx::distortion2Harmonics),
     fxParameterIndex (fx::reverbType), fxParameterIndex (fx::reverbSend1),
     fxParameterIndex (fx::reverbSend2), fxParameterIndex (fx::reverbPredelay),
     fxParameterIndex (fx::reverbDecay), fxParameterIndex (fx::reverbDamping),
     fxParameterIndex (fx::reverbWidth), fxParameterIndex (fx::reverbLevel)
 }};
-constexpr std::array<size_t, sequencerParameterCount> seqDisplayOrder {{
-    2, 0, 5,   // Sequencer On, Pattern, MIDI channel — Bassline 1
-    3, 1, 6,   // Sequencer On, Pattern, MIDI channel — Bassline 2
-    4          // Editor Track
+// All indices are relative to audioParameterCount, including append-only
+// performance controls located AFTER the shared FX parameters.
+constexpr size_t perfRelative (size_t lane, size_t control)
+{ return seqPerformanceIndex (lane, control) - audioParameterCount; }
+constexpr std::array<size_t, sequencerDisplayParameterCount> seqDisplayOrder {{
+    2, 0, 5,
+    perfRelative (0, seqPerformance::bpmDivision), perfRelative (0, seqPerformance::shuffle),
+    perfRelative (0, seqPerformance::legato), perfRelative (0, seqPerformance::skipProbability),
+    perfRelative (0, seqPerformance::noteRandom), perfRelative (0, seqPerformance::velocityRandom),
+    perfRelative (0, seqPerformance::lengthRandom), perfRelative (0, seqPerformance::repeatRandom),
+    perfRelative (0, seqPerformance::octaveShift), perfRelative (0, seqPerformance::semitoneShift),
+    3, 1, 6,
+    perfRelative (1, seqPerformance::bpmDivision), perfRelative (1, seqPerformance::shuffle),
+    perfRelative (1, seqPerformance::legato), perfRelative (1, seqPerformance::skipProbability),
+    perfRelative (1, seqPerformance::noteRandom), perfRelative (1, seqPerformance::velocityRandom),
+    perfRelative (1, seqPerformance::lengthRandom), perfRelative (1, seqPerformance::repeatRandom),
+    perfRelative (1, seqPerformance::octaveShift), perfRelative (1, seqPerformance::semitoneShift),
+    4
+}};
 }};
 }
 
@@ -92,7 +112,7 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         { "slider029", "Delay Modulation Amp", 0, 100, 1, 0, "" },
         { "slider030", "Delay Modulation Freq", 1, 8, 1, 5, "Hz" },
         { "slider031", "Delay Transpose", -12, 12, 1, 0, "st" },
-        { "slider032", "Delay Dry", 0, 100, 1, 100, "%" },
+        { "slider032", "Dry Level", 0, 100, 1, 100, "%" },
         { "slider033", "Delay Wet", 0, 100, 1, 10, "%" },
         { "slider034", "Response Mode", 0, 1, 1, 0, "", responseChoices, 2 },
         { "slider035", "Gate Velocity Filter", 0, 127, 1, 0, "" }
@@ -167,6 +187,31 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         addFx (fx::reverbDamping, "fx_reverb_damping", "Reverb Damping", 500, 16000, 100, 7500, "Hz");
         addFx (fx::reverbWidth, "fx_reverb_width", "Reverb Width", 0, 100, 1, 100, "%");
         addFx (fx::reverbLevel, "fx_reverb_level", "Reverb Level", 0, 100, 1, 50, "%");
+        addFx (fx::effectOrder, "fx_delay_reverb_order", "Delay Reverb Order",
+               0, 1, 1, 0, "", fxOrderChoices, 2);
+        for (size_t lane = 0; lane < basslineCount; ++lane)
+        {
+            const auto base = lane == 0 ? "seq_b1_" : "seq_b2_";
+            const auto suffix = lane == 0 ? " Bassline 1" : " Bassline 2";
+            const auto addSeq = [&] (size_t control, const char* shortId, const char* name,
+                                     float lo, float hi, float step, float initial,
+                                     const char* const* choices = nullptr, int count = 0)
+            {
+                result[seqPerformanceIndex (lane, control)] = {
+                    juce::String (base) + shortId, juce::String (name) + suffix,
+                    lo, hi, step, initial, "", choices, count };
+            };
+            addSeq (seqPerformance::bpmDivision, "bpm_division", "BPM Division", .03125f, 64, .03125f, 4);
+            addSeq (seqPerformance::shuffle, "shuffle", "Shuffle", 0, 1, .01f, 0);
+            addSeq (seqPerformance::legato, "legato", "Legato", 0, 1, 1, 0, switchChoices, 2);
+            addSeq (seqPerformance::skipProbability, "skip_probability", "Note Skip Probability", 0, 1, .01f, 0);
+            addSeq (seqPerformance::noteRandom, "note_random", "Note Random Depth", 0, 1, .01f, 0);
+            addSeq (seqPerformance::velocityRandom, "velocity_random", "Velocity Random Depth", 0, 1, .01f, 0);
+            addSeq (seqPerformance::lengthRandom, "length_random", "Length Random Depth", 0, 1, .01f, 0);
+            addSeq (seqPerformance::repeatRandom, "repeat_random", "Repeat Random Depth", 0, 1, .01f, 0);
+            addSeq (seqPerformance::octaveShift, "octave_shift", "Global Octave Shift", -4, 4, 1, 0);
+            addSeq (seqPerformance::semitoneShift, "semitone_shift", "Global Semitone Shift", -12, 12, 1, 0);
+        }
         return result;
     }();
     return values;
@@ -207,9 +252,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         const auto& p = catalog()[index];
         // Distinguish automated parameters in REAPER's global FX parameter list,
         // without adding redundant prefixes to the accessible per-bassline grids.
-        const auto hostName = index < audioParameterCount
-            ? ("Bassline " + juce::String (1 + index / voiceParameterCount) + " - " + p.name)
-            : (index < legacyParameterCount ? ("Sequencer - " + p.name) : ("FX - " + p.name));
+        const auto hostName = index == parameterIndex (0, 31)
+            ? ("FX - " + p.name) // Historic slider032 ID, but now global direct bus.
+            : (index < audioParameterCount
+                ? ("Bassline " + juce::String (1 + index / voiceParameterCount) + " - " + p.name)
+                : ((index < legacyParameterCount || index >= sequencerPerformanceBase)
+                    ? ("Sequencer - " + p.name) : ("FX - " + p.name)));
         if (p.choiceCount)
         {
             juce::StringArray options;

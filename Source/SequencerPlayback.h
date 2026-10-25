@@ -26,6 +26,7 @@ public:
                    const std::array<int, 2>& patterns, const std::array<bool, 2>& enabled,
                    const std::array<double, 2>& triggerOrigins,
                    const std::array<int, 2>& keyboardTransposes,
+                   const std::array<SequencerConfig, 2>& performanceControls,
                    bool playing, double ppq, double bpm, double sampleRate, int samples,
                    std::array<StepEvent, maximumStepEvents>& stepEvents,
                    int& stepEventCount, int blockOffset);

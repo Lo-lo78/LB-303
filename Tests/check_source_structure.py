@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.6-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.9-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -315,7 +315,7 @@ assert 'heldKeyAge[lane][static_cast<size_t> (channel)]' in processor
 assert 'heldKeyCount[lane] == 0' in processor  # only first key retriggers step 1
 assert 'activePreview ? lastKeyboardNote[0] - 60' in processor
 assert 'const std::array<int, 2>& keyboardTransposes' in playback_h
-assert 'step.note + keyboardTransposes[lane]' in playback
+assert 'step.note + randomSemitones + keyboardTransposes[lane]' in playback
 assert 'lastSourceNote[lane] == step.note' in playback
 assert 'lane + 1, lastNote[lane])' in playback
 assert 'oldPattern[lane] = patterns[lane]' in playback
@@ -356,12 +356,12 @@ print('PASS: TEST2.3 sample-position lock overlay, baseline persistence, dual-la
 # TEST2.3.1 — independently addressable MIDI channels + persistent UI order.
 import ast
 mapsrc = param_cpp
-for marker, size in [('voiceDisplayOrder', 23), ('seqDisplayOrder', 7)]:
-    match = re.search(r'constexpr std::array<size_t, (?:voiceVisibleParameterCount|sequencerParameterCount)> '
-                      + marker + r'\s*\{\{([^}]+)\}\}', mapsrc)
-    assert match, marker
-    nums = [int(n) for n in re.findall(r'\b\d+\b', re.sub(r'//[^\n]*', '', match.group(1)))]
-    assert len(nums) == size and (sorted(nums) == list(range(size)) if marker == 'seqDisplayOrder' else len(set(nums)) == size), (marker, nums)
+match = re.search(r'constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder\s*\{\{([^}]+)\}\}', param_cpp)
+assert match
+voice_order = [int(n) for n in re.findall(r'\b\d+\b', re.sub(r'//[^\n]*', '', match.group(1)))]
+assert len(voice_order) == 23 and len(set(voice_order)) == 23
+assert voice_order[:2] == [35, 0] # Level before Waveform
+assert 'sequencerDisplayParameterCount> seqDisplayOrder' in param_cpp
 assert 'midiChannel1Index = audioParameterCount + 5' in param_h
 assert 'midiChannel2Index = audioParameterCount + 6' in param_h
 assert '"Omni", "1", "2"' in param_cpp
@@ -415,7 +415,7 @@ print('PASS: TEST2.3.2 LJuno-style preset browser, complete state snapshots, .lb
 fxheader = (root / 'Source/SharedEffects.h').read_text(encoding='utf-8')
 fxcpp = (root / 'Source/SharedEffects.cpp').read_text(encoding='utf-8')
 engine = (root / 'Source/BassEngine.cpp').read_text(encoding='utf-8')
-assert 'fxParameterCount = 34' in param_h
+assert 'fxParameterCount = 35' in param_h
 assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount' in param_h
 assert 'legacyParameterCount = audioParameterCount + sequencerParameterCount' in param_h
 assert 'fxDisplayOrder' in param_cpp
@@ -426,7 +426,7 @@ assert 'fxDisplayGlobalIndex' in editor and 'Source/SharedEffects.cpp' in cmake
 assert 'std::pair<float, float> BassEngine::processClassicDelay' in engine
 assert 'return { synthL, synthR };' in engine
 assert 'BassEngine classic' in fxheader
-assert 'classic.processClassicDelay(sl,sr)' in fxcpp
+assert 'classic.processClassicDelay (l, r)' in fxcpp
 assert 'SharedEffects::dualDelay' in fxcpp and 'SharedEffects::chorus' in fxcpp
 assert 'SharedEffects::distort' in fxcpp and 'SharedEffects::reverb' in fxcpp
 assert 'sharedFx.prepare (sampleRate);' in processor
@@ -447,21 +447,21 @@ print('PASS: TEST2.4 shared FX engine, stable host IDs, dual sends, 4 accessible
 import collections
 fx_enum = (root / 'Source/ParameterCatalog.h').read_text()
 assert 'constexpr size_t legacyParameterCount' in fx_enum
-fx_decl = re.search(r'enum Control : size_t\s*\{([^}]+)\}',fx_enum,re.S)
+fx_decl = re.search(r'namespace fx\s*\{\s*enum Control : size_t\s*\{([^}]+)\}',fx_enum,re.S)
 assert fx_decl
 names = [x.strip() for x in re.sub(r'//[^\n]*', '', fx_decl.group(1)).split(',') if x.strip()]
-assert len(names) == 34, (len(names),names)
+assert len(names) == 35, (len(names),names)
 for name in names:
     assert 'addFx (fx::'+name+',' in param_cpp, name
 fxmap = re.search(r'constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder\s*\{\{(.*?)\}\};',param_cpp,re.S)
 assert fxmap
 items=[x.strip() for x in re.sub(r'//[^\n]*','',fxmap.group(1)).split(',') if x.strip()]
-assert len(items) == 48, len(items)
+assert len(items) == 49, len(items)
 assert len(set(items)) == len(items)
-assert sum(x.startswith('fxParameterIndex ') for x in items) == 34
+assert sum(x.startswith('fxParameterIndex ') for x in items) == 35
 assert sorted(int(x) for x in items if x.isdigit()) == list(range(19,33))
 assert 'return 30.0' in processor_h
-print('PASS: FX 34 append-only IDs, 14 shared classic IDs, complete unique display mapping, 30s tail.')
+print('PASS: FX 35 append-only IDs, 14 shared classic IDs, complete unique display mapping, 30s tail.')
 
 # TEST2.4.1 — Correct LJuno Value limits and independent distortion states.
 # Test exactly the context-specific Home/End behavior; navigation Home/End
@@ -599,9 +599,78 @@ assert 'if (letter (\'l\')) { focusControl (Control::grid,' in editor
 # parameter range/IDs or preset serialization modifications.
 reverb = fxcpp.split('std::pair<float, float> SharedEffects::reverb (', 1)[1]\
                .split('std::pair<float, float> SharedEffects::process (', 1)[0]
-assert 'const float level = c[fx::reverbLevel]*.02f;' in reverb
+assert 'const float level = c[fx::reverbLevel] * .02f * reverbReturnMakeupGain;' in reverb
 assert 'return { bounded ((middle+side)*level), bounded ((middle-side)*level) };' in reverb
 assert '"fx_reverb_level"' in param_cpp
 assert '"Reverb Level", 0, 100, 1, 50' in param_cpp
 assert 'fx::reverbSend1' in fxcpp and 'fx::reverbSend2' in fxcpp
-print('PASS: TEST2.4.6 full Grid entrance announcement and double reverb wet only (static).')
+print('PASS: TEST2.4.6 native Grid speech preserved; TEST2.4.7 wet gain verified separately.')
+
+# TEST2.4.7: substantial *wet-only* reverb boost. Source constant and
+# reference arithmetic ensure +18.06dB relative to TEST2.4.6 (8x amplitude),
+# at Send 20 / Level 50 now 1.6x the pre-2.4.6 full-send/level reference.
+from math import log10
+assert 'constexpr float reverbReturnMakeupGain = 8.0f;' in fxcpp
+assert reverb.count('reverbReturnMakeupGain') == 1
+assert abs(20 * log10(8.0) - 18.0617997398) < 1.e-4
+assert abs((.20 * .50 * .02 * 8.0 * 100) - 1.6) < 1.e-9
+assert 'const auto reverbStem = send (fx::reverbSend1, fx::reverbSend2);' in fxcpp
+assert 'reverbWet = runReverb' in fxcpp
+assert 'classicDryLevel + ch1L + ch2L' in fxcpp
+print('PASS: TEST2.4.7 +18.06 dB reverb return only; sends, dry and other FX unchanged.')
+
+# TEST2.4.8 — global direct Dry Level, first in FX grid.
+# Keep historical slider032 unchanged for REAPER automation and .lb files.
+assert '"slider032", "Dry Level"' in param_cpp
+assert 'index == parameterIndex (0, 31)' in param_cpp
+assert '("FX - " + p.name)' in param_cpp
+fxmap = re.search(r'constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder\s*\{\{(.*?)\}\};',param_cpp,re.S)
+assert fxmap
+fxitems=[x.strip() for x in re.sub(r'//[^\n]*','',fxmap.group(1)).split(',') if x.strip()]
+assert fxitems[0] == '31', fxitems[:5]
+assert fxitems.count('31') == 1
+assert len(fxitems) == 49 and len(set(fxitems)) == 49
+assert '(axL + bxL) * classicDryLevel' in fxcpp
+assert 'const float dryGain = delayMode == 1 ? classicDryLevel : 1.0f;' not in fxcpp
+assert 'const auto [axL, axR] = distort (aL, aR, 0);' in fxcpp
+assert 'const auto [bxL, bxR] = distort (bL, bR, 1);' in fxcpp
+assert 'result.first - l * classicDryGain' in fxcpp
+print('PASS: TEST2.4.8 Dry Level first in FX; globally active; existing ID and delay wet-only routing retained.')
+
+# TEST2.4.9 — insert order, per-lane sends and LJuno performance parameters.
+assert 'fxParameterCount = 35' in param_h
+assert 'sequencerPerformancePerLane = 10' in param_h
+assert 'sequencerPerformanceCount = basslineCount * sequencerPerformancePerLane' in param_h
+assert 'sequencerDisplayParameterCount = sequencerParameterCount + sequencerPerformanceCount' in param_h
+assert 'sequencerDisplayParameterCount' in (root / 'Source/PluginEditor.h').read_text()
+assert 'fx_delay_reverb_order' in param_cpp
+assert 'fxOrderChoices' in param_cpp
+assert 'fx::effectOrder' in param_cpp
+assert 'const bool delayFirst = c[fx::effectOrder] < .5f;' in fxcpp
+assert fxcpp.index('const auto [axL, axR] = distort') < fxcpp.index('const auto first = chorus (')
+assert fxcpp.index('const auto first = chorus (') < fxcpp.index('const auto delayStem = send')
+assert 'reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink' in fxcpp
+assert 'delayWet = runDelay (delayStem.first + reverbWet.first * delayLink' in fxcpp
+assert 'const float reverbLink = std::max' in fxcpp and 'const float delayLink = std::max' in fxcpp
+assert 'std::array<Ring, basslineCount> chorusL, chorusR;' in fxheader
+assert 'const auto second = chorus (bxL * s2, bxR * s2, 1);' in fxcpp
+assert 'const float s1 = c[fx::chorusSend1] * .01f;' in fxcpp
+assert 'std::pair<float, float> chorus (float, float, size_t voice)' in fxheader
+assert 'fxParameterIndex (fx::effectOrder)' in param_cpp
+assert '31, // Dry Level' in param_cpp
+assert '35, 0, 36,' in param_cpp
+for idstub in ('bpm_division','shuffle','legato','skip_probability','note_random',
+               'velocity_random','length_random','repeat_random','octave_shift','semitone_shift'):
+    assert f'"{idstub}"' in param_cpp, idstub
+assert 'const std::array<SequencerConfig, 2>& performanceControls' in playback
+assert 'const auto& controls = performanceControls' in playback
+for field in ('bpmDivision', 'shuffle', 'legato', 'noteSkipProbability',
+              'noteRandomDepth', 'velocityRandomDepth', 'noteLengthRandomDepth',
+              'repeatRandomDepth', 'octaveShift', 'semitoneShift'):
+    assert f'config.{field} = controls.{field};' in playback
+assert 'randomValue (lane, pattern, tick' in playback
+assert 'const double lengthFactor' in playback
+assert 'config.legato && step.length >= 100' in playback
+assert 'performance,\n            playing' in processor
+assert 'LB-303-0.0.2-TEST2.4.9-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')

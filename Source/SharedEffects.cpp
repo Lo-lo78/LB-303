@@ -10,6 +10,9 @@ namespace lb303
 namespace
 {
 constexpr double pi = juce::MathConstants<double>::pi;
+// TEST2.4.7: +18.06 dB on the reverb wet RETURN only, relative to TEST2.4.6.
+// This makes moderate sends (e.g. 20% send, 50% level) clearly audible.
+constexpr float reverbReturnMakeupGain = 8.0f;
 float clampf (float x, float lo, float hi) noexcept { return std::clamp (x, lo, hi); }
 float lerp (float a, float b, float t) noexcept { return a + (b - a) * t; }
 }
@@ -33,8 +36,11 @@ void SharedEffects::prepare (double sampleRate)
 {
     fs = std::max (8000.0, sampleRate);
     classic.prepare (fs);
-    chorusL.initialise (static_cast<int> (fs * 0.05) + 8);
-    chorusR.initialise (static_cast<int> (fs * 0.05) + 8);
+    for (size_t i = 0; i < basslineCount; ++i)
+    {
+        chorusL[i].initialise (static_cast<int> (fs * 0.05) + 8);
+        chorusR[i].initialise (static_cast<int> (fs * 0.05) + 8);
+    }
     tapeL.initialise (static_cast<int> (fs * 12.0) + 8);
     tapeR.initialise (static_cast<int> (fs * 12.0) + 8);
     preL.initialise (static_cast<int> (fs * 0.30) + 8);
@@ -64,11 +70,13 @@ void SharedEffects::prepare (double sampleRate)
 void SharedEffects::clearTails() noexcept
 {
     classic.reset();
-    for (auto* line : { &chorusL, &chorusR, &tapeL, &tapeR, &preL, &preR })
+    for (auto* line : { &tapeL, &tapeR, &preL, &preR })
     {
         std::fill (line->data.begin(), line->data.end(), 0.0f);
         line->pos = 0;
     }
+    for (auto& line : chorusL) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
+    for (auto& line : chorusR) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
     for (auto& line : verb)
     {
         std::fill (line.data.begin(), line.data.end(), 0.0f);
@@ -80,7 +88,8 @@ void SharedEffects::clearTails() noexcept
     tapeTime.fill (0.0f); tapeLow.fill (0.0f); tapeHighX.fill (0.0f); tapeHighY.fill (0.0f);
     tapeWetX.fill (0.0f); tapeWetY.fill (0.0f);
     chorusRateSmoothed = chorusTail = 0.0f;
-    chorusHpXL = chorusHpYL = chorusHpXR = chorusHpYR = 0.0f;
+    chorusHpXL.fill (0.0f); chorusHpYL.fill (0.0f);
+    chorusHpXR.fill (0.0f); chorusHpYR.fill (0.0f);
     chorusPhase = 0.0;
     for (auto& distortion : distortions) distortion = {};
     lastDelayMode = 0;
@@ -169,25 +178,23 @@ std::pair<float, float> SharedEffects::distort (float l, float r, size_t voice) 
     wetL *= state.gain; wetR *= state.gain;
     return { bounded (l+state.mix*(wetL-l)), bounded (r+state.mix*(wetR-r)) };
 }
-std::pair<float, float> SharedEffects::chorus (float l, float r) noexcept
+std::pair<float, float> SharedEffects::chorus (float l, float r, size_t voice) noexcept
 {
     // LJuno-116 TEST95 stereo chorus: quadrature LFO, fractional delay and
     // separate 45 Hz HP on each wet channel, wet-only aux return.
-    if (chorusL.data.empty()) return { 0, 0 };
-    chorusRateSmoothed += (c[fx::chorusRate] * .01f - chorusRateSmoothed) * .0005f;
-    const double rateHz = .10 + chorusRateSmoothed * 1.40;
-    chorusPhase += rateHz / fs;
-    if (chorusPhase >= 1.0) chorusPhase -= 1.0;
+    if (chorusL[voice].data.empty()) return { 0, 0 };
+    // The common chorus LFO advances once per audio sample in process().
+    // Voice-specific delay lines keep both chorus sends isolated.
     const double a = std::sin (2.0*pi*chorusPhase);
     const double b = std::sin (2.0*pi*(chorusPhase+.25));
     const double dl = .006+(.018-.006)*(.5+.5*a*.65);
     const double dr = .006+(.018-.006)*(.5+.5*b*.65);
-    const float fromL = chorusL.read (dl*fs), fromR = chorusR.read (dr*fs);
-    chorusL.push (l); chorusR.push (r);
-    const float wetL = fromL-chorusHpXL+chorusHpCoefficient*chorusHpYL;
-    const float wetR = fromR-chorusHpXR+chorusHpCoefficient*chorusHpYR;
-    chorusHpXL = fromL; chorusHpYL = wetL;
-    chorusHpXR = fromR; chorusHpYR = wetR;
+    const float fromL = chorusL[voice].read (dl*fs), fromR = chorusR[voice].read (dr*fs);
+    chorusL[voice].push (l); chorusR[voice].push (r);
+    const float wetL = fromL-chorusHpXL[voice]+chorusHpCoefficient*chorusHpYL[voice];
+    const float wetR = fromR-chorusHpXR[voice]+chorusHpCoefficient*chorusHpYR[voice];
+    chorusHpXL[voice] = fromL; chorusHpYL[voice] = wetL;
+    chorusHpXR[voice] = fromR; chorusHpYR[voice] = wetR;
     const float gain = c[fx::chorusLevel]*.01f*(.5f+.5f*c[fx::chorusWidth]*.01f);
     return { bounded (wetL*gain), bounded (wetR*gain) };
 }
@@ -317,59 +324,93 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
     wetL *= .23f; wetR *= .23f;
     const float width = c[fx::reverbWidth]*.01f;
     const float middle = .5f*(wetL+wetR), side = .5f*(wetL-wetR)*width;
-    // TEST2.4.6: double ONLY the stereo wet return gain. Existing 100% now
-    // corresponds to the new 50%, with up to 200% of the previous return at
-    // 100%. No changes to decay, predelay, feedback, dry mix or other FX.
-    const float level = c[fx::reverbLevel]*.02f;
+    // TEST2.4.7: stronger wet return. The 2.4.6 return was still too quiet at
+    // musical send settings such as Send 20%, Level 50%. Multiply the return
+    // by 8 (+18.06 dB versus TEST2.4.6), without boosting dry, FDN feedback,
+    // decay or the other FX. 50% Level with 20% Send is now approximately
+    // 1.6 times the OLD TEST2.4.5 full-send/full-level wet return.
+    // With very hot sources and both controls near 100%, watch headroom.
+    const float level = c[fx::reverbLevel] * .02f * reverbReturnMakeupGain;
     return { bounded ((middle+side)*level), bounded ((middle-side)*level) };
 }
 std::pair<float, float> SharedEffects::process (float aL, float aR, float bL, float bR) noexcept
 {
-    // Distortion is independent for each voice, before the shared send buses.
+    // INSERT: two distortion processors act independently, before chorus.
     const auto [axL, axR] = distort (aL, aR, 0);
     const auto [bxL, bxR] = distort (bL, bR, 1);
-    const auto send = [&] (size_t one, size_t two)
-    {
-        const float l1=c[one]*.01f, l2=c[two]*.01f;
-        return std::pair<float,float> { axL*l1+bxL*l2, axR*l1+bxR*l2 };
-    };
-    float wetL=0,wetR=0;
-    const int delayMode=juce::roundToInt (c[fx::delayType]);
-    if (delayMode != 0)
-    {
-        const auto [sl,sr]=send (fx::delaySend1,fx::delaySend2);
-        if (delayMode == 1)
-        {
-            const auto [dl,dr] = classic.processClassicDelay(sl,sr);
-            // Send return contains only the delayed sound, not the dry input.
-            // With Wet 0 the feedback engine can run but there is no delay return.
-            // Classic processClassicDelay retains the source's original Dry and
-            // Wet controls, but dry is removed from the send bus here.
-            // Classic dry factor and its gain are read from the classic values.
-            wetL += dl-sl*classicDryGain;
-            wetR += dr-sr*classicDryGain;
-        }
-        else
-        {
-            const auto [dl,dr]=dualDelay(sl,sr);
-            wetL += dl; wetR += dr;
-        }
-    }
+
+    // AUX CHORUS: one global phase/rate, separate voice wet lines. This allows
+    // Delay/Reverb send 1 and 2 to remain genuinely isolated even on tails.
+    float ch1L = 0.0f, ch1R = 0.0f, ch2L = 0.0f, ch2R = 0.0f;
     if (c[fx::chorusOn] > .5f)
     {
-        const auto [sl,sr]=send (fx::chorusSend1,fx::chorusSend2);
-        const auto [cl,cr]=chorus(sl,sr);
-        wetL += cl; wetR += cr;
+        chorusRateSmoothed += (c[fx::chorusRate] * .01f - chorusRateSmoothed) * .0005f;
+        const double rateHz = .10 + chorusRateSmoothed * 1.40;
+        chorusPhase += rateHz / fs;
+        if (chorusPhase >= 1.0) chorusPhase -= 1.0;
+        const float s1 = c[fx::chorusSend1] * .01f;
+        const float s2 = c[fx::chorusSend2] * .01f;
+        const auto first = chorus (axL * s1, axR * s1, 0);
+        const auto second = chorus (bxL * s2, bxR * s2, 1);
+        ch1L = first.first; ch1R = first.second;
+        ch2L = second.first; ch2R = second.second;
     }
-    if (c[fx::reverbType] > .5f)
+    // The wet chorus is part of the sound being sent to later effects;
+    // Dry Level still attenuates only the DIRECT bassline stems.
+    const float composed1L = axL + ch1L, composed1R = axR + ch1R;
+    const float composed2L = bxL + ch2L, composed2R = bxR + ch2R;
+    const auto send = [&] (size_t one, size_t two)
     {
-        const auto [sl,sr]=send (fx::reverbSend1,fx::reverbSend2);
-        const auto [rl,rr]=reverb(sl,sr);
-        wetL += rl; wetR += rr;
+        const float s1 = c[one] * .01f, s2 = c[two] * .01f;
+        return std::pair<float,float> { composed1L * s1 + composed2L * s2,
+                                        composed1R * s1 + composed2R * s2 };
+    };
+    const auto delayStem = send (fx::delaySend1, fx::delaySend2);
+    const auto reverbStem = send (fx::reverbSend1, fx::reverbSend2);
+    const int delayMode = juce::jlimit (0, 2, juce::roundToInt (c[fx::delayType]));
+    const bool verbEnabled = c[fx::reverbType] > .5f;
+    // Master links respect destination send controls: both Reverb Sends at
+    // zero must silence new reverb excitation, even in serial FX routing.
+    const float reverbLink = std::max (c[fx::reverbSend1], c[fx::reverbSend2]) * .01f;
+    const float delayLink = std::max (c[fx::delaySend1], c[fx::delaySend2]) * .01f;
+    const bool delayFirst = c[fx::effectOrder] < .5f;
+
+    const auto runDelay = [&] (float l, float r) -> std::pair<float, float>
+    {
+        if (delayMode == 0) return { 0.0f, 0.0f };
+        if (delayMode == 1)
+        {
+            const auto result = classic.processClassicDelay (l, r);
+            // The Classic delay core includes its own dry term; remove it so
+            // this bus always carries ONLY delay repeats, not duplicate dry.
+            return { bounded (result.first - l * classicDryGain),
+                     bounded (result.second - r * classicDryGain) };
+        }
+        return dualDelay (l, r);
+    };
+    const auto runReverb = [&] (float l, float r) -> std::pair<float, float>
+    {
+        return verbEnabled ? reverb (l, r) : std::pair<float,float> { 0.0f, 0.0f };
+    };
+
+    std::pair<float,float> delayWet, reverbWet;
+    if (delayFirst)
+    {
+        // Delay -> Reverb: repetitions diffuse into the reverb tail.
+        delayWet = runDelay (delayStem.first, delayStem.second);
+        reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink,
+                               reverbStem.second + delayWet.second * reverbLink);
     }
-    // Classic Dry controls the single dry instrument bus, while the return
-    // contains just the wet repeats (never duplicating the raw stems).
-    const float dryGain = delayMode == 1 ? classicDryLevel : 1.0f;
-    return { bounded ((axL+bxL)*dryGain+wetL), bounded ((axR+bxR)*dryGain+wetR) };
+    else
+    {
+        // Reverb -> Delay: delay repeats capture the spacious reverb tail.
+        reverbWet = runReverb (reverbStem.first, reverbStem.second);
+        delayWet = runDelay (delayStem.first + reverbWet.first * delayLink,
+                              delayStem.second + reverbWet.second * delayLink);
+    }
+    return { bounded ((axL + bxL) * classicDryLevel + ch1L + ch2L
+                       + delayWet.first + reverbWet.first),
+             bounded ((axR + bxR) * classicDryLevel + ch1R + ch2R
+                       + delayWet.second + reverbWet.second) };
 }
 }

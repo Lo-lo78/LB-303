@@ -80,7 +80,7 @@ private:
     size_t globalIndex (int local) const;
     size_t globalIndex() const { return globalIndex (selected); }
     int currentParameterCount() const { return context < 2 ? static_cast<int> (lb303::voiceGridParameterCount)
-        : context == 2 ? static_cast<int> (lb303::sequencerParameterCount)
+        : context == 2 ? static_cast<int> (lb303::sequencerDisplayParameterCount)
                        : static_cast<int> (lb303::fxDisplayParameterCount); }
     juce::String contextName() const;
     void changeContext();

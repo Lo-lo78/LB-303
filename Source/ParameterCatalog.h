@@ -23,12 +23,23 @@ constexpr size_t audioParameterCount = voiceParameterCount * basslineCount;
 constexpr size_t sequencerParameterCount = 7;
 constexpr size_t legacyParameterCount = audioParameterCount + sequencerParameterCount;
 // Append all new FX IDs; existing automation and 1-based sequencer lock slots stay stable.
-constexpr size_t fxParameterCount = 34;
-constexpr size_t parameterCount = legacyParameterCount + fxParameterCount;
+constexpr size_t fxParameterCount = 35; // append FX Order after legacy 34
+constexpr size_t sequencerPerformancePerLane = 10;
+constexpr size_t sequencerPerformanceCount = basslineCount * sequencerPerformancePerLane;
+constexpr size_t sequencerPerformanceBase = legacyParameterCount + fxParameterCount;
+constexpr size_t sequencerDisplayParameterCount = sequencerParameterCount + sequencerPerformanceCount;
+constexpr size_t parameterCount = sequencerPerformanceBase + sequencerPerformanceCount;
+constexpr size_t seqPerformanceIndex (size_t lane, size_t control)
+{ return sequencerPerformanceBase + lane * sequencerPerformancePerLane + control; }
+namespace seqPerformance
+{
+enum Control : size_t { bpmDivision, shuffle, legato, skipProbability, noteRandom,
+                         velocityRandom, lengthRandom, repeatRandom, octaveShift, semitoneShift };
+}
 constexpr size_t fxParameterIndex (size_t local) { return legacyParameterCount + local; }
 constexpr size_t voiceVisibleParameterCount = 23; // voice parameters shown in parameter-lock picker
 constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 1; // existing MIDI channel shown too
-constexpr int voiceMidiDisplayIndex = 3; // Waveform, Level, Pan, MIDI Channel, ...
+constexpr int voiceMidiDisplayIndex = 3; // Level, Waveform, Pan, MIDI Channel, ...
 constexpr size_t classicDelayParameterCount = 14;
 constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount;
 constexpr size_t fxContextIndex = basslineCount + 1;
@@ -44,7 +55,8 @@ enum Control : size_t {
     reverbType, reverbSend1, reverbSend2, reverbPredelay, reverbDecay,
     reverbDamping, reverbWidth, reverbLevel,
     // Append-only controls: do not reindex the existing 31 FX parameters.
-    distortion2Type, distortion2Amount, distortion2Harmonics
+    distortion2Type, distortion2Amount, distortion2Harmonics,
+    effectOrder // append only; 0 Delay > Reverb, 1 Reverb > Delay
 };
 }
 constexpr size_t sequencerParameterIndex (size_t local) { return audioParameterCount + local; }

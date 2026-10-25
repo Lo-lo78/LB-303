@@ -186,9 +186,26 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             activePreview ? lastKeyboardNote[0] - 60 : keyboardTranspose[0],
             activePreview ? lastKeyboardNote[1] - 60 : keyboardTranspose[1]
         }};
+        std::array<lb303::SequencerConfig, lb303::basslineCount> performance {};
+        for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
+        {
+            const auto v = [&] (size_t which)
+                { return value (lb303::seqPerformanceIndex (lane, which)); };
+            auto& config = performance[lane];
+            config.bpmDivision = v (lb303::seqPerformance::bpmDivision);
+            config.shuffle = v (lb303::seqPerformance::shuffle);
+            config.legato = v (lb303::seqPerformance::legato) > 0.5f;
+            config.noteSkipProbability = v (lb303::seqPerformance::skipProbability);
+            config.noteRandomDepth = v (lb303::seqPerformance::noteRandom);
+            config.velocityRandomDepth = v (lb303::seqPerformance::velocityRandom);
+            config.noteLengthRandomDepth = v (lb303::seqPerformance::lengthRandom);
+            config.repeatRandomDepth = v (lb303::seqPerformance::repeatRandom);
+            config.octaveShift = juce::roundToInt (v (lb303::seqPerformance::octaveShift));
+            config.semitoneShift = juce::roundToInt (v (lb303::seqPerformance::semitoneShift));
+        }
         juce::MidiBuffer generated;
         sequencerPlayback.generate (generated, sequenceBanks,
-            { currentPattern (0), currentPattern (1) }, audible, origins, transposes,
+            { currentPattern (0), currentPattern (1) }, audible, origins, transposes, performance,
             playing || activePreview || audible[0] || audible[1],
             ppq + beginSample * beatsPerSample, bpm, sampleRateHz, segmentLength,
             stepEvents, stepEventCount, beginSample);

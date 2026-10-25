@@ -1,4 +1,30 @@
-# LB-303 0.0.2 — TEST2.4.6 (versione corrente)
+# LB-303 0.0.2 — TEST2.4.8 (versione corrente)
+
+## Dry Level: controllo diretto globale
+
+La griglia FX inizia ora con **Dry Level** (0–100%). Il parametro era
+precedentemente chiamato **Delay Dry**, ma non rappresenta il segnale wet del
+delay: imposta il volume del segnale diretto di **entrambe le bassline**,
+lasciando indipendenti le mandate e i ritorni di Classic Delay, Dual Tape,
+chorus e riverbero. Funziona con Delay Off, Classic oppure Dual Tape.
+
+L'ID storico **`slider032` rimane invariato**: preset `.lb`, progetti e
+automazioni preesistenti continuano a usare lo stesso parametro; cambia
+soltanto il nome visualizzato e la posizione nella griglia FX. Per coerenza
+con il nuovo significato globale, REAPER lo presenta come **FX - Dry Level**.
+Il vecchio ID nascosto della seconda bassline rimane per compatibilità e
+continua a non pilotare la sezione FX condivisa.
+
+Nota: un valore Dry Level pari a 0 rimuove il suono diretto, ma non le mandate
+agli effetti. In alcuni vecchi progetti con Delay Off o Dual Tape, il nuovo
+comportamento può essere diverso, perché precedentemente la regolazione Dry
+funzionava soltanto nella modalità Classic.
+
+Aggiornamento solo staticamente verificato, senza compilazione locale.
+
+---
+
+# LB-303 0.0.2 — TEST2.4.6 (cronologia)
 
 La navigazione viene ricordata **solo nell'istanza VST attualmente in uso**.
 Chiudere e riaprire la finestra mantiene griglia, parametro e pagina del
@@ -660,3 +686,79 @@ have been run; build on GitHub Actions and test announcements in REAPER/NVDA.
   unchanged, including browser Enter's return to Grid/Value/Edit.
 - Initial focus handling and reverb predelay smoothing from TEST2.4.4
   remain unchanged. No local build was performed; compile on GitHub Actions.
+
+
+## TEST2.4.7 — Reverb return boost (+18 dB)
+
+- The user found the TEST2.4.6 shared reverb still very quiet at realistic
+  settings such as **Reverb Send = 20%** and **Reverb Level = 50%**.
+- The output gain of the *wet return only* is multiplied by **8**, or
+  **+18.06 dB compared with TEST2.4.6**. This is 16x the wet level of
+  TEST2.4.5 because 2.4.6 had already doubled it. Level and Send retain
+  their original 0–100% ranges, VST parameter IDs, defaults, automation and
+  preset values. No changes to FDN feedback, Decay, Predelay, Width, Damping,
+  Bassline dry audio, delay, chorus or distortion.
+- At Send 20%, Level 50%, the new wet return is about **8x louder in amplitude**
+  than TEST2.4.6 at those settings. Beware clipping with both Send and Level
+  near 100% or very hot inputs; reduce levels if the result overloads.
+- Static checks only; build with GitHub Actions and listen in REAPER at a
+  variety of source levels and reverb types. No local VST compilation.
+
+## TEST2.4.9 — Signal-chain FX order and performance sequencer
+
+### Shared FX signal path
+
+Each bassline has its own **Level** (shown *before Waveform*), Pan and
+Distortion. The stereo Chorus follows distortion; its two independently
+adjustable sends feed separate chorus lines with a shared modulation clock.
+The **Delay Send 1/2** and **Reverb Send 1/2** then operate on the resulting
+combined sound (distortion and chorus), rather than on oscillator dry alone.
+**FX → Delay Reverb Order** chooses:
+
+- **Delay then Reverb** (default): delay echoes feed the reverb. Its direct
+  Reverb Sends also feed the same reverb.
+- **Reverb then Delay**: the reverb return is also echoed by the delay.
+
+The downstream FX receives the upstream wet signal *in addition to* its own
+per-bassline sends; the destination send pair scales this crossfeed, so both
+sends at 0% prevent newly feeding that destination. One shared Classic or Dual
+Delay and one shared selected Reverb are used; there are no duplicate delay
+processors. Reverb tails continue after input is removed. The existing **Dry
+Level** only controls the direct distorted bassline bus, not the wet returns.
+The external REAPER audio input is not routed through the instrument FX.
+
+This is a new routing scheme; existing `.lb` presets keep their numeric FX
+controls but will sound different from the older *parallel* routing. The
+reverb's intentionally high return gain from TEST2.4.7 remains, so watch
+headroom, especially when delay repeats feed the reverb.
+
+### Sequencer performance controls
+
+The Sequencer Grid now includes **10 additional automatable controls per
+bassline**, grouped beside its Sequencer On/Off, Pattern and MIDI Channel:
+
+- **BPM Division**: 0.03125–64 (default **4.00**, as in LJuno), so a value
+  of 4 means four steps per quarter-note at REAPER's tempo.
+- **Shuffle**: 0–1; delays the alternate steps, preserving the BPM grid.
+- **Legato**: Off/On; length-100 notes may overlap for glide.
+- **Note Skip Probability**: 0–1 (deterministic at a given pattern/position).
+- **Note Random Depth**, **Velocity Random Depth**, **Length Random Depth**,
+  **Repeat Random Depth**: 0–1, deterministic per step (no random audio-thread
+  allocation and stable when REAPER loops).
+- **Global Octave Shift**: -4 to +4 octaves; **Global Semitone Shift**: -12 to +12.
+
+Unlike per-pattern **Start/End**, Launch Step and step values, these new
+performance controls apply **per bassline across its 16 patterns**. Each of
+the two tracks can run at its own BPM Division, Shuffle and transposition.
+That scope is intentional for now: it provides two independent automatible
+performance clocks without rewriting the per-pattern bank format or the
+already-saved Parameter Locks. The 32 patterns, per-pattern Start/End, MIDI
+channels, accessibility and preset browser are preserved.
+
+### Build and verification
+
+Source-only delivery. Run GitHub Actions for Windows VST3 (no local build).
+Check both FX orders while one line has chorus, verify FX Send = 0 edge
+cases, then test BPM Division 4 / 8 / 2, Shuffle, and separate bassline
+performance settings. Finally save and reload a `.lb` preset to verify the
+new append-only automation parameter IDs and the existing 32 pattern banks.

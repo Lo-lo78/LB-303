@@ -35,7 +35,7 @@ private:
     struct DistSide { float previous = 0, prevEven = 0, evenDc = 0; };
     static float fxShape (int mode, float x) noexcept;
     std::pair<float, float> distort (float, float, size_t voice) noexcept;
-    std::pair<float, float> chorus (float, float) noexcept;
+    std::pair<float, float> chorus (float, float, size_t voice) noexcept;
     std::pair<float, float> dualDelay (float, float) noexcept;
     std::pair<float, float> reverb (float, float) noexcept;
     float toneFeedback (float x, float tone, size_t lane) noexcept;
@@ -53,13 +53,15 @@ private:
     float classicDryGain = 1.0f;
     float classicDryLevel = 1.0f;
     int lastDelayMode = 0;
-    Ring chorusL, chorusR, tapeL, tapeR, preL, preR;
+    std::array<Ring, basslineCount> chorusL, chorusR;
+    Ring tapeL, tapeR, preL, preR;
     std::array<Ring, 8> verb {};
     std::array<float, 8> verbDamped {};
     std::array<float, 8> verbTimes {};
     int verbIndex = 0;
     float chorusRateSmoothed = 0, chorusHpCoefficient = 0, chorusTail = 0;
-    float chorusHpXL = 0, chorusHpYL = 0, chorusHpXR = 0, chorusHpYR = 0;
+    std::array<float, basslineCount> chorusHpXL {}, chorusHpYL {},
+                                       chorusHpXR {}, chorusHpYR {};
     double chorusPhase = 0;
     struct DistortionState
     {
