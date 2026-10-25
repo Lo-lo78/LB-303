@@ -1,3 +1,17 @@
+# LB-303 0.0.2 — TEST2.4.16
+
+## What's new
+
+- **Preset browser accessibility:** cursor movement (Up/Down, Page Up/Down, Home/End, cyclic letter search) explicitly announces the newly selected preset or folder to NVDA/OSARA, as in LJuno. Presets are still auditioned by loading their complete `.lb` snapshots; the browser does *not* start an independent preview player.
+- **Alt+P in the browser:** toggles whether Space controls the existing sequencer preview or is reserved for REAPER (default). While in Preview mode, Space starts/stops both sequencers; selecting another preset updates the currently audible pattern **only while the same preview is already playing**. Browsing while stopped remains silent. Preview continues when the browser closes if it was already playing; Escape restores the previous sound state, without creating a second transport.
+- **Separate stereo outputs:** additional buses alongside FX 1/2: Bassline 1 Out 3/4, Bassline 2 Out 5/6. Each Bassline grid now includes `Separate Output` (`Off` / `Out 3/4` or `Off` / `Out 5/6`). Default Off reproduces the earlier stereo behavior. With Out enabled, the bassline's direct signal **including its own distortion** goes to its separate output; shared Chorus, Delay, Reverb wet returns stay on FX 1/2. Dedicated stems do not follow the FX Dry Level; they use their own voice Volume. FX Dry Level controls only direct sound left on main 1/2. No duplicated effects or transport.
+- **REAPER configuration:** set the track to 6 channels and enable/map all three stereo VST3 output buses using the plug-in pin connector / multi-output routing. A disabled/unavailable separate bus falls back to the main stereo output rather than muting the bassline. For FX 1/2 only, leave `Separate Output` Off. Host routing must be configured for distinct 3/4 and 5/6 audible playback.
+- Two new **append-only VST3 IDs**: `b1_separate_output`, `b2_separate_output`. The existing parameter IDs, presets, 32 patterns, lock slots and shortcut behavior are retained. The output selector is not a sequence step lock.
+
+**Verification:** source-structure regression tests pass; full JUCE/Windows build, REAPER host bus exposure, NVDA/UIA output and audible routing are **not yet tested**. Build only with GitHub Actions and validate on a blank REAPER project first.
+
+---
+
 # TEST2.4.15 — Appunti del pattern corrente (Alt+Q)
 
 - **Ctrl+Shift+C** copia il solo pattern selezionato (128 step, Start/End, Launch Step, Note/Length/Velocity/Repeat/Shift e tutti i Parameter Locks) negli appunti di Windows.
@@ -853,3 +867,21 @@ che vengano incollate 16 sequenze per errore.
 Ctrl+C/X/V resta invariato per i singoli step. I 32 pattern, i preset
 `.lb` e gli ID delle automazioni non cambiano. Test statici soltanto:
 la compilazione va verificata con GitHub Actions e REAPER.
+
+
+## TEST2.4.17 — Arresto dell'anteprima alla chiusura della finestra VST3
+
+Con Alt+P su Sequencer Preview, **Spazio** continua ad avviare o fermare
+l'anteprima contemporanea delle due bassline in Grid/Value/Edit, nel browser preset
+e nell'editor Alt+Q. **Esc o Alt+Q chiudono soltanto l'editor degli step**,
+permettendo all'anteprima di proseguire mentre si regolano i parametri.
+
+**Quando si chiude la finestra principale del VST3**, l'anteprima viene
+sempre arrestata automaticamente, anche se l'istanza rimane caricata
+in REAPER. Riaprire la finestra non riavvia la sequenza: occorre premere
+nuovamente Spazio. La scelta Alt+P resta per istanza e non viene salvata
+nei preset o nei progetti. I trigger MIDI e il normale trasporto REAPER
+non vengono toccati.
+
+Verifica statica superata; compilazione da effettuare con GitHub Actions
+e confermare sul campo in REAPER/NVDA.

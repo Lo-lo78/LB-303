@@ -17,8 +17,14 @@ public:
     void prepare (double newSampleRate);
     void clearTails() noexcept; // no allocation: reset FX after Alt+I
     void setParameters (const Controls&, const ClassicParameters&, double newTempo);
-    // Returns combined dry + wet. External host input bypasses instrument FX.
-    std::pair<float, float> process (float b1l, float b1r, float b2l, float b2r) noexcept;
+    float dryLevel() const noexcept { return classicDryLevel; }
+    struct Output
+    {
+        std::pair<float, float> wet; // chorus, delay, reverb: ONLY main FX 1/2
+        std::array<std::pair<float, float>, basslineCount> dry;
+        // Post-distortion voice, no FX tails, BEFORE global FX Dry Level.
+    };
+    Output process (float b1l, float b1r, float b2l, float b2r) noexcept;
 private:
     struct Ring
     {

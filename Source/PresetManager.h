@@ -12,6 +12,9 @@ namespace lb303
 class PresetManager
 {
 public:
+    // Same instrument instance: browser can route Alt+P/Space to the existing
+    // sequencer preview transport, without creating a second audition engine.
+    LB303AudioProcessor& instrument() const noexcept { return processor; }
     struct BrowserEntry
     {
         juce::File file;

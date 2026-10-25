@@ -32,7 +32,9 @@ constexpr size_t sequencerDisplayParameterCount = sequencerParameterCount + sequ
 // Older voice local lock IDs 1..37 remain untouched; new LFO lock IDs start at 38.
 constexpr size_t lfoParameterCount = 16;
 constexpr size_t lfoParameterBase = sequencerPerformanceBase + sequencerPerformanceCount;
-constexpr size_t parameterCount = lfoParameterBase + basslineCount * lfoParameterCount;
+constexpr size_t separateOutputBase = lfoParameterBase + basslineCount * lfoParameterCount;
+constexpr size_t separateOutputIndex (size_t lane) { return separateOutputBase + lane; }
+constexpr size_t parameterCount = separateOutputBase + basslineCount;
 constexpr size_t lfoParameterIndex (size_t lane, size_t control)
 { return lfoParameterBase + lane * lfoParameterCount + control; }
 namespace lfo
@@ -54,7 +56,7 @@ enum Control : size_t { bpmDivision, shuffle, legato, skipProbability, noteRando
 }
 constexpr size_t fxParameterIndex (size_t local) { return legacyParameterCount + local; }
 constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount; // old Level is hidden; Volume is first // voice parameters shown in parameter-lock picker
-constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 1; // existing MIDI channel shown too
+constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 2; // MIDI channel + separate stereo output
 constexpr int voiceMidiDisplayIndex = 3; // Level, Waveform, Pan, MIDI Channel, ...
 constexpr size_t classicDelayParameterCount = 14;
 constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount;

@@ -189,6 +189,9 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
 LB303AudioProcessorEditor::~LB303AudioProcessorEditor()
 {
     stopTimer();
+    // Closing the *whole VST3 window* stops the per-instance sequencer preview.
+    // Closing the Alt+Q overlay alone must NOT stop it.
+    processor.requestSequencerPreview (false);
     rememberEditorLocation();
     if (stepEditor != nullptr) stepEditor->close();
     if (presetBrowser != nullptr) { presetBrowser->onClose = {}; presetBrowser->onPresetLoaded = {}; presetBrowser->close(); }
@@ -275,7 +278,9 @@ size_t LB303AudioProcessorEditor::globalIndex (int local) const
         // without changing voice DSP local indices or the lock picker mapping.
         if (local == lb303::voiceMidiDisplayIndex)
             return context == 0 ? lb303::midiChannel1Index : lb303::midiChannel2Index;
-        const int voiceDisplay = local > lb303::voiceMidiDisplayIndex ? local - 1 : local;
+        if (local == lb303::voiceMidiDisplayIndex + 1)
+            return lb303::separateOutputIndex (static_cast<size_t> (context));
+        const int voiceDisplay = local > lb303::voiceMidiDisplayIndex + 1 ? local - 2 : local;
         const auto actual = lb303::displayToLocal (static_cast<size_t> (context),
                                                    static_cast<size_t> (voiceDisplay));
         return lb303::voiceParameterGlobalIndex (static_cast<size_t> (context), actual);

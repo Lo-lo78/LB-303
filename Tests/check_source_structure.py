@@ -97,8 +97,8 @@ assert '"Bassline " + juce::String (1 + index / voiceParameterCount)' in param_c
 assert 'lb303::parameterIndex (voice, i)' in processor
 assert 'for (auto& engine : engines) engine.midi (entry.getMessage());' not in processor
 assert 'engines[voice].tick (0.0f, 0.0f)' in processor
-assert 'const float outL = l[nextSample] + fx.first;' in processor
-assert 'const float outR = r[nextSample] + fx.second;' in processor
+assert 'fx.wet.first' in processor and 'fx.dry[0].first' in processor
+assert 'fx.wet.second' in processor and 'fx.dry[1].second' in processor
 assert 'sharedFx.process (stems[0].first' in processor
 assert 'context = (context + 1) % static_cast<int> (lb303::basslineCount + 2)' in editor
 assert 'Bassline 1' in editor and 'Bassline 2' in editor and 'Sequencer' in editor
@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.15-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.17-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -492,7 +492,7 @@ print('PASS: TEST2.4.1 Value Home/End, two isolated distortions before shared se
 
 # TEST2.4.2: single parameter ID for channel in each sequencer/voice view,
 # persistent focus return from preset browsing, and full reset of 32 patterns.
-assert 'voiceGridParameterCount = voiceVisibleParameterCount + 1' in param_h
+assert 'voiceGridParameterCount = voiceVisibleParameterCount + 2' in param_h
 assert 'voiceMidiDisplayIndex = 3' in param_h
 assert 'midiChannel1Index : lb303::midiChannel2Index' in editor
 assert 'voiceGridParameterCount' in (root / 'Source/PluginEditor.h').read_text(encoding='utf-8')
@@ -616,7 +616,7 @@ assert abs(20 * log10(8.0) - 18.0617997398) < 1.e-4
 assert abs((.20 * .50 * .02 * 8.0 * 100) - 1.6) < 1.e-9
 assert 'const auto reverbStem = send (fx::reverbSend1, fx::reverbSend2);' in fxcpp
 assert 'reverbWet = runReverb' in fxcpp
-assert 'classicDryLevel + ch1L + ch2L' in fxcpp
+assert 'out.dry[0]' in fxcpp and 'out.dry[1]' in fxcpp and 'out.wet' in fxcpp
 print('PASS: TEST2.4.7 +18.06 dB reverb return only; sends, dry and other FX unchanged.')
 
 # TEST2.4.8 — global direct Dry Level, first in FX grid.
@@ -630,7 +630,7 @@ fxitems=[x.strip() for x in re.sub(r'//[^\n]*','',fxmap.group(1)).split(',') if 
 assert fxitems[0] == '31', fxitems[:5]
 assert fxitems.count('31') == 1
 assert len(fxitems) == 49 and len(set(fxitems)) == 49
-assert '(axL + bxL) * classicDryLevel' in fxcpp
+assert 'out.dry[0] = { bounded (axL)' in fxcpp and 'sharedFx.dryLevel()' in processor
 assert 'const float dryGain = delayMode == 1 ? classicDryLevel : 1.0f;' not in fxcpp
 assert 'const auto [axL, axR] = distort (aL, aR, 0);' in fxcpp
 assert 'const auto [bxL, bxR] = distort (bL, bR, 1);' in fxcpp
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.15-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.17-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -705,7 +705,7 @@ print('PASS: TEST2.4.11 six independently collapsing FX columns, Type-dependent 
 
 # TEST2.4.12 — two fully independent LJuno-derived LFOs, no duplicate Level.
 assert 'lfoParameterBase = sequencerPerformanceBase + sequencerPerformanceCount' in param_h
-assert 'parameterCount = lfoParameterBase + basslineCount * lfoParameterCount' in param_h
+assert 'parameterCount = separateOutputBase + basslineCount' in param_h
 assert 'constexpr size_t voiceLocalParameterCount = voiceParameterCount + lfoParameterCount' in param_h
 assert 'constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount' in param_h
 assert len(voice_order) == 38 and voice_order[0] == 7 and 35 not in voice_order
@@ -786,3 +786,55 @@ assert 'storeRelaxed (dst.midiInputPolyphony, loadRelaxed (src.midiInputPolyphon
 assert 'sequences[1].midiInputPolyphony' not in copy_sequence
 assert 'sequences[2].midiInputPolyphony' not in copy_sequence
 print('PASS: TEST2.4.15 portable single-pattern clipboard, cross-track paste, target-only Undo/Redo, silent other 15 patterns.')
+
+# TEST2.4.16 — accessible browser and multi-output audio routing.
+assert 'std::function<void()> onPresetLoaded' in (root/'Source/PresetBrowser.h').read_text()
+browser = (root/'Source/PresetBrowser.cpp').read_text()
+assert 'announce (getNameForRow (row));' in browser
+assert 'const int bounded = juce::jlimit' in browser
+assert 'entries.selectRow (bounded);' in browser
+assert 'manager.instrument().toggleSpaceTarget()' in browser
+assert 'manager.instrument().toggleSequencerPreview()' in browser
+assert 'if (! manager.instrument().spaceControlsSequencerPreview()) return false;' in browser
+assert 'if (! suppressSelection && mode == Mode::browse && row >= 0) previewRow (row);' not in browser
+assert 'void PresetBrowser::previewRow' in browser and 'manager.preview (item.file)' in browser
+assert 'setStateInformation (state.getData()' in (root/'Source/PresetManager.cpp').read_text()
+assert 'previewEnabled.store (false' not in processor.split('void LB303AudioProcessor::setStateInformation', 1)[1]
+assert 'separateOutputBase = lfoParameterBase + basslineCount * lfoParameterCount;' in param_h
+assert 'constexpr size_t separateOutputIndex (size_t lane)' in param_h
+assert 'result[separateOutputIndex (0)]' in param_cpp
+assert 'result[separateOutputIndex (1)]' in param_cpp
+assert '"b1_separate_output"' in param_cpp and '"b2_separate_output"' in param_cpp
+assert '"Off", "Out 3/4"' in param_cpp and '"Off", "Out 5/6"' in param_cpp
+assert 'if (local == lb303::voiceMidiDisplayIndex + 1)' in editor
+assert 'lb303::separateOutputIndex (static_cast<size_t> (context))' in editor
+assert 'voiceGridParameterCount = voiceVisibleParameterCount + 2' in param_h
+assert 'std::array<std::pair<float, float>, basslineCount> dry' in fxheader
+assert 'std::pair<float, float> wet' in fxheader
+assert 'SharedEffects::Output SharedEffects::process' in fxcpp
+assert 'out.wet = {' in fxcpp and 'out.dry[0] = {' in fxcpp and 'out.dry[1] = {' in fxcpp
+assert '.withOutput ("FX 1/2"' in processor and '.withOutput ("Bassline 1 3/4"' in processor
+assert '.withOutput ("Bassline 2 5/6"' in processor
+assert 'getChannelIndexInProcessBlockBuffer (false, 1, 0)' in processor
+assert 'getChannelIndexInProcessBlockBuffer (false, 2, 0)' in processor
+assert '&& b1Index + 1 < audio.getNumChannels()' in processor
+assert '&& b2Index + 1 < audio.getNumChannels()' in processor
+assert 'b1L[nextSample] += fx.dry[0].first;' in processor
+assert 'b2L[nextSample] += fx.dry[1].first;' in processor
+assert 'const float mainDry = sharedFx.dryLevel();' in processor
+assert 'fx.wet.first + mainDry' in processor
+assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
+assert 'LB-303-0.0.2-TEST2.4.17-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+print('PASS: TEST2.4.16 browser NVDA names + existing preview + 3 stereo buses + separate distortion stems + stable IDs (static).')
+
+# TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
+editor_source = (root / 'Source/PluginEditor.cpp').read_text(encoding='utf-8')
+processor_header = (root / 'Source/PluginProcessor.h').read_text(encoding='utf-8')
+step_source = (root / 'Source/SequencerStepEditor.cpp').read_text(encoding='utf-8')
+destructor = editor_source.split('LB303AudioProcessorEditor::~LB303AudioProcessorEditor()', 1)[1].split('LB303AudioProcessorEditor::createAccessibilityHandler', 1)[0]
+step_close = step_source.split('void SequencerStepEditor::close()', 1)[1].split('void SequencerStepEditor::', 1)[0]
+assert 'processor.requestSequencerPreview (false);' in destructor
+assert 'processor.requestSequencerPreview (false);' not in step_close
+assert 'void requestSequencerPreview (bool enabled)' in processor_header
+assert 'previewEnabled.store (enabled, std::memory_order_release);' in processor_header
+print('PASS: TEST2.4.17 window close stops preview; leaving Alt+Q does not.')

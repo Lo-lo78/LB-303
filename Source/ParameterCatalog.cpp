@@ -23,6 +23,8 @@ constexpr const char* fxOrderChoices[] = { "Delay then Reverb", "Reverb then Del
 constexpr const char* fxReverbChoices[] = { "Off", "Room", "Plate", "Hall", "Cathedral" };
 constexpr const char* lfoModeChoices[] = { "Free", "Triggered" };
 constexpr const char* lfoWaveChoices[] = { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Sample Hold" };
+constexpr const char* output1Choices[] = { "Off", "Out 3/4" };
+constexpr const char* output2Choices[] = { "Off", "Out 5/6" };
 constexpr const char* midiChannelChoices[] = { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9",
                                                "10", "11", "12", "13", "14", "15", "16" };
 // Group tone, envelopes and response; delay is accessible only in shared FX.
@@ -247,6 +249,11 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             addLfo (lfo::filterDepth, "filter_depth", "Filter Depth", -1, 1, .01f, 0);
             addLfo (lfo::panDepth, "pan_depth", "Pan Depth", -1, 1, .01f, 0);
         }
+        // New VST3 IDs appended: do not alter existing automation or locks.
+        result[separateOutputIndex (0)] = { "b1_separate_output", "Separate Output",
+            0, 1, 1, 0, "", output1Choices, 2 };
+        result[separateOutputIndex (1)] = { "b2_separate_output", "Separate Output",
+            0, 1, 1, 0, "", output2Choices, 2 };
         return result;
     }();
     return values;
@@ -260,7 +267,11 @@ size_t fxDisplayGlobalIndex (size_t displayIndex) noexcept
 size_t displayToLocal (size_t context, size_t displayIndex) noexcept
 {
     if (context < basslineCount)
+    {
+        if (displayIndex == voiceVisibleParameterCount + 1)
+            return voiceLocalParameterCount + 1; // output routing: not a lock slot
         return voiceDisplayOrder[juce::jmin (displayIndex, voiceDisplayOrder.size() - 1)];
+    }
     return seqDisplayOrder[juce::jmin (displayIndex, seqDisplayOrder.size() - 1)];
 }
 
@@ -287,7 +298,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         const auto& p = catalog()[index];
         // Distinguish automated parameters in REAPER's global FX parameter list,
         // without adding redundant prefixes to the accessible per-bassline grids.
-        const auto hostName = index >= lfoParameterBase
+        const auto hostName = index >= separateOutputBase
+            ? ("Bassline " + juce::String (1 + index - separateOutputBase) + " - " + p.name)
+            : index >= lfoParameterBase
             ? ("Bassline " + juce::String (1 + (index - lfoParameterBase) / lfoParameterCount)
                + " - " + p.name)
             : index == parameterIndex (0, 31)

@@ -333,7 +333,7 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
     const float level = c[fx::reverbLevel] * .02f * reverbReturnMakeupGain;
     return { bounded ((middle+side)*level), bounded ((middle-side)*level) };
 }
-std::pair<float, float> SharedEffects::process (float aL, float aR, float bL, float bR) noexcept
+SharedEffects::Output SharedEffects::process (float aL, float aR, float bL, float bR) noexcept
 {
     // INSERT: two distortion processors act independently, before chorus.
     const auto [axL, axR] = distort (aL, aR, 0);
@@ -397,9 +397,12 @@ std::pair<float, float> SharedEffects::process (float aL, float aR, float bL, fl
     const auto delayWet = runDelay (delayStem.first, delayStem.second);
     const auto reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink,
                                       reverbStem.second + delayWet.second * reverbLink);
-    return { bounded ((axL + bxL) * classicDryLevel + ch1L + ch2L
-                       + delayWet.first + reverbWet.first),
-             bounded ((axR + bxR) * classicDryLevel + ch1R + ch2R
-                       + delayWet.second + reverbWet.second) };
+    Output out;
+    // Exactly one shared wet bus, even when both voices are sent to stems.
+    out.wet = { bounded (ch1L + ch2L + delayWet.first + reverbWet.first),
+                bounded (ch1R + ch2R + delayWet.second + reverbWet.second) };
+    out.dry[0] = { bounded (axL), bounded (axR) };
+    out.dry[1] = { bounded (bxL), bounded (bxR) };
+    return out;
 }
 }

@@ -7,7 +7,9 @@
 LB303AudioProcessor::LB303AudioProcessor()
     : AudioProcessor (BusesProperties()
           .withInput ("Audio input", juce::AudioChannelSet::stereo(), true)
-          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+          .withOutput ("FX 1/2", juce::AudioChannelSet::stereo(), true)
+          .withOutput ("Bassline 1 3/4", juce::AudioChannelSet::stereo(), true)
+          .withOutput ("Bassline 2 5/6", juce::AudioChannelSet::stereo(), true)),
       parameters (*this, nullptr, "LB303State", lb303::createParameterLayout()),
       presetManager (*this)
 {
@@ -43,9 +45,15 @@ void LB303AudioProcessor::releaseResources() {}
 bool LB303AudioProcessor::isBusesLayoutSupported (const BusesLayout& layout) const
 {
     const auto stereo = juce::AudioChannelSet::stereo();
-    return layout.getMainOutputChannelSet() == stereo
-        && (layout.getMainInputChannelSet() == stereo ||
-            layout.getMainInputChannelSet() == juce::AudioChannelSet::disabled());
+    if (layout.getMainOutputChannelSet() != stereo ||
+        (layout.getMainInputChannelSet() != stereo &&
+         layout.getMainInputChannelSet() != juce::AudioChannelSet::disabled()))
+        return false;
+    for (int bus = 1; bus < layout.outputBuses.size(); ++bus)
+        if (layout.outputBuses[bus] != stereo &&
+            layout.outputBuses[bus] != juce::AudioChannelSet::disabled())
+            return false;
+    return true;
 }
 
 float LB303AudioProcessor::value (size_t i) const
@@ -413,6 +421,26 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     if (audio.getNumChannels() < 2) { audio.clear(); return; }
     auto* l = audio.getWritePointer (0);
     auto* r = audio.getWritePointer (1);
+    // JUCE interleaves output buses in the host process block: main 1/2,
+    // optional stereo buses 3/4 and 5/6. Respect disabled host buses.
+    const int b1Index = getChannelCountOfBus (false, 1) == 2
+        ? getChannelIndexInProcessBlockBuffer (false, 1, 0) : -1;
+    const int b2Index = getChannelCountOfBus (false, 2) == 2
+        ? getChannelIndexInProcessBlockBuffer (false, 2, 0) : -1;
+    // An unavailable/disabled bus must never cause a muted voice.
+    // In that case route its direct signal back to the FX main output.
+    const bool toB1 = value (lb303::separateOutputIndex (0)) > .5f
+        && b1Index >= 2 && b1Index + 1 < audio.getNumChannels();
+    const bool toB2 = value (lb303::separateOutputIndex (1)) > .5f
+        && b2Index >= 2 && b2Index + 1 < audio.getNumChannels();
+    auto* b1L = b1Index >= 0 && b1Index + 1 < audio.getNumChannels()
+        ? audio.getWritePointer (b1Index) : nullptr;
+    auto* b1R = b1L != nullptr ? audio.getWritePointer (b1Index + 1) : nullptr;
+    auto* b2L = b2Index >= 0 && b2Index + 1 < audio.getNumChannels()
+        ? audio.getWritePointer (b2Index) : nullptr;
+    auto* b2R = b2L != nullptr ? audio.getWritePointer (b2Index + 1) : nullptr;
+    if (b1L != nullptr) { audio.clear (b1Index, 0, count); audio.clear (b1Index + 1, 0, count); }
+    if (b2L != nullptr) { audio.clear (b2Index, 0, count); audio.clear (b2Index + 1, 0, count); }
     int nextSample = 0;
     int nextStepEvent = 0;
     const auto renderSamplesTo = [&] (int end)
@@ -428,10 +456,25 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             }
             const auto fx = sharedFx.process (stems[0].first, stems[0].second,
                                               stems[1].first, stems[1].second);
-            const float outL = l[nextSample] + fx.first;
-            const float outR = r[nextSample] + fx.second;
-            l[nextSample] = outL;
-            r[nextSample] = outR;
+            // The two voice distortion inserts remain with their own stems.
+            // Chorus, delay and reverb returns stay on FX main 1/2.
+            if (toB1)
+            {
+                b1L[nextSample] += fx.dry[0].first;
+                b1R[nextSample] += fx.dry[0].second;
+            }
+            if (toB2)
+            {
+                b2L[nextSample] += fx.dry[1].first;
+                b2R[nextSample] += fx.dry[1].second;
+            }
+            // Dry Level controls the main FX bus only. Dedicated outputs
+            // carry full post-distortion voices at their own Volume setting.
+            const float mainDry = sharedFx.dryLevel();
+            l[nextSample] += fx.wet.first + mainDry *
+                ((toB1 ? 0.0f : fx.dry[0].first) + (toB2 ? 0.0f : fx.dry[1].first));
+            r[nextSample] += fx.wet.second + mainDry *
+                ((toB1 ? 0.0f : fx.dry[0].second) + (toB2 ? 0.0f : fx.dry[1].second));
         }
     };
     const auto renderTo = [&] (int end)
@@ -463,8 +506,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             engines[static_cast<size_t> (midiChannel - 1)].midi (message);
     }
     renderTo (count);
-    for (int channel = 2; channel < audio.getNumChannels(); ++channel)
-        audio.clear (channel, 0, count);
+    // Extra outputs contain the two post-distortion stereo stems.
+    // Do not clear them after rendering (nor overwrite any host-only inputs).
 }
 
 void LB303AudioProcessor::resetToInitialState()

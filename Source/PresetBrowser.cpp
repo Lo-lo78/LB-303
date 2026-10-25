@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PresetBrowser.h"
 #include "ScreenReaderAnnouncer.h"
+#include "PluginProcessor.h"
 #include <algorithm>
 
 namespace lb303
@@ -220,7 +221,8 @@ juce::String PresetBrowser::getNameForRow (int row)
 {
     if (! juce::isPositiveAndBelow (row, static_cast<int> (items.size()))) return {};
     const auto& entry = items[static_cast<size_t> (row)];
-    return (entry.directory ? "Folder. " : "Preset. ") + entry.name;
+    return juce::String (row + 1) + ". "
+        + (entry.directory ? "Folder. " : "Preset. ") + entry.name;
 }
 void PresetBrowser::paintListBoxItem (int row, juce::Graphics& g,
                                       int width, int height, bool selected)
@@ -232,7 +234,12 @@ void PresetBrowser::paintListBoxItem (int row, juce::Graphics& g,
 }
 void PresetBrowser::selectedRowsChanged (int row)
 {
-    if (! suppressSelection && mode == Mode::browse && row >= 0) previewRow (row);
+    if (suppressSelection || mode != Mode::browse ||
+        ! juce::isPositiveAndBelow (row, static_cast<int> (items.size()))) return;
+    // LJuno-style explicit UI Automation announcement, not merely a ListBox
+    // selection event: NVDA can otherwise remain completely silent on arrows.
+    previewRow (row);
+    announce (getNameForRow (row));
 }
 void PresetBrowser::listBoxItemDoubleClicked (int row, const juce::MouseEvent&)
 {
@@ -415,7 +422,46 @@ bool PresetBrowser::listKey (const juce::KeyPress& k)
         && (juce::CharacterFunctions::toLowerCase (k.getTextCharacter()) == 'b'
             || juce::CharacterFunctions::toLowerCase (k.getTextCharacter()) == 'c')))
     { close(); return true; }
+    const auto ch = juce::CharacterFunctions::toLowerCase (k.getTextCharacter());
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown()
+        && (ch == 'p' || code == 'P'))
+    {
+        const bool previewTarget = manager.instrument().toggleSpaceTarget();
+        announce (previewTarget ? "Space: Sequencer preview" : "Space: DAW");
+        return true;
+    }
+    if (code == juce::KeyPress::spaceKey && ! mods.isAltDown()
+        && ! mods.isCtrlDown() && ! mods.isShiftDown())
+    {
+        if (! manager.instrument().spaceControlsSequencerPreview()) return false;
+        const bool nowPlaying = manager.instrument().toggleSequencerPreview();
+        announce (nowPlaying ? "Both basslines preview playing" : "Both basslines preview stopped");
+        return true;
+    }
     if (code == juce::KeyPress::returnKey) { activateRow (entries.getSelectedRow()); return true; }
+    // Mirror LJuno: explicitly select + announce on every keyboard step.
+    if (! items.empty() && ! mods.isAltDown() && ! mods.isCtrlDown()
+        && ! mods.isCommandDown())
+    {
+        int target = entries.getSelectedRow();
+        if (code == juce::KeyPress::upKey) --target;
+        else if (code == juce::KeyPress::downKey) ++target;
+        else if (code == juce::KeyPress::pageUpKey) target -= 10;
+        else if (code == juce::KeyPress::pageDownKey) target += 10;
+        else if (code == juce::KeyPress::homeKey) target = 0;
+        else if (code == juce::KeyPress::endKey) target = static_cast<int> (items.size()) - 1;
+        else target = -1;
+        if (target >= 0 || code == juce::KeyPress::upKey || code == juce::KeyPress::pageUpKey)
+        {
+            const int bounded = juce::jlimit (0, static_cast<int> (items.size()) - 1, target);
+            if (bounded != entries.getSelectedRow())
+            {
+                entries.selectRow (bounded); // selectedRowsChanged announces + loads preview
+                entries.scrollToEnsureRowIsOnscreen (bounded);
+            }
+            return true; // silent edges
+        }
+    }
     if (code == juce::KeyPress::backspaceKey || code == juce::KeyPress::leftKey)
     { parentFolder(); return true; }
     if (code == juce::KeyPress::F2Key) { renameSelected(); return true; }
