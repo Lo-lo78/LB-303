@@ -17,6 +17,7 @@ public:
     ~LB303AudioProcessorEditor() override;
     void paint (juce::Graphics&) override;
     void resized() override;
+    void focusGained (FocusChangeType) override;
     void mouseDown (const juce::MouseEvent&) override;
     std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
@@ -73,6 +74,8 @@ private:
     int stepWidthIndex = 0; // LJuno: 1 / 5 / 10 / 15 / 20, saved with the project.
     bool changingParameter = false;
     bool editDirty = false;
+    bool initialFocusTransferPending = false;
+    int initialFocusTransferAttempts = 0;
 
     size_t globalIndex (int local) const;
     size_t globalIndex() const { return globalIndex (selected); }
@@ -97,6 +100,9 @@ private:
     bool commitEdit();
     void cancelEdit();
     void focusControl (Control, bool defer = false);
+    void scheduleInitialFocusTransfer();
+    void performInitialFocusTransfer();
+    void rememberEditorLocation();
     bool handleKey (const juce::KeyPress&, Control);
     void openStepEditor();
     void openPresetBrowser (bool save);

@@ -13,7 +13,6 @@ constexpr int columnsFor (int count) { return (count + rowsPerColumn - 1) / rows
 constexpr int gridGap = 7;
 constexpr int valuePageStep = 40;
 constexpr int stepWidths[] { 1, 5, 10, 15, 20 };
-const juce::Identifier stepWidthState { "editorStepWidthIndex" };
 }
 
 void LB303AudioProcessorEditor::ParameterGrid::setLineReadingMode()
@@ -101,11 +100,19 @@ bool LB303AudioProcessorEditor::NumericEdit::keyPressed (const juce::KeyPress& k
 LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
     : juce::AudioProcessorEditor (p), processor (p)
 {
-    // Do NOT transfer focus when REAPER constructs or displays the editor.
-    // Loading the FX must leave the host FX Chain as the keyboard context.
-    setWantsKeyboardFocus (false);
-    stepWidthIndex = juce::jlimit (0, 4, static_cast<int> (
-        processor.parameters.state.getProperty (stepWidthState, 0)));
+    // LJuno-style host entry: be a keyboard focus container, but NEVER grab
+    // focus in the constructor. REAPER's FX Chain retains focus until the user
+    // actually enters this plug-in. Once the root receives focus, hand it to
+    // the currently remembered parameter Grid on the native UIA message loop.
+    setFocusContainerType (juce::Component::FocusContainerType::keyboardFocusContainer);
+    setWantsKeyboardFocus (true);
+    // Restore only this processor instance's in-memory editing history.
+    // The APVTS and preset snapshots must never contain these selections.
+    context = juce::jlimit (0, 3, processor.editorSession.activeContext);
+    for (int i = 0; i < 4; ++i)
+        lastSelected[static_cast<size_t> (i)] = juce::jmax (0,
+            processor.editorSession.selectedParameters[static_cast<size_t> (i)]);
+    stepWidthIndex = juce::jlimit (0, 4, processor.editorSession.stepWidthIndex);
 
     parameterGrid.setTextWhenNothingSelected ("Select parameter");
     parameterGrid.setWantsKeyboardFocus (true); // ensure Grid accepts arrows immediately after preset browser
@@ -170,6 +177,7 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
 LB303AudioProcessorEditor::~LB303AudioProcessorEditor()
 {
     stopTimer();
+    rememberEditorLocation();
     if (stepEditor != nullptr) stepEditor->close();
     if (presetBrowser != nullptr) { presetBrowser->onClose = {}; presetBrowser->onPresetLoaded = {}; presetBrowser->close(); }
     valueAttachment.reset();
@@ -178,6 +186,66 @@ std::unique_ptr<juce::AccessibilityHandler> LB303AudioProcessorEditor::createAcc
 {
     // No duplicate editor/window title in NVDA; expose only the three controls.
     return createIgnoredAccessibilityHandler (*this);
+}
+
+
+void LB303AudioProcessorEditor::rememberEditorLocation()
+{
+    lastSelected[static_cast<size_t> (context)] = selected;
+    processor.editorSession.activeContext = context;
+    processor.editorSession.selectedParameters = lastSelected;
+}
+
+void LB303AudioProcessorEditor::focusGained (FocusChangeType)
+{
+    // Unlike the constructor, this event means REAPER has intentionally
+    // transferred keyboard focus into the plug-in's root component.
+    scheduleInitialFocusTransfer();
+}
+
+void LB303AudioProcessorEditor::scheduleInitialFocusTransfer()
+{
+    if (initialFocusTransferPending) return;
+    initialFocusTransferPending = true;
+    juce::Timer::callAfterDelay (110,
+        [safe = juce::Component::SafePointer<LB303AudioProcessorEditor> (this)]
+        {
+            if (safe == nullptr) return;
+            safe->initialFocusTransferPending = false;
+            safe->performInitialFocusTransfer();
+        });
+}
+
+void LB303AudioProcessorEditor::performInitialFocusTransfer()
+{
+    if (! isShowing() || (presetBrowser != nullptr && presetBrowser->active())
+        || (stepEditor != nullptr && stepEditor->isOpen())) return;
+
+    // Never steal focus from Value, Edit or from the host FX Chain.
+    auto* focused = juce::Component::getCurrentlyFocusedComponent();
+    if (focused != nullptr && focused != this)
+        return;
+    auto* peer = getPeer();
+    auto* handler = parameterGrid.getAccessibilityHandler();
+    if (peer == nullptr || ! peer->isFocused() || handler == nullptr
+        || handler->getNativeImplementation() == nullptr)
+    {
+        if (focused == this && ++initialFocusTransferAttempts < 8)
+            scheduleInitialFocusTransfer();
+        return;
+    }
+
+    initialFocusTransferAttempts = 0;
+    parameterGrid.hidePopup();
+    parameterGrid.setEntryAccessibility();
+    parameterGrid.grabKeyboardFocus();
+    if (parameterGrid.hasKeyboardFocus (false))
+    {
+        handler->grabFocus();
+        lb303::announceToActiveScreenReader (parameterGrid, labelFor (selected));
+    }
+    else if (++initialFocusTransferAttempts < 8)
+        scheduleInitialFocusTransfer();
 }
 
 size_t LB303AudioProcessorEditor::globalIndex (int local) const
@@ -227,6 +295,7 @@ void LB303AudioProcessorEditor::changeContext()
     // Ctrl+Tab: Bassline 1 -> Bassline 2 -> Sequencer -> FX -> Bassline 1.
     context = (context + 1) % static_cast<int> (lb303::basslineCount + 2);
     populateContext();
+    rememberEditorLocation();
     focusControl (Control::grid, true);
     juce::Timer::callAfterDelay (50,
         [safe = juce::Component::SafePointer<LB303AudioProcessorEditor> (this)]
@@ -359,6 +428,7 @@ void LB303AudioProcessorEditor::selectParameter()
     if (! juce::isPositiveAndBelow (chosen, currentParameterCount())) return;
     selected = chosen;
     lastSelected[static_cast<size_t> (context)] = chosen;
+    rememberEditorLocation();
     changingParameter = true;
     valueAttachment.reset();
     const auto& p = lb303::catalog()[globalIndex()];
@@ -457,7 +527,7 @@ void LB303AudioProcessorEditor::changeStepWidth (int direction)
     const int next = juce::jlimit (0, 4, stepWidthIndex + direction);
     if (next == stepWidthIndex) return; // silent limit, also for NVDA/OSARA
     stepWidthIndex = next;
-    processor.parameters.state.setProperty (stepWidthState, stepWidthIndex, nullptr);
+    processor.editorSession.stepWidthIndex = stepWidthIndex;
     auto* active = juce::Component::getCurrentlyFocusedComponent();
     juce::Component& source = (active != nullptr && (active == this || isParentOf (active)))
         ? *active : static_cast<juce::Component&> (parameterGrid);
@@ -580,6 +650,7 @@ void LB303AudioProcessorEditor::focusBackFromPreset()
     }
     refreshLabels (true);
     selectParameter();
+    rememberEditorLocation();
     // Hiding the browser while its ListBox processes Enter can leave JUCE's
     // native ComboBox / UIA focus stale.  Value and Edit do not need recovery,
     // but Grid must receive a SECOND, post-event focus handoff.  Without it

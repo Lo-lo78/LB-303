@@ -1,7 +1,38 @@
-# LB-303 0.0.2 — TEST2.4.2 (versione corrente)
+# LB-303 0.0.2 — TEST2.4.5 (versione corrente)
 
-Il resto di questo README include note storiche delle TEST precedenti. Per il
-comportamento corrente, consultare la sezione **TEST2.4.2** in fondo.
+La navigazione viene ricordata **solo nell'istanza VST attualmente in uso**.
+Chiudere e riaprire la finestra mantiene griglia, parametro e pagina del
+sequencer; una nuova istanza, un nuovo progetto o un riavvio di REAPER non
+recuperano questa memoria dai salvataggi. Anche lo step di modifica segue
+questa regola. I suoni, gli effetti, i pattern e i preset `.lb` si salvano
+normalmente. Vedi la sezione TEST2.4.5 in fondo al documento.
+
+Le sezioni precedenti restano come cronologia dello sviluppo.
+
+
+## TEST2.4.4 — First Grid focus, remembered contexts and Reverb Predelay smoothing
+
+- **Initial entry from REAPER:** like LJuno, the editor root is a keyboard
+  focus container. Only after the host focuses that root, an asynchronous,
+  peer-checked transfer focuses the selected Grid and announces parameter +
+  value. Constructing the plugin must never grab the FX Chain's keyboard focus.
+- **Remember the place:** the four contexts (Bassline 1, Bassline 2, Sequencer,
+  FX) remember their selected parameter. The last active context and the
+  selections are retained when the editor window closes and reopens; the
+  sequencer's last active page (1–7) is remembered across Alt+Q. Alt+Q and Esc
+  still return to the originating control.
+- **Reverb Predelay:** the read position is continuously smoothed over a 35 ms
+  transition when Predelay changes, rather than abruptly jumping 44/48 samples
+  per 1 ms. The Cathedral FDN now uses an effective delay length consistent
+  with each buffer's maximum size when computing feedback.
+- **Important:** this targets confirmed discontinuities in the code. Continued
+  periodic clicks at a fixed Predelay value need an audio example for a
+  definitive diagnosis. No synth, MIDI, preset IDs or pattern format changed.
+- **Suggested REAPER test:** enter the new plugin from FX Chain once, use Grid
+  arrows immediately, switch to FX and select Reverb Predelay, leave and reenter
+  the GUI, check same context/parameter; Alt+Q 7 Esc Alt+Q should reopen page 7.
+  Then sweep Predelay through 9, 17/18, 34/36, 68–72 and 136–144 ms on a
+  sustained sound, and hold a value fixed while listening for ticks.
 
 ## TEST2.4.1 — Home/End and two independent distortions
 
@@ -101,7 +132,7 @@ esistenti, compresi i numeri dei 37 parametri per bassline usati nei Parameter L
 Non modifica il motore sonoro, ma cambia il **solo ordine visibile** dei parametri
 nelle tre griglie e nel selettore della pagina 7.
 
-- **Alt+Q** entra sempre nella **pagina 1 Note**, anche dopo aver chiuso
+- **Alt+Q** rientra nell’**ultima pagina del sequencer utilizzata**, anche dopo aver chiuso
   l'editor da un'altra pagina. Da dentro l'editor, anche mentre è aperto il
   selettore Parameters, **Alt+Q** chiude come Esc e riporta il focus sul
   controllo originale (Grid, Value o Edit), nella stessa griglia e parametro.
@@ -351,7 +382,7 @@ shortcuts may vary; please test Alt+L and arrow focus with NVDA/OSARA in REAPER.
 - Alt+PageUp/PageDown adjust by **40 selected steps**; enumerated choice parameters move by one choice.
 - Alt+Home takes the selected value to its **maximum**; Alt+End takes it to its **minimum** (LJuno convention).
 - Value Left/Right and Value PageUp/PageDown mirror LJuno, also without Alt.
-- The step width is stored in the project state and restored when reopening.
+- From TEST2.4.5, the step width is remembered only by the current running instance, not stored in the project/preset.
 - Silent borders remain unchanged; all shortcuts work in Grid, Value and Edit without stealing focus on plug-in insertion.
 - Only the editor, tests and documentation are changed; DSP and the 35 persistent parameter IDs are untouched.
 - **Static checks only; no local build.** Compile on GitHub Actions and test in REAPER.
@@ -407,7 +438,8 @@ Reference files are not compiled directly into the VST3.
 - **No automatic focus transfer** when REAPER creates/opens the FX editor.
   The plug-in cannot force REAPER to keep its window closed; that is a host
   preference. This change prevents LB-303 itself from moving the keyboard
-  focus away from the host FX Chain during initialization.
+  focus away from the host FX Chain during initialization; on actual keyboard
+  entry TEST2.4.4 focuses the remembered Grid after the host has focus.
 - The 35 original parameter IDs, DSP, JUCE version and Actions workflow
   remain unchanged. Compile and runtime testing remain GitHub/REAPER tasks.
 
@@ -590,3 +622,22 @@ have been run; build on GitHub Actions and test announcements in REAPER/NVDA.
 - This is a static-checked source patch; compile with GitHub Actions, then
   test in REAPER with NVDA. Test loading from all four Grid contexts and
   also from Value/Edit to confirm those controls still return normally.
+
+## TEST2.4.5 — Editor navigation is per-instance only
+
+- The active Grid (Bassline 1, Bassline 2, Sequencer, FX), the selected
+  parameter in each Grid, the Alt+Q sequencer page and the parameter step
+  width are stored **only in the live processor instance's RAM**.
+- Closing and reopening the **editor window of that same VST instance**
+  restores its position and last sequencer page. Two instances have
+  completely independent histories.
+- A fresh VST instance (for example, after removing/reinserting it or
+  reopening a project in REAPER) starts on Bassline 1, first parameter,
+  Note page (and default value step).
+- Saving a REAPER project or a `.lb` preset **never saves editor navigation**.
+  Old transient editor properties from TEST2.4.4 are stripped on load/save,
+  while all audio parameters, 32 pattern banks and Parameter Locks persist.
+- Loading a preset into the same running instance leaves its navigation
+  unchanged, including browser Enter's return to Grid/Value/Edit.
+- Initial focus handling and reverb predelay smoothing from TEST2.4.4
+  remain unchanged. No local build was performed; compile on GitHub Actions.

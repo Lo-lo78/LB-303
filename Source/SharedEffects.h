@@ -45,6 +45,11 @@ private:
     BassEngine classic; // the original JSFX delay engine, instantiated ONCE
     Controls c {};
     double fs = 44100.0, bpm = 120.0;
+    // Smoothed fractional read position for the shared reverb pre-delay.
+    // Parameter changes must not jump directly to another point in the ring.
+    double reverbPredelaySamples = 0.0;
+    double reverbPredelaySmoothCoeff = 0.0;
+    bool reverbPredelayReady = false;
     float classicDryGain = 1.0f;
     float classicDryLevel = 1.0f;
     int lastDelayMode = 0;

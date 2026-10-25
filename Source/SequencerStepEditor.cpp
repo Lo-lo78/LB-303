@@ -31,7 +31,9 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
 {
     if (opened) return;
     track = juce::jlimit (0, 1, selectedTrack);
-    page = 0; // Always open on Note, regardless of the previous editor page.
+    // Preserve the visited page only in this live processor instance.
+    // Opening another instance or loading a project starts at Note.
+    page = juce::jlimit (0, 6, processor.editorSession.sequencerPage);
     returnControl = focus;
     opened = true;
     lastStepKey = -1;
@@ -52,6 +54,7 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
 void SequencerStepEditor::close()
 {
     if (! opened) return;
+    processor.editorSession.sequencerPage = page;
     opened = false;
     pickerOpen = false;
     if (preview) { processor.requestSequencerPreview (false); preview = false; }
@@ -785,6 +788,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         if (page != target)
         {
             page = target;
+            processor.editorSession.sequencerPage = page;
             lastRevision = 0;
             refresh();
         }

@@ -448,7 +448,9 @@ void LB303AudioProcessor::resetToInitialState()
         }
     }
     for (auto& bank : sequenceBanks) bank.reset();
-    parameters.state.setProperty (juce::Identifier ("editorStepWidthIndex"), 0, nullptr);
+    // Alt+I resets this instance's editing increment, without writing UI
+    // history into the state saved by REAPER or the preset browser.
+    editorSession.stepWidthIndex = 0;
     presetManager.forgetCurrent();
     // Reset actual running DSP at the next audio callback (thread safe).
     resetRuntimeRequested.store (true, std::memory_order_release);
@@ -458,9 +460,28 @@ juce::AudioProcessorEditor* LB303AudioProcessor::createEditor()
 {
     return new LB303AudioProcessorEditor (*this);
 }
+namespace
+{
+// TEST2.4.5: Drop navigation metadata from older TEST2.4.4 states as well.
+// Audio parameters, pattern banks, and preset manager data remain intact.
+constexpr const char* transientEditorKeys[] {
+    "editorActiveContext", "editorSelectedBassline1", "editorSelectedBassline2",
+    "editorSelectedSequencer", "editorSelectedFx", "editorSequencerPage",
+    "editorStepWidthIndex"
+};
+void removeLegacyEditorProperties (juce::ValueTree& state)
+{
+    for (const char* key : transientEditorKeys)
+        state.removeProperty (juce::Identifier (key), nullptr);
+}
+}
+
 void LB303AudioProcessor::getStateInformation (juce::MemoryBlock& data)
 {
-    if (auto xml = parameters.copyState().createXml())
+    // Work on a copy; never change the live state merely to save a preset.
+    auto snapshot = parameters.copyState();
+    removeLegacyEditorProperties (snapshot);
+    if (auto xml = snapshot.createXml())
     {
         // Two independent banks, not 16 joint patterns. Save all 32 patterns.
         auto* bank1 = xml->createNewChildElement ("LB303PatternBank1");
@@ -486,7 +507,9 @@ void LB303AudioProcessor::setStateInformation (const void* data, int size)
             }
             if (auto* a = xml->getChildByName ("LB303PatternBank1")) xml->removeChildElement (a, true);
             if (auto* b = xml->getChildByName ("LB303PatternBank2")) xml->removeChildElement (b, true);
-            parameters.replaceState (juce::ValueTree::fromXml (*xml));
+            auto restored = juce::ValueTree::fromXml (*xml);
+            removeLegacyEditorProperties (restored);
+            parameters.replaceState (restored);
             sequencerPlayback.reset();
         }
 }

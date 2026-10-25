@@ -34,14 +34,15 @@ assert 'startTimerHz (8)' in editor
 constructor = editor.split('LB303AudioProcessorEditor::LB303AudioProcessorEditor (', 1)[1].split('LB303AudioProcessorEditor::~', 1)[0]
 assert constructor.index('addAndMakeVisible (numericEdit)') < constructor.index('setResizable (true, true)')
 assert constructor.index('setResizable (true, true)') < constructor.index('setResizeLimits (')
-# Loading the FX must NOT steal focus from REAPER or enter the first parameter.
+# Plugin insertion must NOT grab the focus. The root becomes focusable only so
+# that an actual REAPER keyboard-entry event can trigger a deferred handoff.
 assert 'SafePointer<LB303AudioProcessorEditor> (this)' not in constructor
 assert 'grabKeyboardFocus()' not in constructor
-assert 'setWantsKeyboardFocus (false)' in constructor
+assert 'setWantsKeyboardFocus (true)' in constructor and 'setFocusContainerType' in constructor
 assert 'Alt+Q' in (root / 'README.md').read_text(encoding='utf-8')
 assert 'constexpr int stepWidths[] { 1, 5, 10, 15, 20 };' in editor
 assert 'constexpr int valuePageStep = 40;' in editor
-assert 'editorStepWidthIndex' in editor
+assert 'processor.editorSession.stepWidthIndex' in editor
 assert 'void LB303AudioProcessorEditor::changeStepWidth (int direction)' in editor
 assert 'if (next == stepWidthIndex) return;' in editor
 assert 'p.choiceCount > 0 ? 1.0f' in editor
@@ -108,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.3-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.5-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -179,7 +180,7 @@ assert 'const double launchDelay =' in playback
 assert 'void LB303AudioProcessorEditor::openStepEditor()' in editor
 assert 'stepEditor->open (lane, origin)' in editor
 assert 'openStepEditor(); return true;' in editor
-assert 'setWantsKeyboardFocus (false)' in constructor
+assert 'setWantsKeyboardFocus (true)' in constructor and 'setFocusContainerType' in constructor
 print('PASS: TEST2.2 two-track step editor, preview, 7 pages, undo and keyboard navigation (static).')
 
 # TEST2.2.1: Home/End edit track, Ctrl+Up/Down edit current track's
@@ -378,7 +379,7 @@ assert '(sequencerOn[0] && heldKeyCount[0] > 0) || activePreview' in processor
 assert '(sequencerOn[1] && heldKeyCount[1] > 0) || activePreview' in processor
 assert 'requestSequencerPreview (false); preview = false' in step
 assert 'if (preview) { processor.requestSequencerPreview (false); preview = false; }\n    track = target;' not in step
-assert 'page = 0; // Always open on Note' in step
+assert 'processor.editorSession.sequencerPage' in step
 assert 'lastPickerPosition[static_cast<size_t> (track)]' in step
 assert 'returnControl = focus;' in step
 assert 'key.getModifiers().isAltDown()' in step and 'close(); return true;' in step
@@ -528,3 +529,56 @@ assert 'safe->numericEdit.hasKeyboardFocus (true)' in preset_restore
 assert 'safe->context != restoreContext || safe->selected != restoreParameter' in preset_restore
 assert 'safe->parameterGrid.setLineReadingMode();' in preset_restore
 print('PASS: TEST2.4.3 browser Enter -> responsive Grid and restored NVDA parameter/value.')
+
+# TEST2.4.4: initial host keyboard entry (not editor construction), per-grid
+# persistent cursor and Alt+Q page memory, glitch-free reverb predelay.
+assert 'void LB303AudioProcessorEditor::focusGained (FocusChangeType)' in editor
+assert 'void LB303AudioProcessorEditor::performInitialFocusTransfer()' in editor
+assert 'peer->isFocused()' in editor and 'focused != this' in editor
+assert 'handler->getNativeImplementation()' in editor
+assert 'processor.editorSession.activeContext' in editor
+assert 'processor.editorSession.selectedParameters' in editor
+assert 'void LB303AudioProcessorEditor::rememberEditorLocation()' in editor
+assert 'rememberEditorLocation();' in editor
+assert 'processor.editorSession.sequencerPage' in step
+assert 'processor.parameters.state.setProperty (sequencerPageState' not in step
+assert 'page = 0; // Always open on Note' not in step
+assert 'reverbPredelaySmoothCoeff' in fxcpp and 'reverbPredelaySamples' in fxcpp
+assert 'targetPredelay - reverbPredelaySamples' in fxcpp
+assert 'preL.read (readOffset), inR = preR.read (readOffset)' in fxcpp
+assert 'verb[i].data.size() - 2' in fxcpp
+print('PASS: TEST2.4.4 entry Grid focus, context/page memory, smoothed pre-delay and FDN effective delay.')
+
+# TEST2.4.5: navigation persists only while the processor instance lives.
+# REAPER/project/.lb state excludes navigation, including legacy TEST2.4.4 tags.
+assert 'struct EditorSessionState' in processor_h
+assert 'EditorSessionState editorSession;' in processor_h
+assert 'processor.editorSession.activeContext' in editor
+assert 'processor.editorSession.selectedParameters' in editor
+assert 'processor.editorSession.stepWidthIndex' in editor
+assert 'processor.editorSession.sequencerPage' in step
+for legacy in ('editorActiveContext', 'editorSelectedBassline1', 'editorSelectedBassline2',
+               'editorSelectedSequencer', 'editorSelectedFx', 'editorSequencerPage',
+               'editorStepWidthIndex'):
+    assert legacy in processor, legacy
+    assert legacy not in editor and legacy not in step, legacy
+assert 'removeLegacyEditorProperties (snapshot);' in processor
+assert 'removeLegacyEditorProperties (restored);' in processor
+assert processor.index('removeLegacyEditorProperties (snapshot);') < processor.index('if (auto xml = snapshot.createXml())')
+assert processor.index('removeLegacyEditorProperties (restored);') < processor.index('parameters.replaceState (restored);')
+assert 'processor.parameters.state.setProperty' not in step
+assert 'processor.parameters.state.setProperty (activeContextState' not in editor
+assert 'processor.parameters.state.setProperty (selectedContextState' not in editor
+assert 'processor.parameters.state.setProperty (stepWidthState' not in editor
+assert 'editorSession.stepWidthIndex = 0;' in processor
+print('PASS: TEST2.4.5 processor-instance-only navigation, legacy state migration, no cross-instance bleed.')
+
+# Old snapshots must never reset the current editor location when loading a
+# preset, and creating a new VST always starts with a default state object.
+assert 'int activeContext = 0;' in processor_h
+assert 'std::array<int, lb303::basslineCount + 2> selectedParameters {};' in processor_h
+assert 'int sequencerPage = 0;' in processor_h
+state_loader = processor.split('void LB303AudioProcessor::setStateInformation (', 1)[1]
+assert 'editorSession' not in state_loader
+assert 'auto restored = juce::ValueTree::fromXml (*xml);' in state_loader
+print('PASS: TEST2.4.5 old projects cannot overwrite the live editor position.')

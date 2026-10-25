@@ -39,6 +39,9 @@ void SharedEffects::prepare (double sampleRate)
     tapeR.initialise (static_cast<int> (fs * 12.0) + 8);
     preL.initialise (static_cast<int> (fs * 0.30) + 8);
     preR.initialise (static_cast<int> (fs * 0.30) + 8);
+    reverbPredelaySmoothCoeff = 1.0 - std::exp (-1.0 / (0.035 * fs));
+    reverbPredelaySamples = 0.0;
+    reverbPredelayReady = false;
     constexpr std::array<double, 8> lengths {{ .0311, .0377, .0411, .0437, .0531, .0593, .0679, .0719 }};
     for (size_t i = 0; i < verb.size(); ++i)
     {
@@ -72,6 +75,8 @@ void SharedEffects::clearTails() noexcept
         line.pos = 0;
     }
     verbDamped.fill (0.0f);
+    reverbPredelayReady = false;
+    reverbPredelaySamples = 0.0;
     tapeTime.fill (0.0f); tapeLow.fill (0.0f); tapeHighX.fill (0.0f); tapeHighY.fill (0.0f);
     tapeWetX.fill (0.0f); tapeWetY.fill (0.0f);
     chorusRateSmoothed = chorusTail = 0.0f;
@@ -263,8 +268,22 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
     // Four tunings of one Householder FDN. Decay times, diffusion and stereo
     // width differ: Room tight, Plate bright, Hall wide, Cathedral prolonged.
     const int mode = juce::jlimit (1,4,juce::roundToInt (c[fx::reverbType]));
-    const double predelay = c[fx::reverbPredelay]*.001*fs;
-    const float inL = preL.read (predelay+1), inR = preR.read (predelay+1);
+    // Before TEST2.4.4 each 1 ms change made the read head jump instantly
+    // (44/48 samples at common sample rates). That discontinuity sounds like
+    // a click; the FDN then repeats and emphasises it. Keep one continuous
+    // fractional delay head and smoothly approach the new user setting.
+    const double targetPredelay = std::clamp (
+        static_cast<double> (c[fx::reverbPredelay]) * .001 * fs,
+        0.0, .20 * fs);
+    if (! reverbPredelayReady)
+    {
+        reverbPredelaySamples = targetPredelay;
+        reverbPredelayReady = true;
+    }
+    reverbPredelaySamples += (targetPredelay - reverbPredelaySamples)
+                             * reverbPredelaySmoothCoeff;
+    const double readOffset = 1.0 + reverbPredelaySamples;
+    const float inL = preL.read (readOffset), inR = preR.read (readOffset);
     preL.push (l); preR.push (r);
     const double size = mode==1 ? .58 : mode==2 ? .85 : mode==3 ? 1.0 : 1.2;
     const double seconds = std::max (.15, static_cast<double> (c[fx::reverbDecay])
@@ -276,14 +295,19 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
     for (size_t i=0;i<8;++i)
     {
         // Each buffer length is fixed and noncommensurate. Size changes the read offset.
-        current[i] = verb[i].read (std::max (2.0, verbTimes[i]*size*fs));
+        current[i] = verb[i].read (std::clamp (static_cast<double> (verbTimes[i]) * size * fs,
+                                              2.0,
+                                              static_cast<double> (verb[i].data.size() - 2)));
         sum += current[i];
     }
     for (size_t i=0;i<8;++i)
     {
         const float reflected = sum*.25f-current[i];
         verbDamped[i] += (reflected-verbDamped[i])*damp;
-        const auto gain = static_cast<float> (std::pow (10.0, -3.0*verbTimes[i]*size/seconds));
+        const double effectiveSeconds = std::clamp (
+            static_cast<double> (verbTimes[i]) * size, 2.0 / fs,
+            static_cast<double> (verb[i].data.size() - 2) / fs);
+        const auto gain = static_cast<float> (std::pow (10.0, -3.0*effectiveSeconds/seconds));
         const float source = ((i & 1)==0 ? inL : inR) * .18f;
         verb[i].push (bounded (source+verbDamped[i]*std::min (.9995f,gain)));
     }

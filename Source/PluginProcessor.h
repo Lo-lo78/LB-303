@@ -35,6 +35,17 @@ public:
     void setStateInformation (const void*, int) override;
     void resetToInitialState(); // Alt+I: full synth, FX, MIDI, all 32 patterns
 
+    // Editor navigation belongs to this live processor instance, not to
+    // the host project or a .lb preset. Recreating this instance starts clean.
+    struct EditorSessionState
+    {
+        int activeContext = 0;
+        std::array<int, lb303::basslineCount + 2> selectedParameters {};
+        int sequencerPage = 0;
+        int stepWidthIndex = 0;
+    };
+    EditorSessionState editorSession;
+
     juce::AudioProcessorValueTreeState parameters;
     lb303::PresetManager presetManager;
     float value (size_t index) const;
