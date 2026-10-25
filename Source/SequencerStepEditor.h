@@ -32,6 +32,9 @@ private:
         int pattern = 0;
         std::vector<StepChange> changes;
         bool hasLaunch = false;
+        // One undoable edit can replace ONLY the current pattern.
+        bool hasWholePattern = false;
+        juce::String beforePattern, afterPattern;
         int launchBefore = 1, launchAfter = 1;
     };
     LB303AudioProcessor& processor;
@@ -75,6 +78,10 @@ private:
     void undo (bool redo);
     void copySteps (bool cut);
     void pasteSteps();
+    void copyCurrentPattern (bool cut);
+    void pasteCurrentPattern();
+    static juce::String makePatternSnapshot (const lb303::SequencerState&, int pattern);
+    static bool restorePatternSnapshot (lb303::SequencerState&, int pattern, const juce::String&);
     void changeLaunch (int direction, int amount);
     juce::String currentLockText() const;
     void openParameterPicker();

@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.13-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.15-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.13-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.15-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -753,3 +753,36 @@ assert 'processor.editorSession.spaceControlsPreview' not in param_cpp
 assert 'getKeyCode() == juce::KeyPress::spaceKey' in editor
 assert '&& ! editor.processor.spaceControlsSequencerPreview()' in editor
 print('PASS: TEST2.4.13 DAW-default Space, Alt+P target, dual preview across edit exit and nonpersistent instance mode.')
+
+# TEST2.4.15 — only the ACTIVE pattern may be copied/cut/pasted.
+assert 'void copyCurrentPattern (bool cut);' in step_h
+assert 'void pasteCurrentPattern();' in step_h
+assert 'bool hasWholePattern = false;' in step_h
+assert 'juce::String beforePattern, afterPattern;' in step_h
+assert 'LB303-PATTERN-V1:' in step
+assert 'LB303-TRACK-V1:' not in step
+assert 'juce::SystemClipboard::copyTextToClipboard (patternClipboardHeader + snapshot);' in step
+assert 'juce::SystemClipboard::getTextFromClipboard()' in step
+assert 'scratch->copySequenceFrom (source, sourcePattern, 0)' in step
+assert 'destination.copySequenceFrom (*scratch, 0, destinationPattern)' in step
+assert 'bank().copySequenceFrom (*staged, 0, destinationPattern);' in step
+assert 'bank().resetSequence (sourcePattern);' in step
+assert 'bank().resetSequence (i);' not in step
+assert 'action.hasWholePattern = true;' in step
+assert 'restorePatternSnapshot (dest, action.pattern,' in step
+assert 'const int destinationPattern = pattern();' in step
+assert 'if (mods.isCtrlDown() && mods.isShiftDown() && ! mods.isAltDown())' in step
+assert "if (chord ('c')) { copyCurrentPattern (false); return true; }" in step
+assert "if (chord ('x')) { copyCurrentPattern (true); return true; }" in step
+assert "if (chord ('v')) { pasteCurrentPattern(); return true; }" in step
+assert step.index('if (mods.isCtrlDown() && mods.isShiftDown()') < step.index('if (pickerOpen) return handlePickerKey')
+assert "if (letter ('c')) { copySteps (false); return true; }" in step
+assert "if (letter ('x')) { copySteps (true); return true; }" in step
+assert "if (letter ('v')) { pasteSteps(); return true; }" in step
+assert 'void SequencerStepEditor::undo (bool redo)' in step
+state = (root / 'Source/SequencerState.cpp').read_text(encoding='utf-8')
+copy_sequence = state.split('void SequencerState::copySequenceFrom', 1)[1].split('juce::String SequencerState::serialiseToBase64',1)[0]
+assert 'storeRelaxed (dst.midiInputPolyphony, loadRelaxed (src.midiInputPolyphony));' in copy_sequence
+assert 'sequences[1].midiInputPolyphony' not in copy_sequence
+assert 'sequences[2].midiInputPolyphony' not in copy_sequence
+print('PASS: TEST2.4.15 portable single-pattern clipboard, cross-track paste, target-only Undo/Redo, silent other 15 patterns.')

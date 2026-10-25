@@ -633,16 +633,9 @@ void SequencerState::copySequenceFrom (const SequencerState& source, int sourceS
     storeRelaxed (dst.launchStep, loadRelaxed (src.launchStep));
     storeRelaxed (dst.launchOffsetMs, loadRelaxed (src.launchOffsetMs));
 
-    // Input Polyphony is shared by the two pitched lanes.  Preserve that
-    // invariant when a complete sequence is pasted between lanes.  Noise is
-    // always monophonic.
-    if (destinationIndex < 2)
-    {
-        const auto polyphony = sourceIndex < 2 ? source.getConfig (sourceIndex).midiInputPolyphony : 0;
-        storeRelaxed (sequences[0].midiInputPolyphony, polyphony);
-        storeRelaxed (sequences[1].midiInputPolyphony, polyphony);
-    }
-    storeRelaxed (sequences[2].midiInputPolyphony, 0);
+    // LB-303 indexes patterns, NOT LJuno's pitched/noise layers. Copy the
+    // source pattern's metadata into this destination pattern ONLY.
+    storeRelaxed (dst.midiInputPolyphony, loadRelaxed (src.midiInputPolyphony));
 
     for (int stepIndex = 0; stepIndex < stepsPerSequence; ++stepIndex)
     {

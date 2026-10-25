@@ -3,6 +3,7 @@
 #include "ScreenReaderAnnouncer.h"
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 namespace
 {
@@ -11,6 +12,8 @@ constexpr std::array<char, 8> topKeys { 'q','w','e','r','t','y','u','i' };
 constexpr std::array<char, 8> lowerKeys { 'a','s','d','f','g','h','j','k' };
 const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift", "Launch Step", "Parameters" };
 constexpr int maxUndo = 50;
+// Versioned clipboard marker prevents pasting ordinary text as a sequencer.
+const juce::String patternClipboardHeader = "LB303-PATTERN-V1:";
 }
 
 SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
@@ -160,7 +163,8 @@ void SequencerStepEditor::refresh()
          << "  Step " << coarseSteps[static_cast<size_t> (valueStepIndex)]
          << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Tab: active blocks"
          << "\nZ/X: Start Step -/+  |  C/V: End Step -/+"
-         << "\nCtrl+C/V/X: Copy/Paste/Cut  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
+         << "\nCtrl+C/V/X: steps  |  Ctrl+Shift+C/X/V: current pattern only"
+         << "  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
          << "\nAlt+P: Space target (" << (processor.spaceControlsSequencerPreview() ? "Preview" : "REAPER")
          << ")  |  Space: " << (processor.spaceControlsSequencerPreview() ? "play/stop both basslines" : "REAPER play/stop")
          << "  |  Esc / Alt+Q: return without stopping preview";
@@ -296,7 +300,7 @@ std::vector<int> SequencerStepEditor::editingSteps() const
 }
 void SequencerStepEditor::commitAction (Action&& action)
 {
-    if (action.changes.empty() && ! action.hasLaunch) return;
+    if (action.changes.empty() && ! action.hasLaunch && ! action.hasWholePattern) return;
     undoStack.push_back (std::move (action));
     if (undoStack.size() > maxUndo) undoStack.erase (undoStack.begin());
     redoStack.clear();
@@ -306,6 +310,13 @@ void SequencerStepEditor::commitAction (Action&& action)
 void SequencerStepEditor::applyAction (const Action& action, bool backwards)
 {
     auto& dest = processor.patternBank (static_cast<size_t> (action.track));
+    if (action.hasWholePattern)
+    {
+        // Undo / Redo affects only the recorded pattern in the recorded lane.
+        // Other patterns and active pattern selectors are never overwritten.
+        restorePatternSnapshot (dest, action.pattern,
+                                backwards ? action.beforePattern : action.afterPattern);
+    }
     for (const auto& step : action.changes)
         dest.replaceStep (action.pattern, step.index, backwards ? step.before : step.after);
     if (action.hasLaunch)
@@ -446,6 +457,98 @@ void SequencerStepEditor::pasteSteps()
     commitAction (std::move (action));
     announce (juce::String (count) + " steps pasted");
 }
+// The versioned system clipboard contains a SINGLE source pattern (config,
+// all 128 steps and all parameter locks), never a full 16-pattern bank.
+// SequencerState already has a stable serializer and a copySequenceFrom
+// primitive, so stage the copied pattern in temporary slot 0 on the HEAP.
+// This supports pasting between patterns, basslines and plugin instances.
+juce::String SequencerStepEditor::makePatternSnapshot (const lb303::SequencerState& source,
+                                                       int sourcePattern)
+{
+    auto scratch = std::make_unique<lb303::SequencerState>();
+    scratch->copySequenceFrom (source, sourcePattern, 0);
+    return scratch->serialiseToBase64 (false);
+}
+
+bool SequencerStepEditor::restorePatternSnapshot (lb303::SequencerState& destination,
+                                                   int destinationPattern,
+                                                   const juce::String& snapshot)
+{
+    auto scratch = std::make_unique<lb303::SequencerState>();
+    if (! scratch->restoreFromBase64 (snapshot)) return false;
+    destination.copySequenceFrom (*scratch, 0, destinationPattern);
+    return true;
+}
+
+void SequencerStepEditor::copyCurrentPattern (bool cut)
+{
+    const int sourcePattern = pattern();
+    const auto snapshot = makePatternSnapshot (bank(), sourcePattern);
+    juce::SystemClipboard::copyTextToClipboard (patternClipboardHeader + snapshot);
+    if (! cut)
+    {
+        announce ("Bassline " + juce::String (track + 1) + ", Pattern "
+                  + juce::String (sourcePattern + 1) + " copied");
+        return;
+    }
+
+    Action action;
+    action.track = track;
+    action.pattern = sourcePattern;
+    action.hasWholePattern = true;
+    action.beforePattern = snapshot;
+    bank().resetSequence (sourcePattern);
+    action.afterPattern = makePatternSnapshot (bank(), sourcePattern);
+    selectedSteps.fill (false);
+    currentStep = 0;
+    lastPattern = -1;
+    commitAction (std::move (action));
+    announce ("Bassline " + juce::String (track + 1) + ", Pattern "
+              + juce::String (sourcePattern + 1) + " cut");
+}
+
+void SequencerStepEditor::pasteCurrentPattern()
+{
+    const juce::String text = juce::SystemClipboard::getTextFromClipboard();
+    if (! text.startsWith (patternClipboardHeader) || text.length() > 4 * 1024 * 1024)
+    {
+        announce ("No LB-303 pattern in clipboard");
+        return;
+    }
+    const auto payload = text.substring (patternClipboardHeader.length()).trim();
+
+    // Validate clipboard before touching the destination, avoiding partial
+    // updates with corrupt data. The large atomic bank lives on the heap.
+    auto staged = std::make_unique<lb303::SequencerState>();
+    if (! staged->restoreFromBase64 (payload))
+    {
+        announce ("Invalid LB-303 pattern clipboard");
+        return;
+    }
+
+    const int destinationPattern = pattern();
+    Action action;
+    action.track = track;
+    action.pattern = destinationPattern;
+    action.hasWholePattern = true;
+    action.beforePattern = makePatternSnapshot (bank(), destinationPattern);
+    if (action.beforePattern == payload)
+    {
+        announce ("Bassline " + juce::String (track + 1) + ", Pattern "
+                  + juce::String (destinationPattern + 1) + " already identical");
+        return;
+    }
+
+    bank().copySequenceFrom (*staged, 0, destinationPattern);
+    action.afterPattern = makePatternSnapshot (bank(), destinationPattern);
+    selectedSteps.fill (false);
+    currentStep = 0;
+    lastPattern = -1;
+    commitAction (std::move (action));
+    announce ("Bassline " + juce::String (track + 1) + ", Pattern "
+              + juce::String (destinationPattern + 1) + " pasted");
+}
+
 // Parameter selectors store the 1-based local catalog slot in sliderNumber.
 // The two independent banks translate that slot to the corresponding voice.
 juce::String SequencerStepEditor::currentLockText() const
@@ -720,6 +823,17 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         const bool running = processor.toggleSequencerPreview();
         announce (running ? "Both basslines preview playing" : "Both basslines preview stopped");
         return true;
+    }
+    // Whole-pattern clipboard shortcuts have priority even with the parameter
+    // picker open. Ctrl+C/X/V without Shift still edit just selected steps.
+    if (mods.isCtrlDown() && mods.isShiftDown() && ! mods.isAltDown())
+    {
+        const auto pressed = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+        const auto chord = [code, pressed] (juce::juce_wchar ch)
+        { return pressed == ch || code == juce::CharacterFunctions::toUpperCase (ch); };
+        if (chord ('c')) { copyCurrentPattern (false); return true; }
+        if (chord ('x')) { copyCurrentPattern (true); return true; }
+        if (chord ('v')) { pasteCurrentPattern(); return true; }
     }
     if (pickerOpen) return handlePickerKey (key);
     const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());

@@ -1,3 +1,15 @@
+# TEST2.4.15 — Appunti del pattern corrente (Alt+Q)
+
+- **Ctrl+Shift+C** copia il solo pattern selezionato (128 step, Start/End, Launch Step, Note/Length/Velocity/Repeat/Shift e tutti i Parameter Locks) negli appunti di Windows.
+- **Ctrl+Shift+X** copia e azzera **solo questo pattern**; gli altri 15 della bassline rimangono immutati.
+- **Ctrl+Shift+V** sostituisce **solo il pattern attualmente selezionato** con quello negli appunti. Puoi incollare in un altro pattern della stessa bassline, nell'altra bassline o in un'altra istanza del plugin.
+- **Ctrl+Z / Ctrl+Shift+Z** annullano/ripristinano soltanto la modifica di quel pattern.
+- **Ctrl+C/X/V** continuano a gestire i singoli step, senza cambiamenti.
+- **Home/End** cambia traccia; **Ctrl+Su/Giù** cambia pattern in Alt+Q.
+- Non vengono copiati Volume, Waveform, gli altri parametri delle bassline, FX, canali MIDI VST3, né i rimanenti 15 pattern.
+- Gli appunti precedenti `LB303-TRACK-V1` non vengono accettati; il nuovo formato è `LB303-PATTERN-V1`.
+- Nessuna modifica a sintesi, 32 pattern disponibili, preset `.lb` o ID VST3. Compilazione tramite GitHub Actions.
+
 # TEST2.4.13 — Alt+P: DAW / Sequencer preview (Windows VST3)
 
 - **Alt+P** alterna la destinazione di Spazio fra **DAW** (predefinito) e **Sequencer preview**. NVDA annuncia il nuovo modo.
@@ -815,3 +827,29 @@ Check the fixed Delay -> Reverb routing with chorus, verify FX Send = 0 edge
 cases, then test BPM Division 4 / 8 / 2, Shuffle, and separate bassline
 performance settings. Finally save and reload a `.lb` preset to verify the
 new append-only automation parameter IDs and the existing 32 pattern banks.
+
+
+## TEST2.4.15 — Copia/taglia/incolla un SOLO pattern (correzione TEST2.4.14)
+
+Nell'editor Alt+Q, **Ctrl+Shift+C / Ctrl+Shift+X / Ctrl+Shift+V** ora
+copiano, tagliano e incollano soltanto il **pattern selezionato** della
+traccia corrente, non tutti i 16 pattern della bassline. Copia completa
+di 128 step, Start/End, Launch Step, impostazioni del pattern e Parameter
+Locks. Non sono inclusi parametri del sintetizzatore, FX, canali MIDI
+VST3 o gli altri 15 pattern.
+
+Puoi selezionare Bassline 1, Pattern 3, copiarlo con Ctrl+Shift+C,
+poi cambiare su Bassline 2 (End), scegliere Pattern 8 (Ctrl+Su/Giù) e
+incollarlo con Ctrl+Shift+V. Gli altri pattern restano invariati.
+L'incolla sovrascrive il solo pattern di destinazione. Ctrl+Shift+X
+azzera solo il pattern corrente. Ctrl+Z e Ctrl+Shift+Z annullano e
+ripristinano soltanto l'operazione su quel pattern.
+
+Gli appunti di Windows permettono il trasferimento fra istanze. Il
+formato cambia da `LB303-TRACK-V1` a `LB303-PATTERN-V1`: le copie
+prodotte dalla TEST2.4.14 sono rifiutate esplicitamente per evitare
+che vengano incollate 16 sequenze per errore.
+
+Ctrl+C/X/V resta invariato per i singoli step. I 32 pattern, i preset
+`.lb` e gli ID delle automazioni non cambiano. Test statici soltanto:
+la compilazione va verificata con GitHub Actions e REAPER.
