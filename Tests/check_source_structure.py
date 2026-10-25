@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.17-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.18-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.17-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.18-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -813,19 +813,19 @@ assert 'std::array<std::pair<float, float>, basslineCount> dry' in fxheader
 assert 'std::pair<float, float> wet' in fxheader
 assert 'SharedEffects::Output SharedEffects::process' in fxcpp
 assert 'out.wet = {' in fxcpp and 'out.dry[0] = {' in fxcpp and 'out.dry[1] = {' in fxcpp
-assert '.withOutput ("FX 1/2"' in processor and '.withOutput ("Bassline 1 3/4"' in processor
+assert '.withOutput ("Master 1/2"' in processor and '.withOutput ("Bassline 1 3/4"' in processor
 assert '.withOutput ("Bassline 2 5/6"' in processor
-assert 'getChannelIndexInProcessBlockBuffer (false, 1, 0)' in processor
-assert 'getChannelIndexInProcessBlockBuffer (false, 2, 0)' in processor
-assert '&& b1Index + 1 < audio.getNumChannels()' in processor
-assert '&& b2Index + 1 < audio.getNumChannels()' in processor
+assert '.withOutput ("FX Wet 7/8"' in processor
+assert 'getChannelIndexInProcessBlockBuffer (false, bus, 0)' in processor
+assert 'const int wetIndex = stereoBusStart (3);' in processor
+assert 'channel + 1 < audio.getNumChannels()' in processor
 assert 'b1L[nextSample] += fx.dry[0].first;' in processor
 assert 'b2L[nextSample] += fx.dry[1].first;' in processor
 assert 'const float mainDry = sharedFx.dryLevel();' in processor
-assert 'fx.wet.first + mainDry' in processor
+assert 'mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first' in processor
 assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
-assert 'LB-303-0.0.2-TEST2.4.17-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
-print('PASS: TEST2.4.16 browser NVDA names + existing preview + 3 stereo buses + separate distortion stems + stable IDs (static).')
+assert 'LB-303-0.0.2-TEST2.4.18-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+print('PASS: TEST2.4.16 browser NVDA names + existing preview + 4 stereo buses + separate distortion stems + stable IDs (static).')
 
 # TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
 editor_source = (root / 'Source/PluginEditor.cpp').read_text(encoding='utf-8')
@@ -838,3 +838,21 @@ assert 'processor.requestSequencerPreview (false);' not in step_close
 assert 'void requestSequencerPreview (bool enabled)' in processor_header
 assert 'previewEnabled.store (enabled, std::memory_order_release);' in processor_header
 print('PASS: TEST2.4.17 window close stops preview; leaving Alt+Q does not.')
+
+# TEST2.4.18 - full master, isolated bassline and wet FX outputs.
+assert 'const int wetIndex = stereoBusStart (3);' in processor
+assert 'if (wetL != nullptr)' in processor
+assert 'wetL[nextSample] += fx.wet.first;' in processor
+assert 'wetR[nextSample] += fx.wet.second;' in processor
+assert 'audio.clear (0, 0, count);' in processor
+assert 'audio.clear (1, 0, count);' in processor
+assert 'audio.clear (wetIndex, 0, count);' in processor
+assert 'const bool toB1 = value (lb303::separateOutputIndex (0)) > .5f && b1Index >= 0;' in processor
+assert 'const bool toB2 = value (lb303::separateOutputIndex (1)) > .5f && b2Index >= 0;' in processor
+assert 'l[nextSample] += mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first;' in processor
+assert 'r[nextSample] += mainDry * (fx.dry[0].second + fx.dry[1].second) + fx.wet.second;' in processor
+assert 'toB1 ? 0.0f' not in processor
+assert 'toB2 ? 0.0f' not in processor
+assert '.withOutput ("FX Wet 7/8", juce::AudioChannelSet::stereo(), true)' in processor
+assert 'std::pair<float, float> wet; // Shared chorus' in (root/'Source/SharedEffects.h').read_text()
+print('PASS: TEST2.4.18 four stereo buses: full master, two optional distortion stems, isolated wet FX; no audio-input passthrough.')

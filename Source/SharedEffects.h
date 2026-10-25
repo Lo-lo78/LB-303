@@ -20,7 +20,7 @@ public:
     float dryLevel() const noexcept { return classicDryLevel; }
     struct Output
     {
-        std::pair<float, float> wet; // chorus, delay, reverb: ONLY main FX 1/2
+        std::pair<float, float> wet; // Shared chorus, delay, reverb: Master 1/2 + isolated FX bus 7/8
         std::array<std::pair<float, float>, basslineCount> dry;
         // Post-distortion voice, no FX tails, BEFORE global FX Dry Level.
     };
