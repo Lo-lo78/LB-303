@@ -26,7 +26,9 @@ constexpr size_t legacyParameterCount = audioParameterCount + sequencerParameter
 constexpr size_t fxParameterCount = 34;
 constexpr size_t parameterCount = legacyParameterCount + fxParameterCount;
 constexpr size_t fxParameterIndex (size_t local) { return legacyParameterCount + local; }
-constexpr size_t voiceVisibleParameterCount = 23; // no duplicated old delays in voice grids
+constexpr size_t voiceVisibleParameterCount = 23; // voice parameters shown in parameter-lock picker
+constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 1; // existing MIDI channel shown too
+constexpr int voiceMidiDisplayIndex = 3; // Waveform, Level, Pan, MIDI Channel, ...
 constexpr size_t classicDelayParameterCount = 14;
 constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount;
 constexpr size_t fxContextIndex = basslineCount + 1;

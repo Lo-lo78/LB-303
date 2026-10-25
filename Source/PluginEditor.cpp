@@ -183,11 +183,19 @@ size_t LB303AudioProcessorEditor::globalIndex (int local) const
 {
     if (context == static_cast<int> (lb303::fxContextIndex))
         return lb303::fxDisplayGlobalIndex (static_cast<size_t> (local));
-    const auto actual = lb303::displayToLocal (static_cast<size_t> (context),
-                                               static_cast<size_t> (local));
-    return context < 2
-        ? lb303::parameterIndex (static_cast<size_t> (context), actual)
-        : lb303::sequencerParameterIndex (actual);
+    if (context < 2)
+    {
+        // Reuse the existing, automated MIDI channel ID in each voice grid,
+        // without changing voice DSP local indices or the lock picker mapping.
+        if (local == lb303::voiceMidiDisplayIndex)
+            return context == 0 ? lb303::midiChannel1Index : lb303::midiChannel2Index;
+        const int voiceDisplay = local > lb303::voiceMidiDisplayIndex ? local - 1 : local;
+        const auto actual = lb303::displayToLocal (static_cast<size_t> (context),
+                                                   static_cast<size_t> (voiceDisplay));
+        return lb303::parameterIndex (static_cast<size_t> (context), actual);
+    }
+    return lb303::sequencerParameterIndex (lb303::displayToLocal (
+        static_cast<size_t> (context), static_cast<size_t> (local)));
 }
 juce::String LB303AudioProcessorEditor::contextName() const
 {
@@ -265,7 +273,7 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
     }
     g.setColour (juce::Colour (0xffb5c9e2));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::plain)));
-    g.drawText ("Grid / Value / Edit | Alt+Q: steps | Alt+B: browser | Alt+S: save | Alt+- / Alt++: presets",
+    g.drawText ("Grid / Value / Edit | Alt+Q: steps | Alt+B: browser | Alt+S: save | Alt+I: init | Alt+- / Alt++: presets",
                 18, getHeight() - 26, getWidth() - 36, 18, juce::Justification::centredLeft);
 }
 void LB303AudioProcessorEditor::resized()
@@ -548,11 +556,27 @@ void LB303AudioProcessorEditor::openPresetBrowser (bool save)
     else if (parameterValue.hasKeyboardFocus (true)) presetReturnControl = Control::value;
     else presetReturnControl = Control::grid;
     // Store grid selection; do not steal focus from REAPER just by constructing.
+    presetReturnContext = context;
+    presetReturnParameter = selected;
     if (save) presetBrowser->saveAs(); else presetBrowser->browse();
 }
 void LB303AudioProcessorEditor::focusBackFromPreset()
 {
     if (presetBrowser != nullptr && presetBrowser->active()) return;
+    // Preset snapshots affect parameter values and pattern banks, not the
+    // original page, selected parameter or Grid / Value / Edit target.
+    if (context != presetReturnContext)
+    {
+        context = presetReturnContext;
+        lastSelected[static_cast<size_t> (context)] = presetReturnParameter;
+        populateContext();
+    }
+    else if (selected != presetReturnParameter)
+    {
+        selected = presetReturnParameter;
+        parameterGrid.setSelectedId (selected + 1, juce::dontSendNotification);
+        selectParameter();
+    }
     refreshLabels (true);
     selectParameter();
     focusControl (presetReturnControl, true);
@@ -564,6 +588,19 @@ void LB303AudioProcessorEditor::changePreset (int direction)
     presetBrowser->previousNext (direction);
     refreshLabels (true);
     selectParameter();
+}
+void LB303AudioProcessorEditor::initialisePlugin()
+{
+    // Explicit user command only. Never steal REAPER focus at construction.
+    processor.resetToInitialState();
+    stepWidthIndex = 0;
+    refreshLabels (true);
+    selectParameter();
+    juce::Component* focused = juce::Component::getCurrentlyFocusedComponent();
+    auto& speaking = focused == &parameterValue ? static_cast<juce::Component&> (parameterValue)
+                   : focused == &numericEdit ? static_cast<juce::Component&> (numericEdit)
+                   : static_cast<juce::Component&> (parameterGrid);
+    lb303::announceToActiveScreenReader (speaking, "LB-303 initialized. Both basslines, effects and 32 patterns reset");
 }
 void LB303AudioProcessorEditor::openStepEditor()
 {
@@ -590,6 +627,7 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
     {
         if (letter ('b')) { openPresetBrowser (false); return true; }
         if (letter ('s')) { openPresetBrowser (true); return true; }
+        if (letter ('i')) { initialisePlugin(); return true; }
         if (letter ('+') || code == juce::KeyPress::numberPadAdd
             || (code == '=' && mods.isShiftDown()))
         { changePreset (1); return true; }

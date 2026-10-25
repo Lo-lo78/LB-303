@@ -28,12 +28,12 @@ jobs:
           }
           # An actual VST3 is a bundle (directory) on Windows in JUCE 8.
           # Preserve its internal layout (Contents/x86_64-win/*.vst3).
-          Compress-Archive -Path $plugin -DestinationPath "LB-303-0.0.2-TEST2.4.1-Windows-x64.zip" -Force
+          Compress-Archive -Path $plugin -DestinationPath "LB-303-0.0.2-TEST2.4.2-Windows-x64.zip" -Force
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LB-303-0.0.2-TEST2.4.1-Windows-x64
-          path: LB-303-0.0.2-TEST2.4.1-Windows-x64.zip
+          name: LB-303-0.0.2-TEST2.4.2-Windows-x64
+          path: LB-303-0.0.2-TEST2.4.2-Windows-x64.zip
           if-no-files-found: error
           retention-days: 14

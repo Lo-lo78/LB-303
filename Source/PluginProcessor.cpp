@@ -67,6 +67,27 @@ int LB303AudioProcessor::currentPattern (size_t lane) const noexcept
 void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+    if (resetRuntimeRequested.exchange (false, std::memory_order_acq_rel))
+    {
+        // Clear running notes and all FX tails on the audio thread, avoiding
+        // concurrent writes into the synthesizer's non-atomic DSP state.
+        for (auto& engine : engines) engine.reset();
+        sharedFx.clearTails();
+        sequencerPlayback.reset();
+        fallbackPpq = previewPpq = previewOriginPpq = 0.0;
+        previousPreview = false;
+        heldKeys = {};
+        heldKeyCount = {};
+        heldKeyAge = {};
+        keyAgeCounter = { 1, 1 };
+        keyboardTranspose = {};
+        lastKeyboardNote = { 60, 60 };
+        triggerOriginPpq = {};
+        previousSequencerOn = {};
+        previousMidiChannel = { 1, 2 };
+        activeLockStep = { -1, -1 };
+        activeLockPattern = { -1, -1 };
+    }
     double bpm = 120.0;
     double ppq = fallbackPpq;
     bool playing = false;
@@ -405,6 +426,32 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     renderTo (count);
     for (int channel = 2; channel < audio.getNumChannels(); ++channel)
         audio.clear (channel, 0, count);
+}
+
+void LB303AudioProcessor::resetToInitialState()
+{
+    // Restore the catalog's initial plain values. Keep existing parameter IDs
+    // and notify REAPER so its exposed parameter values stay synchronized.
+    previewEnabled.store (false, std::memory_order_release);
+    for (size_t i = 0; i < lb303::parameterCount; ++i)
+    {
+        if (auto* p = parameter (i))
+        {
+            const auto& info = lb303::catalog()[i];
+            const auto current = value (i);
+            if (std::abs (current - info.initial) > 1.0e-6f)
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (p->convertTo0to1 (info.initial));
+                p->endChangeGesture();
+            }
+        }
+    }
+    for (auto& bank : sequenceBanks) bank.reset();
+    parameters.state.setProperty (juce::Identifier ("editorStepWidthIndex"), 0, nullptr);
+    presetManager.forgetCurrent();
+    // Reset actual running DSP at the next audio callback (thread safe).
+    resetRuntimeRequested.store (true, std::memory_order_release);
 }
 
 juce::AudioProcessorEditor* LB303AudioProcessor::createEditor()

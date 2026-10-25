@@ -15,6 +15,7 @@ public:
     using Controls = std::array<float, fxParameterCount>;
     using ClassicParameters = BassEngine::Values;
     void prepare (double newSampleRate);
+    void clearTails() noexcept; // no allocation: reset FX after Alt+I
     void setParameters (const Controls&, const ClassicParameters&, double newTempo);
     // Returns combined dry + wet. External host input bypasses instrument FX.
     std::pair<float, float> process (float b1l, float b1r, float b2l, float b2r) noexcept;

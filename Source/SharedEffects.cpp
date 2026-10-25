@@ -58,6 +58,28 @@ void SharedEffects::prepare (double sampleRate)
     distGainCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.035 * fs)));
     distMixCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.004 * fs)));
 }
+void SharedEffects::clearTails() noexcept
+{
+    classic.reset();
+    for (auto* line : { &chorusL, &chorusR, &tapeL, &tapeR, &preL, &preR })
+    {
+        std::fill (line->data.begin(), line->data.end(), 0.0f);
+        line->pos = 0;
+    }
+    for (auto& line : verb)
+    {
+        std::fill (line.data.begin(), line.data.end(), 0.0f);
+        line.pos = 0;
+    }
+    verbDamped.fill (0.0f);
+    tapeTime.fill (0.0f); tapeLow.fill (0.0f); tapeHighX.fill (0.0f); tapeHighY.fill (0.0f);
+    tapeWetX.fill (0.0f); tapeWetY.fill (0.0f);
+    chorusRateSmoothed = chorusTail = 0.0f;
+    chorusHpXL = chorusHpYL = chorusHpXR = chorusHpYR = 0.0f;
+    chorusPhase = 0.0;
+    for (auto& distortion : distortions) distortion = {};
+    lastDelayMode = 0;
+}
 void SharedEffects::setParameters (const Controls& settings,
                                    const ClassicParameters& original, double tempo)
 {

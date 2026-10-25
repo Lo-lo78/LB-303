@@ -64,6 +64,8 @@ private:
     juce::TextButton browserButton { "Browser" };
     juce::TextButton saveButton { "Save preset" };
     Control presetReturnControl = Control::grid;
+    int presetReturnContext = 0;
+    int presetReturnParameter = 0;
     juce::Rectangle<int> drawnGrid;
     int context = 0; // 0 = Bassline 1, 1 = Bassline 2, 2 = Sequencer, 3 = FX
     std::array<int, lb303::basslineCount + 2> lastSelected { 0, 0, 0, 0 };
@@ -74,7 +76,7 @@ private:
 
     size_t globalIndex (int local) const;
     size_t globalIndex() const { return globalIndex (selected); }
-    int currentParameterCount() const { return context < 2 ? static_cast<int> (lb303::voiceVisibleParameterCount)
+    int currentParameterCount() const { return context < 2 ? static_cast<int> (lb303::voiceGridParameterCount)
         : context == 2 ? static_cast<int> (lb303::sequencerParameterCount)
                        : static_cast<int> (lb303::fxDisplayParameterCount); }
     juce::String contextName() const;
@@ -100,6 +102,7 @@ private:
     void openPresetBrowser (bool save);
     void focusBackFromPreset();
     void changePreset (int direction);
+    void initialisePlugin();
     juce::String labelFor (int index) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessorEditor)

@@ -263,9 +263,10 @@ void PresetBrowser::activateRow (int row)
     if (previewFile != entry.file) return;
     auto result = manager.commit (entry.file);
     if (result.failed()) { announce (result.getErrorMessage()); return; }
-    const auto message = "Loaded preset " + entry.name;
+    // Report the result while the list is still visible. Closing next fires
+    // onClose, which returns accessibility focus to the original Grid/Value/Edit.
+    announce ("Loaded preset " + entry.name);
     close (false);
-    announce (message);
 }
 void PresetBrowser::parentFolder()
 {
@@ -343,7 +344,7 @@ void PresetBrowser::commitName()
         }
         if (result.failed()) { announce (result.getErrorMessage()); return; }
         const auto message = "Saved preset " + destination.getFileNameWithoutExtension();
-        close (false); announce (message);
+        announce (message); close (false);
     }
     else if (mode == Mode::rename)
     {
@@ -378,7 +379,7 @@ void PresetBrowser::confirmAction()
         auto result = manager.save (directory, nameEdit.getText(), saved, true);
         if (result.failed()) { announce (result.getErrorMessage()); return; }
         const auto message = "Saved preset " + saved.getFileNameWithoutExtension();
-        close (false); announce (message);
+        announce (message); close (false);
     }
     else if (mode == Mode::remove)
     {

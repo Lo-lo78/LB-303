@@ -91,7 +91,7 @@ assert 'std::array<lb303::BassEngine, lb303::basslineCount> engines;' in process
 assert 'result[base + i].id = juce::String ("b2_") + originals[i].id;' in param_cpp
 assert 'b1_level' in param_cpp and 'b2_level' in param_cpp
 assert 'b1_pan' in param_cpp and 'b2_pan' in param_cpp
-assert 'voice == 0 ? 1.0f : 0.0f' in param_cpp
+assert '0.0f, 1.0f, 0.01f, 1.0f, ""' in param_cpp
 assert '"Bassline " + juce::String (1 + index / voiceParameterCount)' in param_cpp
 assert 'lb303::parameterIndex (voice, i)' in processor
 assert 'for (auto& engine : engines) engine.midi (entry.getMessage());' not in processor
@@ -108,7 +108,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.1-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.2-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -488,3 +488,22 @@ for idname in ['fx_distortion_type', 'fx_distortion_amount', 'fx_distortion_harm
 assert '"Distortion 2 Type", 0, 12, 1, 0' in param_cpp
 assert '"Distortion 2 Amount", 0, 100, 1, 0' in param_cpp
 print('PASS: TEST2.4.1 Value Home/End, two isolated distortions before shared sends, old VST IDs preserved.')
+
+# TEST2.4.2: single parameter ID for channel in each sequencer/voice view,
+# persistent focus return from preset browsing, and full reset of 32 patterns.
+assert 'voiceGridParameterCount = voiceVisibleParameterCount + 1' in param_h
+assert 'voiceMidiDisplayIndex = 3' in param_h
+assert 'midiChannel1Index : lb303::midiChannel2Index' in editor
+assert 'voiceGridParameterCount' in (root / 'Source/PluginEditor.h').read_text(encoding='utf-8')
+assert 'presetReturnContext = context;' in editor and 'presetReturnParameter = selected;' in editor
+assert 'focusControl (presetReturnControl, true);' in editor
+assert 'announce ("Loaded preset " + entry.name);\n    close (false);' in browser
+assert 'void LB303AudioProcessorEditor::initialisePlugin()' in editor
+assert "if (letter ('i')) { initialisePlugin(); return true; }" in editor
+assert 'void LB303AudioProcessor::resetToInitialState()' in processor
+assert 'for (auto& bank : sequenceBanks) bank.reset();' in processor
+assert 'resetRuntimeRequested.exchange (false' in processor
+assert 'sharedFx.clearTails();' in processor
+assert 'void SharedEffects::clearTails() noexcept' in fxcpp
+assert 'for (auto& line : verb)' in fxcpp
+print('PASS: TEST2.4.2 preset focus restore, MIDI alias, two audible default voices, full reset.')

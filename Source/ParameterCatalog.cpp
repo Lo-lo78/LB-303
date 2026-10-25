@@ -113,7 +113,7 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             }
             result[base + outputLevelOffset] = {
                 voice == 0 ? "b1_level" : "b2_level", "Level",
-                0.0f, 1.0f, 0.01f, voice == 0 ? 1.0f : 0.0f, "" };
+                0.0f, 1.0f, 0.01f, 1.0f, "" };
             result[base + outputPanOffset] = {
                 voice == 0 ? "b1_pan" : "b2_pan", "Pan",
                 -100.0f, 100.0f, 1.0f, 0.0f, "%" };

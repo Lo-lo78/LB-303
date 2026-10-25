@@ -1,3 +1,8 @@
+# LB-303 0.0.2 — TEST2.4.2 (versione corrente)
+
+Il resto di questo README include note storiche delle TEST precedenti. Per il
+comportamento corrente, consultare la sezione **TEST2.4.2** in fondo.
+
 ## TEST2.4.1 — Home/End and two independent distortions
 
 - **Value**: Home now sets **maximum**, End sets **minimum**, matching LJuno. Alt+Home/Alt+End already used that mapping and remain unchanged. Home/End in Grid and sequencer keep their navigation actions.
@@ -123,8 +128,7 @@ nelle tre griglie e nel selettore della pagina 7.
   Resonance**, poi i controlli del filtro, inviluppi, portamento, accento,
   risposta, PWM e infine il delay. L'ordine è identico nel selettore
   Parameter Locks; i lock salvati restano associati agli ID originari.
-- **Attenzione:** Level Bassline 2 rimane a 0 per compatibilità: impostalo
-  a 1 per sentire la seconda bassline.
+- **Nota storica (TEST2.3.1):** Bassline 2 partiva a 0. Dalla TEST2.4.2 il default è 1.00.
 
 **Verifiche:** test statici Python superati, nessuna compilazione locale.
 Compilare usando GitHub Actions e verificare in REAPER: suono condiviso sul
@@ -188,7 +192,7 @@ so existing projects and automation retain their values. Both default Off.
   all keys had been released. Preview via the step editor still works.
 - Other channel messages (such as CC or pitch bend) still reach the relevant
   bassline. MIDI channels 3–16 remain ignored by the sound engines.
-- Level of Bassline 2 still defaults to 0; raise Level to hear it.
+- Historical TEST2.2.8: Bassline 2 Level defaulted to 0; TEST2.4.2 now defaults to 1.00.
 
 Only static regression checks are run locally. Build on GitHub Actions, then
 try both modes and MIDI channels independently in an empty REAPER project.
@@ -239,7 +243,7 @@ using GitHub Actions and test behavior with NVDA/REAPER.
 
 **Two independent pattern selectors:** Pattern Bassline 1 (1–16) and Pattern Bassline 2 (1–16). Selecting a new pattern in either lane never changes the other. There are **32 patterns total** (16 per bassline), each with 128 steps and up to 32 parameter-lock slots per step. Both use REAPER's transport clock, but have independent pattern lengths, playback positions and note events. Bassline 1 outputs MIDI channel 1; Bassline 2 outputs MIDI channel 2.
 
-Use **Ctrl+Tab** to open the Sequencer parameter grid (Bassline 1 → Bassline 2 → Sequencer). This grid has **Pattern Bassline 1, Pattern Bassline 2, Sequencer Bassline 1, Sequencer Bassline 2, Editor Track**. Navigation remains Grid/Value/Edit with silent bounds and NVDA announcements. The two Play controls default to Off, so existing projects remain unaffected. Bassline 2 Level still defaults to 0; raise it to hear track 2.
+Use **Ctrl+Tab** to open the Sequencer parameter grid (Bassline 1 → Bassline 2 → Sequencer). This grid has **Pattern Bassline 1, Pattern Bassline 2, Sequencer Bassline 1, Sequencer Bassline 2, Editor Track**. Navigation remains Grid/Value/Edit with silent bounds and NVDA announcements. The two Play controls default to Off, so existing projects remain unaffected. in this historical TEST2.1 version, Bassline 2 Level defaulted to 0 (now 1.00).
 
 **TEST2.2:** Alt+Q opens the accessible step editor and can now program both
 independent 16-pattern banks: Note, Length, Velocity, Repeat, Shift and Launch Step.
@@ -438,8 +442,7 @@ Reference files are not compiled directly into the VST3.
 - `Volume` is the original pre-filter amplitude control, untouched; `Level` is
   an additional **final** post-delay level. Pan: -100% left, 0 centre, +100% right.
   Linear balance panning keeps the original Bassline 1 signal unchanged at centre.
-- Default final Level: Bassline 1 = 1.00, Bassline 2 = 0.00. Raise Bassline 2's
-  Level to hear it. This avoids suddenly doubling the output on old projects.
+- Historical TEST1.6 defaults were Bassline 1 = 1.00, Bassline 2 = 0.00. In TEST2.4.2 both factory defaults are 1.00; saved projects keep their values.
 - In TEST1.6, incoming MIDI was layered to both basslines. Starting in TEST1.7,
   Bassline 1 receives MIDI channel 1 exclusively and Bassline 2 channel 2.
   The future two-track sequencer will address them independently. TEST1.7 still
@@ -462,8 +465,7 @@ Reference files are not compiled directly into the VST3.
   are not routed into either bassline engine.
 - REAPER can host both basslines as one VST3 instrument: send MIDI 1 for the
   first instrument and MIDI 2 for the second. MIDI output is passed through.
-- The Bassline 2 Level parameter still defaults to **0.00**. Increase it to
-  hear the second bassline, even after sending it notes on channel 2.
+- Historically Bassline 2 Level defaulted to **0.00**; from TEST2.4.2 it defaults to **1.00**, except when restored from a saved project or preset.
 - No synthesis algorithms, parameter IDs, keyboard controls or UI navigation
   have been changed. Only MIDI event routing, tests and build artifact naming.
 - Static checks only. GitHub Actions must compile; REAPER must verify
@@ -561,3 +563,12 @@ added. The separate 16-pattern banks and saved parameters are unchanged.
 
 Parameter Lock **playback** is still planned for TEST2.3. Only static checks
 have been run; build on GitHub Actions and test announcements in REAPER/NVDA.
+
+
+## TEST2.4.2 – preset focus, MIDI access, initialization
+
+- Enter on a preset loads it and closes the browser, restoring the original page, selected parameter and Grid/Value/Edit focus. Escape cancels a preview.
+- Each Bassline grid also exposes the **same** MIDI Channel Bassline 1/2 VST parameter already in Sequencer (Omni or 1..16), with the same parameter IDs. No duplicated channels or automation.
+- Both Bassline Level factory defaults are **1.00**. Already-saved REAPER projects and `.lb` presets preserve their values.
+- **Alt+I** from Grid/Value/Edit initializes both basslines, the shared FX, MIDI input settings, both 16-pattern banks (including locks) and sequencer settings; audio tails are cleared on the next audio callback. This destroys unsaved changes: save a `.lb` first. Alt+I inside the step editor retains its existing information announcement.
+- Compile only via GitHub Actions. Static checks do not replace REAPER testing.

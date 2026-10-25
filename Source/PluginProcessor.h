@@ -33,6 +33,7 @@ public:
     void changeProgramName (int, const juce::String&) override {}
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
+    void resetToInitialState(); // Alt+I: full synth, FX, MIDI, all 32 patterns
 
     juce::AudioProcessorValueTreeState parameters;
     lb303::PresetManager presetManager;
@@ -75,6 +76,7 @@ private:
     std::array<bool, lb303::basslineCount> previousSequencerOn {};
     std::array<int, lb303::basslineCount> previousMidiChannel {{ 1, 2 }};
     std::atomic<bool> previewEnabled { false };
+    std::atomic<bool> resetRuntimeRequested { false };
     std::array<std::atomic<float>*, lb303::parameterCount> rawParameters {};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessor)
 };
