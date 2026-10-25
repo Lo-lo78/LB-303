@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static regressions for LB-303 TEST2.4 FX. No local compilation."""
+"""Static regressions for LB-303 TEST2.4.1 dual voice distortion FX. No local compilation."""
 from pathlib import Path
 import re
 root = Path(__file__).resolve().parents[1]
@@ -108,7 +108,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.1-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -414,7 +414,7 @@ print('PASS: TEST2.3.2 LJuno-style preset browser, complete state snapshots, .lb
 fxheader = (root / 'Source/SharedEffects.h').read_text(encoding='utf-8')
 fxcpp = (root / 'Source/SharedEffects.cpp').read_text(encoding='utf-8')
 engine = (root / 'Source/BassEngine.cpp').read_text(encoding='utf-8')
-assert 'fxParameterCount = 31' in param_h
+assert 'fxParameterCount = 34' in param_h
 assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount' in param_h
 assert 'legacyParameterCount = audioParameterCount + sequencerParameterCount' in param_h
 assert 'fxDisplayOrder' in param_cpp
@@ -442,22 +442,49 @@ for idname in ('fx_delay_send1', 'fx_delay_send2', 'fx_chorus_send1',
 assert 'TEST2.4' in (root / 'README.md').read_text()
 print('PASS: TEST2.4 shared FX engine, stable host IDs, dual sends, 4 accessible contexts and complete preset state.')
 
-# Index and ID allocation: 81 legacy IDs, 31 appended, one shared classic effect.
+# Index and ID allocation: 81 legacy IDs, 34 appended, one shared classic effect.
 import collections
 fx_enum = (root / 'Source/ParameterCatalog.h').read_text()
 assert 'constexpr size_t legacyParameterCount' in fx_enum
 fx_decl = re.search(r'enum Control : size_t\s*\{([^}]+)\}',fx_enum,re.S)
 assert fx_decl
-names = [x.strip() for x in fx_decl.group(1).split(',') if x.strip()]
-assert len(names) == 31, (len(names),names)
+names = [x.strip() for x in re.sub(r'//[^\n]*', '', fx_decl.group(1)).split(',') if x.strip()]
+assert len(names) == 34, (len(names),names)
 for name in names:
     assert 'addFx (fx::'+name+',' in param_cpp, name
 fxmap = re.search(r'constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder\s*\{\{(.*?)\}\};',param_cpp,re.S)
 assert fxmap
 items=[x.strip() for x in re.sub(r'//[^\n]*','',fxmap.group(1)).split(',') if x.strip()]
-assert len(items) == 45, len(items)
+assert len(items) == 48, len(items)
 assert len(set(items)) == len(items)
-assert sum(x.startswith('fxParameterIndex ') for x in items) == 31
+assert sum(x.startswith('fxParameterIndex ') for x in items) == 34
 assert sorted(int(x) for x in items if x.isdigit()) == list(range(19,33))
 assert 'return 30.0' in processor_h
-print('PASS: FX 31 append-only IDs, 14 shared classic IDs, complete unique display mapping, 30s tail.')
+print('PASS: FX 34 append-only IDs, 14 shared classic IDs, complete unique display mapping, 30s tail.')
+
+# TEST2.4.1 — Correct LJuno Value limits and independent distortion states.
+# Test exactly the context-specific Home/End behavior; navigation Home/End
+# elsewhere (Grid and sequencer) must keep their original roles.
+value_block = editor.split('if (current == Control::value)', 2)[-1]
+assert 'if (code == juce::KeyPress::homeKey) { setBoundary (true); return true; }' in editor
+assert 'if (code == juce::KeyPress::endKey) { setBoundary (false); return true; }' in editor
+assert 'changeSelection ((selected / rowsPerColumn) * rowsPerColumn)' in editor
+assert 'changeSelection (juce::jmin (currentParameterCount() - 1' in editor
+assert 'if (code == juce::KeyPress::homeKey)' in step
+assert 'if (code == juce::KeyPress::endKey)' in step
+assert 'const size_t typeIndex = voice == 0 ? fx::distortionType : fx::distortion2Type;' in fxcpp
+assert 'const size_t amountIndex = voice == 0 ? fx::distortionAmount : fx::distortion2Amount;' in fxcpp
+assert 'const size_t harmonicsIndex = voice == 0 ? fx::distortionHarmonics : fx::distortion2Harmonics;' in fxcpp
+assert 'std::array<DistortionState, basslineCount> distortions {};' in fxheader
+assert 'const auto [axL, axR] = distort (aL, aR, 0);' in fxcpp
+assert 'const auto [bxL, bxR] = distort (bL, bR, 1);' in fxcpp
+assert 'distort (dryL,dryR)' not in fxcpp
+assert 'distribute(aL,bL' not in fxcpp
+assert 'distortion2Type, distortion2Amount, distortion2Harmonics' in param_h
+for idname in ['fx_distortion_type', 'fx_distortion_amount', 'fx_distortion_harmonics',
+               'fx_distortion_2_type', 'fx_distortion_2_amount', 'fx_distortion_2_harmonics']:
+    assert f'"{idname}"' in param_cpp
+# Additional controls have defaults that will not alter old projects (Off / Amount zero).
+assert '"Distortion 2 Type", 0, 12, 1, 0' in param_cpp
+assert '"Distortion 2 Amount", 0, 100, 1, 0' in param_cpp
+print('PASS: TEST2.4.1 Value Home/End, two isolated distortions before shared sends, old VST IDs preserved.')

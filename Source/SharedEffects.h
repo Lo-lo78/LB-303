@@ -33,7 +33,7 @@ private:
     };
     struct DistSide { float previous = 0, prevEven = 0, evenDc = 0; };
     static float fxShape (int mode, float x) noexcept;
-    std::pair<float, float> distort (float, float) noexcept;
+    std::pair<float, float> distort (float, float, size_t voice) noexcept;
     std::pair<float, float> chorus (float, float) noexcept;
     std::pair<float, float> dualDelay (float, float) noexcept;
     std::pair<float, float> reverb (float, float) noexcept;
@@ -55,8 +55,13 @@ private:
     float chorusRateSmoothed = 0, chorusHpCoefficient = 0, chorusTail = 0;
     float chorusHpXL = 0, chorusHpYL = 0, chorusHpXR = 0, chorusHpYR = 0;
     double chorusPhase = 0;
-    float distortionMix = 0, distortionGain = 1, dryPower = 0, processedPower = 0;
-    DistSide distL, distR;
+    struct DistortionState
+    {
+        float mix = 0, gain = 1, dryPower = 0, processedPower = 0;
+        DistSide left, right;
+    };
+    // Dedicated state per bassline: no shared DC filters, envelopes or gain smoothing.
+    std::array<DistortionState, basslineCount> distortions {};
     float distDcCoeff = 0, distPowerCoeff = 0, distGainCoeff = 0, distMixCoeff = 0;
     std::array<float, 2> tapeTime {}, tapeLow {}, tapeHighX {}, tapeHighY {};
     std::array<float, 2> tapeWetX {}, tapeWetY {};

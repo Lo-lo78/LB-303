@@ -50,9 +50,7 @@ void SharedEffects::prepare (double sampleRate)
     tapeWetX.fill (0); tapeWetY.fill (0);
     chorusRateSmoothed = chorusTail = 0;
     chorusPhase = 0;
-    distortionMix = dryPower = processedPower = 0;
-    distortionGain = 1;
-    distL = {}; distR = {};
+    for (auto& distortion : distortions) distortion = {};
     lastDelayMode = 0;
     chorusHpCoefficient = static_cast<float> (std::exp (-2 * pi * 120.0 / fs));
     distDcCoeff = static_cast<float> (std::exp (-2 * pi * 9.0 / (fs * 2.0)));
@@ -98,25 +96,29 @@ float SharedEffects::fxShape (int mode, float x) noexcept
         default: return v;
     }
 }
-std::pair<float, float> SharedEffects::distort (float l, float r) noexcept
+std::pair<float, float> SharedEffects::distort (float l, float r, size_t voice) noexcept
 {
-    const int mode = juce::roundToInt (c[fx::distortionType]);
-    const float amount = c[fx::distortionAmount] * .01f;
+    auto& state = distortions[voice];
+    const size_t typeIndex = voice == 0 ? fx::distortionType : fx::distortion2Type;
+    const size_t amountIndex = voice == 0 ? fx::distortionAmount : fx::distortion2Amount;
+    const size_t harmonicsIndex = voice == 0 ? fx::distortionHarmonics : fx::distortion2Harmonics;
+    const int mode = juce::roundToInt (c[typeIndex]);
+    const float amount = c[amountIndex] * .01f;
     if (mode == 0 || amount <= 0)
     {
-        distortionMix = 0;
+        state = {}; // Clean restart when this bassline's distortion is turned on.
         return { l, r };
     }
-    distortionMix += (amount - distortionMix) * distMixCoeff;
-    const float balance = c[fx::distortionHarmonics] * .01f;
+    state.mix += (amount - state.mix) * distMixCoeff;
+    const float balance = c[harmonicsIndex] * .01f;
     const float oddGain = 1.0f + .85f*balance, evenGain = 1.0f-balance;
     const float drive = 1.0f+19.0f*std::pow (amount, 1.35f);
     const float bias = mode == 9 ? 0.0f : 0.28f;
     const float centre = fxShape (mode, bias);
-    const auto side = [&] (float v, DistSide& state)
+    const auto side = [&] (float v, DistSide& channel)
     {
-        const float midpoint = .5f*(v+state.previous);
-        state.previous = v;
+        const float midpoint = .5f*(v+channel.previous);
+        channel.previous = v;
         const auto evaluate = [&] (float x)
         {
             const float driven = x*drive;
@@ -124,21 +126,21 @@ std::pair<float, float> SharedEffects::distort (float l, float r) noexcept
             const float negative = fxShape (mode, -driven+bias)-centre;
             const float odd = .5f*(positive-negative);
             const float even = .5f*(positive+negative);
-            const float hp = even-state.prevEven+distDcCoeff*state.evenDc;
-            state.prevEven = even; state.evenDc = hp;
+            const float hp = even-channel.prevEven+distDcCoeff*channel.evenDc;
+            channel.prevEven = even; channel.evenDc = hp;
             return oddGain*odd+2.0f*evenGain*hp;
         };
         return .23f*v+.77f*(.35f*evaluate (midpoint)+.65f*evaluate (v));
     };
-    float wetL = side (l, distL), wetR = side (r, distR);
+    float wetL = side (l, state.left), wetR = side (r, state.right);
     const float dryLevel = .5f*(l*l+r*r);
     const float processedLevel = .5f*(wetL*wetL+wetR*wetR);
-    dryPower += (dryLevel-dryPower)*distPowerCoeff;
-    processedPower += (processedLevel-processedPower)*distPowerCoeff;
-    const float target = clampf (std::sqrt ((dryPower+1.e-10f)/(processedPower+1.e-10f)), .2f, 1.35f);
-    distortionGain += (target-distortionGain)*distGainCoeff;
-    wetL *= distortionGain; wetR *= distortionGain;
-    return { bounded (l+distortionMix*(wetL-l)), bounded (r+distortionMix*(wetR-r)) };
+    state.dryPower += (dryLevel-state.dryPower)*distPowerCoeff;
+    state.processedPower += (processedLevel-state.processedPower)*distPowerCoeff;
+    const float target = clampf (std::sqrt ((state.dryPower+1.e-10f)/(state.processedPower+1.e-10f)), .2f, 1.35f);
+    state.gain += (target-state.gain)*distGainCoeff;
+    wetL *= state.gain; wetR *= state.gain;
+    return { bounded (l+state.mix*(wetL-l)), bounded (r+state.mix*(wetR-r)) };
 }
 std::pair<float, float> SharedEffects::chorus (float l, float r) noexcept
 {
@@ -274,17 +276,9 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
 }
 std::pair<float, float> SharedEffects::process (float aL, float aR, float bL, float bR) noexcept
 {
-    const float dryL = aL+bL, dryR = aR+bR;
-    const auto [distL0,distR0] = distort (dryL,dryR);
-    // Match LJuno's global distortion-before-FX order, preserving the relative
-    // mix of each bassline (and hence its individual send level).
-    const auto distribute = [] (float dry1, float dry2, float delta)
-    {
-        const float total = std::abs (dry1)+std::abs (dry2);
-        return total > 1.e-10f ? dry1 + delta*std::abs (dry1)/total : dry1;
-    };
-    const float axL=distribute(aL,bL,distL0-dryL), bxL=distL0-axL;
-    const float axR=distribute(aR,bR,distR0-dryR), bxR=distR0-axR;
+    // Distortion is independent for each voice, before the shared send buses.
+    const auto [axL, axR] = distort (aL, aR, 0);
+    const auto [bxL, bxR] = distort (bL, bR, 1);
     const auto send = [&] (size_t one, size_t two)
     {
         const float l1=c[one]*.01f, l2=c[two]*.01f;
@@ -327,6 +321,6 @@ std::pair<float, float> SharedEffects::process (float aL, float aR, float bL, fl
     // Classic Dry controls the single dry instrument bus, while the return
     // contains just the wet repeats (never duplicating the raw stems).
     const float dryGain = delayMode == 1 ? classicDryLevel : 1.0f;
-    return { bounded (distL0*dryGain+wetL), bounded (distR0*dryGain+wetR) };
+    return { bounded ((axL+bxL)*dryGain+wetL), bounded ((axR+bxR)*dryGain+wetR) };
 }
 }

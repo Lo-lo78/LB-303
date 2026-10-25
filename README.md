@@ -1,4 +1,11 @@
-# LB-303 0.0.2 — TEST2.4 Shared FX
+## TEST2.4.1 — Home/End and two independent distortions
+
+- **Value**: Home now sets **maximum**, End sets **minimum**, matching LJuno. Alt+Home/Alt+End already used that mapping and remain unchanged. Home/End in Grid and sequencer keep their navigation actions.
+- **FX Distortion 1** and **FX Distortion 2** have separate Type, Amount and Harmonics Even/Odd controls, separate DSP state, and process their respective basslines **before** the shared delay, chorus, and reverb sends.
+- Old `fx_distortion_type`, `fx_distortion_amount`, and `fx_distortion_harmonics` IDs belong to Distortion 1, unchanged; the three Distortion 2 IDs are appended and default to Off/0/0. Existing `.lb` presets and automation IDs are preserved.
+- Load the patch on top of **TEST2.4** and build via GitHub Actions. Runtime behavior must still be verified in REAPER; no local build was performed.
+
+# LB-303 0.0.2 — TEST2.4.1 Shared FX
 
 ## FX condivisi (quarto contesto)
 

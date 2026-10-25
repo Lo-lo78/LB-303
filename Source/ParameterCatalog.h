@@ -23,7 +23,7 @@ constexpr size_t audioParameterCount = voiceParameterCount * basslineCount;
 constexpr size_t sequencerParameterCount = 7;
 constexpr size_t legacyParameterCount = audioParameterCount + sequencerParameterCount;
 // Append all new FX IDs; existing automation and 1-based sequencer lock slots stay stable.
-constexpr size_t fxParameterCount = 31;
+constexpr size_t fxParameterCount = 34;
 constexpr size_t parameterCount = legacyParameterCount + fxParameterCount;
 constexpr size_t fxParameterIndex (size_t local) { return legacyParameterCount + local; }
 constexpr size_t voiceVisibleParameterCount = 23; // no duplicated old delays in voice grids
@@ -40,7 +40,9 @@ enum Control : size_t {
     chorusOn, chorusLevel, chorusRate, chorusWidth, chorusSend1, chorusSend2,
     distortionType, distortionAmount, distortionHarmonics,
     reverbType, reverbSend1, reverbSend2, reverbPredelay, reverbDecay,
-    reverbDamping, reverbWidth, reverbLevel
+    reverbDamping, reverbWidth, reverbLevel,
+    // Append-only controls: do not reindex the existing 31 FX parameters.
+    distortion2Type, distortion2Amount, distortion2Harmonics
 };
 }
 constexpr size_t sequencerParameterIndex (size_t local) { return audioParameterCount + local; }

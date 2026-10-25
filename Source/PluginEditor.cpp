@@ -696,8 +696,9 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         if (code == juce::KeyPress::rightKey) { changeStepWidth (1); return true; }
         if (code == juce::KeyPress::pageUpKey) { changeValue (1, valuePageStep); return true; }
         if (code == juce::KeyPress::pageDownKey) { changeValue (-1, valuePageStep); return true; }
-        if (code == juce::KeyPress::homeKey) { setBoundary (false); return true; }
-        if (code == juce::KeyPress::endKey) { setBoundary (true); return true; }
+        // Match LJuno: Home=max, End=min, both on Value and with Alt.
+        if (code == juce::KeyPress::homeKey) { setBoundary (true); return true; }
+        if (code == juce::KeyPress::endKey) { setBoundary (false); return true; }
         return false;
     }
     parameterGrid.setLineReadingMode();

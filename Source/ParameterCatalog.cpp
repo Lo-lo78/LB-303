@@ -44,6 +44,8 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     fxParameterIndex (fx::chorusSend1), fxParameterIndex (fx::chorusSend2),
     fxParameterIndex (fx::distortionType), fxParameterIndex (fx::distortionAmount),
     fxParameterIndex (fx::distortionHarmonics),
+    fxParameterIndex (fx::distortion2Type), fxParameterIndex (fx::distortion2Amount),
+    fxParameterIndex (fx::distortion2Harmonics),
     fxParameterIndex (fx::reverbType), fxParameterIndex (fx::reverbSend1),
     fxParameterIndex (fx::reverbSend2), fxParameterIndex (fx::reverbPredelay),
     fxParameterIndex (fx::reverbDecay), fxParameterIndex (fx::reverbDamping),
@@ -149,9 +151,14 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         addFx (fx::chorusWidth, "fx_chorus_width", "Chorus Width", 0, 100, 1, 100, "%");
         addFx (fx::chorusSend1, "fx_chorus_send1", "Chorus Send Bassline 1", 0, 100, 1, 35, "%");
         addFx (fx::chorusSend2, "fx_chorus_send2", "Chorus Send Bassline 2", 0, 100, 1, 35, "%");
-        addFx (fx::distortionType, "fx_distortion_type", "FX Distortion Type", 0, 12, 1, 0, "", fxDistChoices, 13);
-        addFx (fx::distortionAmount, "fx_distortion_amount", "FX Distortion Amount", 0, 100, 1, 0, "%");
-        addFx (fx::distortionHarmonics, "fx_distortion_harmonics", "FX Harmonics Even Odd", -100, 100, 1, 0, "%");
+        // Keep original IDs for Bassline 1: old projects and .lb presets remain compatible.
+        addFx (fx::distortionType, "fx_distortion_type", "Distortion 1 Type", 0, 12, 1, 0, "", fxDistChoices, 13);
+        addFx (fx::distortionAmount, "fx_distortion_amount", "Distortion 1 Amount", 0, 100, 1, 0, "%");
+        addFx (fx::distortionHarmonics, "fx_distortion_harmonics", "Distortion 1 Harmonics Even Odd", -100, 100, 1, 0, "%");
+        // New voice-specific processor. Append rather than shifting any existing ID.
+        addFx (fx::distortion2Type, "fx_distortion_2_type", "Distortion 2 Type", 0, 12, 1, 0, "", fxDistChoices, 13);
+        addFx (fx::distortion2Amount, "fx_distortion_2_amount", "Distortion 2 Amount", 0, 100, 1, 0, "%");
+        addFx (fx::distortion2Harmonics, "fx_distortion_2_harmonics", "Distortion 2 Harmonics Even Odd", -100, 100, 1, 0, "%");
         addFx (fx::reverbType, "fx_reverb_type", "Reverb Type", 0, 4, 1, 0, "", fxReverbChoices, 5);
         addFx (fx::reverbSend1, "fx_reverb_send1", "Reverb Send Bassline 1", 0, 100, 1, 25, "%");
         addFx (fx::reverbSend2, "fx_reverb_send2", "Reverb Send Bassline 2", 0, 100, 1, 25, "%");
