@@ -572,3 +572,21 @@ have been run; build on GitHub Actions and test announcements in REAPER/NVDA.
 - Both Bassline Level factory defaults are **1.00**. Already-saved REAPER projects and `.lb` presets preserve their values.
 - **Alt+I** from Grid/Value/Edit initializes both basslines, the shared FX, MIDI input settings, both 16-pattern banks (including locks) and sequencer settings; audio tails are cleared on the next audio callback. This destroys unsaved changes: save a `.lb` first. Alt+I inside the step editor retains its existing information announcement.
 - Compile only via GitHub Actions. Static checks do not replace REAPER testing.
+
+
+## TEST2.4.3 – Restore Grid keyboard and NVDA focus after preset load
+
+- Confirming a `.lb` preset with **Enter** closes the browser and returns to
+  exactly the same page, parameter, and Grid / Value / Edit control as before.
+- When the originating control was **Grid**, a delayed, post-key-event focus
+  handoff to the native ComboBox and its accessibility handler prevents the
+  browser list from retaining navigation. **Arrow keys work immediately**.
+- NVDA explicitly announces the restored parameter name **and loaded value**.
+  Normal Grid line-reading behaviour resumes after the announcement.
+- A quick deliberate Tab to Value/Edit is respected: delayed recovery will
+  not steal focus from those controls. No auto-focus when REAPER opens the VST3.
+- DSP, MIDI, FX, patterns, Parameter Locks, `.lb` format, VST3 parameter IDs
+  and existing keyboard shortcuts have not changed.
+- This is a static-checked source patch; compile with GitHub Actions, then
+  test in REAPER with NVDA. Test loading from all four Grid contexts and
+  also from Value/Edit to confirm those controls still return normally.

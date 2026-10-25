@@ -108,7 +108,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.2-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.3-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -507,3 +507,24 @@ assert 'sharedFx.clearTails();' in processor
 assert 'void SharedEffects::clearTails() noexcept' in fxcpp
 assert 'for (auto& line : verb)' in fxcpp
 print('PASS: TEST2.4.2 preset focus restore, MIDI alias, two audible default voices, full reset.')
+
+# TEST2.4.3: pressing Enter on a preset must restore a functional, speaking
+# Grid without making the user Tab around Value/Edit first.  Focus recovery is
+# delayed until the browser has finished dispatching the Enter key.
+preset_restore = editor.split('void LB303AudioProcessorEditor::focusBackFromPreset()', 1)[1].split(
+    'void LB303AudioProcessorEditor::changePreset', 1)[0]
+assert 'parameterGrid.setWantsKeyboardFocus (true)' in constructor
+assert 'if (presetReturnControl == Control::grid)' in preset_restore
+assert 'focusControl (presetReturnControl, true);' in preset_restore
+assert 'juce::Timer::callAfterDelay (65,' in preset_restore
+assert preset_restore.index('focusControl (presetReturnControl, true);') < preset_restore.index('juce::Timer::callAfterDelay (65,')
+assert 'safe->parameterGrid.hidePopup();' in preset_restore
+assert 'safe->parameterGrid.grabKeyboardFocus();' in preset_restore
+assert 'juce::AccessibilityHandler::clearCurrentlyFocusedHandler();' in preset_restore
+assert 'handler->grabFocus();' in preset_restore
+assert 'safe->labelFor (restoreParameter)' in preset_restore
+assert 'safe->parameterValue.hasKeyboardFocus (true)' in preset_restore
+assert 'safe->numericEdit.hasKeyboardFocus (true)' in preset_restore
+assert 'safe->context != restoreContext || safe->selected != restoreParameter' in preset_restore
+assert 'safe->parameterGrid.setLineReadingMode();' in preset_restore
+print('PASS: TEST2.4.3 browser Enter -> responsive Grid and restored NVDA parameter/value.')

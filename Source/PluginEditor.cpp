@@ -108,6 +108,7 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
         processor.parameters.state.getProperty (stepWidthState, 0)));
 
     parameterGrid.setTextWhenNothingSelected ("Select parameter");
+    parameterGrid.setWantsKeyboardFocus (true); // ensure Grid accepts arrows immediately after preset browser
     parameterGrid.setLineReadingMode();
     parameterGrid.setExplicitFocusOrder (1);
     parameterGrid.onChange = [this] { selectParameter(); };
@@ -579,7 +580,50 @@ void LB303AudioProcessorEditor::focusBackFromPreset()
     }
     refreshLabels (true);
     selectParameter();
+    // Hiding the browser while its ListBox processes Enter can leave JUCE's
+    // native ComboBox / UIA focus stale.  Value and Edit do not need recovery,
+    // but Grid must receive a SECOND, post-event focus handoff.  Without it
+    // REAPER/NVDA can appear to be on the Grid while arrow keys still go to
+    // the closed list, until the user cycles Tab through Value and Edit.
+    if (presetReturnControl == Control::grid)
+        parameterGrid.hidePopup();
     focusControl (presetReturnControl, true);
+    if (presetReturnControl == Control::grid)
+    {
+        const int restoreContext = context;
+        const int restoreParameter = selected;
+        juce::Timer::callAfterDelay (65,
+            [safe = juce::Component::SafePointer<LB303AudioProcessorEditor> (this),
+             restoreContext, restoreParameter]
+            {
+                if (safe == nullptr || (safe->presetBrowser != nullptr && safe->presetBrowser->active())
+                    || safe->context != restoreContext || safe->selected != restoreParameter)
+                    return;
+                // Never override a later deliberate Tab into Value or Edit.
+                if (safe->parameterValue.hasKeyboardFocus (true)
+                    || safe->numericEdit.hasKeyboardFocus (true))
+                    return;
+                safe->parameterGrid.hidePopup();
+                safe->parameterGrid.setSelectedId (restoreParameter + 1, juce::dontSendNotification);
+                safe->parameterGrid.setEntryAccessibility();
+                juce::AccessibilityHandler::clearCurrentlyFocusedHandler();
+                safe->parameterGrid.grabKeyboardFocus();
+                if (auto* handler = safe->parameterGrid.getAccessibilityHandler())
+                    handler->grabFocus();
+                // Always announce exactly the restored parameter and its
+                // CURRENT value (including changes from the loaded preset).
+                lb303::announceToActiveScreenReader (
+                    safe->parameterGrid, safe->labelFor (restoreParameter));
+                juce::Timer::callAfterDelay (250,
+                    [safe, restoreContext, restoreParameter]
+                    {
+                        if (safe != nullptr && safe->context == restoreContext
+                            && safe->selected == restoreParameter
+                            && safe->parameterGrid.hasKeyboardFocus (true))
+                            safe->parameterGrid.setLineReadingMode();
+                    });
+            });
+    }
 }
 void LB303AudioProcessorEditor::changePreset (int direction)
 {
