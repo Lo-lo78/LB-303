@@ -36,6 +36,7 @@ void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
     activeLockStep = { -1, -1 };
     activeLockPattern = { -1, -1 };
     for (auto& engine : engines) engine.prepare (sampleRate);
+    sharedFx.prepare (sampleRate);
 }
 void LB303AudioProcessor::releaseResources() {}
 
@@ -299,6 +300,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         }
         lb303::BassEngine::Values synth {};
         for (size_t i = 0; i < synth.size(); ++i) synth[i] = effective[i];
+        // Voice engine processes only the oscillator/filter/envelopes; the
+        // 14 historic delay controls are routed to one shared classic FX bus.
+        synth[31] = 100.0f; synth[32] = 0.0f;
         engines[voice].setParameters (synth, bpm);
         const auto level = std::clamp (effective[lb303::outputLevelOffset], 0.0f, 1.0f);
         const auto pan = std::clamp (
@@ -306,8 +310,36 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         leftGain[voice] = level * (pan > 0.0f ? 1.0f - pan : 1.0f);
         rightGain[voice] = level * (pan < 0.0f ? 1.0f + pan : 1.0f);
     };
+    const auto applyFxParameters = [&]
+    {
+        lb303::SharedEffects::Controls fxControls {};
+        for (size_t i = 0; i < fxControls.size(); ++i)
+            fxControls[i] = value (lb303::fxParameterIndex (i));
+        // Historic B1 delay parameter IDs now control ONE master classic delay.
+        lb303::SharedEffects::ClassicParameters legacy {};
+        for (size_t i = 0; i < legacy.size(); ++i)
+            legacy[i] = value (lb303::parameterIndex (0, i));
+        // Preserve older B1 per-step delay locks as automations of that shared delay.
+        if (activeLockStep[0] >= 0 && activeLockPattern[0] == currentPattern (0))
+        {
+            const auto step = sequenceBanks[0].getStep (activeLockPattern[0], activeLockStep[0]);
+            for (int i = 0; i < step.parameterLockCount; ++i)
+            {
+                const auto& lock = step.parameterLocks[static_cast<size_t> (i)];
+                const int local = lock.sliderNumber - 1;
+                if (local >= 19 && local <= 32 && std::isfinite (lock.value))
+                {
+                    const auto& info = lb303::catalog()[static_cast<size_t> (local)];
+                    legacy[static_cast<size_t> (local)] =
+                        juce::jlimit (info.minimum, info.maximum, lock.value);
+                }
+            }
+        }
+        sharedFx.setParameters (fxControls, legacy, bpm);
+    };
     for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
         applyVoiceParameters (voice);
+    applyFxParameters();
 
     // Independently scheduled lock boundaries may be emitted for paused steps,
     // too. Sort them for exact sample order between the two MIDI channels.
@@ -327,15 +359,17 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     {
         for (; nextSample < end; ++nextSample)
         {
-            float outL = l[nextSample], outR = r[nextSample];
+            std::array<std::pair<float, float>, lb303::basslineCount> stems {};
             for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
             {
-                // Engine.tick adds incoming audio to its output. Pass zero to
-                // both engines and mix the original host input only ONCE.
                 const auto generated = engines[voice].tick (0.0f, 0.0f);
-                outL += generated.first * leftGain[voice];
-                outR += generated.second * rightGain[voice];
+                stems[voice] = { generated.first * leftGain[voice],
+                                 generated.second * rightGain[voice] };
             }
+            const auto fx = sharedFx.process (stems[0].first, stems[0].second,
+                                              stems[1].first, stems[1].second);
+            const float outL = l[nextSample] + fx.first;
+            const float outR = r[nextSample] + fx.second;
             l[nextSample] = outL;
             r[nextSample] = outR;
         }
@@ -352,6 +386,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             activeLockStep[lane] = event.step;
             activeLockPattern[lane] = event.pattern;
             applyVoiceParameters (lane);
+            applyFxParameters();
         }
         renderSamplesTo (end);
     };

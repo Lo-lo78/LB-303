@@ -18,6 +18,8 @@ public:
     void midi (const juce::MidiMessage& event);
     void releaseNote() noexcept; // stop a direct note when switching to sequencer mode
     std::pair<float, float> tick (float inputL, float inputR);
+    // Shared FX instance only: the original JSFX classic delay on an external stereo bus.
+    std::pair<float, float> processClassicDelay (float synthL, float synthR);
 
 private:
     struct Biquad

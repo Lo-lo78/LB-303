@@ -300,6 +300,12 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     const auto synthL = outputLpfL.process (2.0f*clip (filteredL));
     const auto synthR = outputLpfR.process (2.0f*clip (filteredR));
 
+    // Raw stereo synth; both historic delay instances are now removed from the voice bus.
+    return { synthL, synthR };
+}
+
+std::pair<float, float> BassEngine::processClassicDelay (float synthL, float synthR)
+{
     // CookDSP delay interpolation, time modulation and per-channel filters.
     // JSFX rc_set(0.5) deliberately smooths time over a long (~0.5 s) period.
     smoothDelay += (delayTargetSamples - smoothDelay) / (0.5*fs+1.0);
@@ -336,6 +342,6 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     const auto outR = (synthR*dry + val1*wet)*outGain;
     const auto safe = [] (double x) { return static_cast<float> (std::isfinite (x) ? clamp (x, -1000, 1000) : 0.0); };
     // JSFX sums incoming audio after the synth+delay output.
-    return { safe (inputL+outL), safe (inputR+outR) };
+    return { safe (outL), safe (outR) };
 }
 }

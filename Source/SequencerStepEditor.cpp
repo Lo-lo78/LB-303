@@ -499,7 +499,7 @@ void SequencerStepEditor::renderParameterPicker()
          << ", PATTERN " << (pattern() + 1) << ", STEP " << (currentStep + 1)
          << "\\n\\n";
     const int rows = 8;
-    const int count = static_cast<int> (lb303::voiceParameterCount);
+    const int count = static_cast<int> (lb303::voiceVisibleParameterCount);
     const int columns = (count + rows - 1) / rows;
     for (int row = 0; row < rows; ++row)
     {
@@ -642,7 +642,7 @@ bool SequencerStepEditor::handlePickerKey (const juce::KeyPress& key)
     if (mods.isCtrlDown() && (code == juce::KeyPress::upKey
                              || code == juce::KeyPress::downKey))
         return true;
-    const int count = static_cast<int> (lb303::voiceParameterCount);
+    const int count = static_cast<int> (lb303::voiceVisibleParameterCount);
     const int firstInColumn = (pickerIndex / 8) * 8;
     const int lastInColumn = juce::jmin (count - 1, firstInColumn + 7);
     int target = pickerIndex;

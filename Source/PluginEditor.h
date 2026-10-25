@@ -65,8 +65,8 @@ private:
     juce::TextButton saveButton { "Save preset" };
     Control presetReturnControl = Control::grid;
     juce::Rectangle<int> drawnGrid;
-    int context = 0; // 0 = Bassline 1, 1 = Bassline 2, 2 = Sequencer
-    std::array<int, lb303::basslineCount + 1> lastSelected { 0, 0, 0 };
+    int context = 0; // 0 = Bassline 1, 1 = Bassline 2, 2 = Sequencer, 3 = FX
+    std::array<int, lb303::basslineCount + 2> lastSelected { 0, 0, 0, 0 };
     int selected = 0; // per-context, not global parameter index
     int stepWidthIndex = 0; // LJuno: 1 / 5 / 10 / 15 / 20, saved with the project.
     bool changingParameter = false;
@@ -74,7 +74,9 @@ private:
 
     size_t globalIndex (int local) const;
     size_t globalIndex() const { return globalIndex (selected); }
-    int currentParameterCount() const { return context < 2 ? static_cast<int> (lb303::voiceParameterCount) : static_cast<int> (lb303::sequencerParameterCount); }
+    int currentParameterCount() const { return context < 2 ? static_cast<int> (lb303::voiceVisibleParameterCount)
+        : context == 2 ? static_cast<int> (lb303::sequencerParameterCount)
+                       : static_cast<int> (lb303::fxDisplayParameterCount); }
     juce::String contextName() const;
     void changeContext();
     void populateContext();

@@ -1,3 +1,45 @@
+# LB-303 0.0.2 — TEST2.4 Shared FX
+
+## FX condivisi (quarto contesto)
+
+**Ctrl+Tab** cicla Bassline 1 → Bassline 2 → Sequencer → FX → Bassline 1.
+Grid, Value ed Edit, ricerca alfanumerica, memoria del cursore, NVDA/OSARA e
+preset browser **Alt+B** rimangono invariati. La sezione FX ha un solo DSP
+stereo comune: l'audio delle due bassline entra tramite send indipendenti.
+
+- **Delay Type**: Off / LB-303 Classic / LJuno Dual Tape (un solo tipo alla volta).
+  Due send separati, uno per ogni bassline. I parametri di Classic riutilizzano
+  gli ID preesistenti `slider020`…`slider033` della Bassline 1, mantenendo
+  automazioni e lock del vecchio delay B1. Il vecchio gruppo delay della
+  Bassline 2 viene lasciato nel VST3 solo per retrocompatibilità con i preset;
+  non compare più nelle griglie e non controlla l'audio.
+- **Dual Tape**: due tempi/speed ratio, sync al BPM, glide, feedback, tono per
+  canale, drive tape e stereo spread; DSP adattato dal Dual Delay di LJuno.
+- **Chorus**: stereo con LFO in quadratura, delay frazionario e high-pass sui
+  ritorni, con livello, rate, width e due send. Adattato dal chorus di LJuno.
+- **FX Distortion**: 12 curve e controllo armoniche pari/dispari, stadio
+  globale prima dei send; curve e gain staging adattati da LJuno TEST95.
+- **Reverb Type**: Off, Room, Plate, Hall, Cathedral. Un unico riverbero stereo
+  FDN a otto linee con predelay, damping, decay, width, level e send separati.
+  Queste quattro varianti sono nuove; non sono copie bit-per-bit dei reverb LJuno.
+
+I nuovi controlli FX hanno identificatori `fx_*` append-only e vengono
+salvati insieme ai 32 pattern, ai loro Parameter Locks e a tutte le impostazioni
+nei preset `Documenti\LB-303\*.lb`. I Parameter Locks bassline rimangono
+separati per traccia; i vecchi lock del Classic Delay B1 sono applicati al FX
+condiviso, gli eventuali vecchi lock del delay B2 sono mantenuti nei pattern
+ma non agiscono più sul DSP.
+
+**Licenze:** le parti adattate da LJuno-116 sono riutilizzate nel progetto AGPL-3.0-or-later.
+
+**Avvertenze TEST2.4**: il motore dei due synth viene ora inviato dry alla
+sezione FX; il sound mix dei progetti precedenti può cambiare rispetto a
+TEST2.3.2, soprattutto quando entrambi i vecchi delay erano udibili.
+La configurazione e la compilazione VST3 devono essere confermate via GitHub
+Actions. Non è stata eseguita una compilazione locale né un ascolto in REAPER.
+
+---
+
 # LB-303 0.0.2 — TEST2.3.2: Browser preset .lb (da LJuno-116)
 
 ## Preset library

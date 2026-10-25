@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static regressions for LB-303 TEST2.3.2. No local compilation."""
+"""Static regressions for LB-303 TEST2.4 FX. No local compilation."""
 from pathlib import Path
 import re
 root = Path(__file__).resolve().parents[1]
@@ -96,10 +96,10 @@ assert '"Bassline " + juce::String (1 + index / voiceParameterCount)' in param_c
 assert 'lb303::parameterIndex (voice, i)' in processor
 assert 'for (auto& engine : engines) engine.midi (entry.getMessage());' not in processor
 assert 'engines[voice].tick (0.0f, 0.0f)' in processor
-assert 'outL = l[nextSample], outR = r[nextSample]' in processor
-assert 'outL += generated.first * leftGain[voice]' in processor
-assert 'outR += generated.second * rightGain[voice]' in processor
-assert 'context = (context + 1) % static_cast<int> (lb303::basslineCount + 1)' in editor
+assert 'const float outL = l[nextSample] + fx.first;' in processor
+assert 'const float outR = r[nextSample] + fx.second;' in processor
+assert 'sharedFx.process (stems[0].first' in processor
+assert 'context = (context + 1) % static_cast<int> (lb303::basslineCount + 2)' in editor
 assert 'Bassline 1' in editor and 'Bassline 2' in editor and 'Sequencer' in editor
 assert 'Pattern Bassline 1' in param_cpp and 'Pattern Bassline 2' in param_cpp
 assert 'lastSelected[static_cast<size_t> (context)] = chosen;' in editor
@@ -108,7 +108,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.3.2-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -231,7 +231,7 @@ assert 'currentStep = juce::jlimit (firstActive, lastActive, currentStep);' in s
 assert "if (code == juce::KeyPress::homeKey) { changeTrack (-1); return true; }" in step
 assert "if (code == juce::KeyPress::upKey) { changePattern (1); return true; }" in step
 assert 'TEST2.2.3' in (root / 'README.md').read_text()
-assert 'TEST2.3.2' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4' in (root / '.github/workflows/build-windows.yml').read_text()
 
 # Example active ranges, zero-based block bounds. Every permitted Tab block
 # intersects [Start Step, End Step], never stepping past the recorded End.
@@ -246,7 +246,7 @@ print('PASS: TEST2.2.3 Z/X/C/V active Start/End and bounded silent Tab/Shift+Tab
 step = (root / 'Source' / 'SequencerStepEditor.cpp').read_text(encoding='utf-8')
 assert 'else if (page == 6) openParameterPicker();' in step
 assert 'if (pickerOpen) return handlePickerKey (key);' in step
-assert 'lb303::voiceParameterCount' in step
+assert 'lb303::voiceVisibleParameterCount' in step
 assert 'selectPickerParameter (mods.isAltDown())' in step
 assert 'const auto index = lb303::parameterIndex (static_cast<size_t> (track),' in step
 assert 'bank().addStepParameterLock (pat, stepIndex, local + 1,' in step
@@ -319,7 +319,7 @@ assert 'lastSourceNote[lane] == step.note' in playback
 assert 'lane + 1, lastNote[lane])' in playback
 assert 'oldPattern[lane] = patterns[lane]' in playback
 assert 'Note is a trigger, never a direct oscillator note' in processor
-assert 'TEST2.3.2' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.2.9 keyboard transpose reference C4, MIDI1/MIDI2 independence, newest-held priority and matching Note Off (static).')
 
 # TEST2.3 — locks drive actual audio snapshots per step, including paused steps.
@@ -355,12 +355,12 @@ print('PASS: TEST2.3 sample-position lock overlay, baseline persistence, dual-la
 # TEST2.3.1 — independently addressable MIDI channels + persistent UI order.
 import ast
 mapsrc = param_cpp
-for marker, size in [('voiceDisplayOrder', 37), ('seqDisplayOrder', 7)]:
-    match = re.search(r'constexpr std::array<size_t, (?:voiceParameterCount|sequencerParameterCount)> '
+for marker, size in [('voiceDisplayOrder', 23), ('seqDisplayOrder', 7)]:
+    match = re.search(r'constexpr std::array<size_t, (?:voiceVisibleParameterCount|sequencerParameterCount)> '
                       + marker + r'\s*\{\{([^}]+)\}\}', mapsrc)
     assert match, marker
     nums = [int(n) for n in re.findall(r'\b\d+\b', re.sub(r'//[^\n]*', '', match.group(1)))]
-    assert len(nums) == size and sorted(nums) == list(range(size)), (marker, nums)
+    assert len(nums) == size and (sorted(nums) == list(range(size)) if marker == 'seqDisplayOrder' else len(set(nums)) == size), (marker, nums)
 assert 'midiChannel1Index = audioParameterCount + 5' in param_h
 assert 'midiChannel2Index = audioParameterCount + 6' in param_h
 assert '"Omni", "1", "2"' in param_cpp
@@ -409,3 +409,55 @@ assert 'Alt+B' in editor and 'Alt+S' in editor
 assert 'savedBrowserDirectory' in preset and 'saveBrowserDirectory' in preset
 assert 'presetBrowser->onPresetLoaded' in editor
 print('PASS: TEST2.3.2 LJuno-style preset browser, complete state snapshots, .lb library, preview rollback and keyboard UI (static).')
+
+# TEST2.4 — a single shared stereo FX bus with four accessible contexts.
+fxheader = (root / 'Source/SharedEffects.h').read_text(encoding='utf-8')
+fxcpp = (root / 'Source/SharedEffects.cpp').read_text(encoding='utf-8')
+engine = (root / 'Source/BassEngine.cpp').read_text(encoding='utf-8')
+assert 'fxParameterCount = 31' in param_h
+assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount' in param_h
+assert 'legacyParameterCount = audioParameterCount + sequencerParameterCount' in param_h
+assert 'fxDisplayOrder' in param_cpp
+assert 'voiceVisibleParameterCount = 23' in param_h
+assert 'std::array<int, lb303::basslineCount + 2>' in (root / 'Source/PluginEditor.h').read_text(encoding='utf-8')
+assert 'return context == 2 ? "Sequencer" : "FX"' in editor
+assert 'fxDisplayGlobalIndex' in editor and 'Source/SharedEffects.cpp' in cmake
+assert 'std::pair<float, float> BassEngine::processClassicDelay' in engine
+assert 'return { synthL, synthR };' in engine
+assert 'BassEngine classic' in fxheader
+assert 'classic.processClassicDelay(sl,sr)' in fxcpp
+assert 'SharedEffects::dualDelay' in fxcpp and 'SharedEffects::chorus' in fxcpp
+assert 'SharedEffects::distort' in fxcpp and 'SharedEffects::reverb' in fxcpp
+assert 'sharedFx.prepare (sampleRate);' in processor
+assert 'sharedFx.setParameters (fxControls, legacy, bpm)' in processor
+assert 'sharedFx.process (stems[0].first' in processor
+assert 'legacy[static_cast<size_t> (local)]' in processor
+assert 'fxParameterIndex (fx::delayType)' in param_cpp
+assert 'fxParameterIndex (fx::reverbType)' in param_cpp
+assert 'fxParameterIndex (fx::distortionType)' in param_cpp
+assert 'fxParameterIndex (fx::chorusOn)' in param_cpp
+for idname in ('fx_delay_send1', 'fx_delay_send2', 'fx_chorus_send1',
+               'fx_chorus_send2', 'fx_reverb_send1', 'fx_reverb_send2'):
+    assert idname in param_cpp
+assert 'TEST2.4' in (root / 'README.md').read_text()
+print('PASS: TEST2.4 shared FX engine, stable host IDs, dual sends, 4 accessible contexts and complete preset state.')
+
+# Index and ID allocation: 81 legacy IDs, 31 appended, one shared classic effect.
+import collections
+fx_enum = (root / 'Source/ParameterCatalog.h').read_text()
+assert 'constexpr size_t legacyParameterCount' in fx_enum
+fx_decl = re.search(r'enum Control : size_t\s*\{([^}]+)\}',fx_enum,re.S)
+assert fx_decl
+names = [x.strip() for x in fx_decl.group(1).split(',') if x.strip()]
+assert len(names) == 31, (len(names),names)
+for name in names:
+    assert 'addFx (fx::'+name+',' in param_cpp, name
+fxmap = re.search(r'constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder\s*\{\{(.*?)\}\};',param_cpp,re.S)
+assert fxmap
+items=[x.strip() for x in re.sub(r'//[^\n]*','',fxmap.group(1)).split(',') if x.strip()]
+assert len(items) == 45, len(items)
+assert len(set(items)) == len(items)
+assert sum(x.startswith('fxParameterIndex ') for x in items) == 31
+assert sorted(int(x) for x in items if x.isdigit()) == list(range(19,33))
+assert 'return 30.0' in processor_h
+print('PASS: FX 31 append-only IDs, 14 shared classic IDs, complete unique display mapping, 30s tail.')

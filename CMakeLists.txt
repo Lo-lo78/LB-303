@@ -37,6 +37,8 @@ target_sources(LB303 PRIVATE
     Source/ParameterCatalog.cpp
     Source/BassEngine.h
     Source/BassEngine.cpp
+    Source/SharedEffects.h
+    Source/SharedEffects.cpp
     Source/SequencerState.h
     Source/SequencerState.cpp
     Source/SequencerPlayback.h

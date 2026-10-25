@@ -16,15 +16,38 @@ constexpr const char* patternChoices[] = { "1", "2", "3", "4", "5", "6", "7", "8
                                           "9", "10", "11", "12", "13", "14", "15", "16" };
 constexpr const char* switchChoices[] = { "Off", "On" };
 constexpr const char* trackChoices[] = { "Bassline 1", "Bassline 2" };
+constexpr const char* fxDelayChoices[] = { "Off", "LB-303 Classic", "LJuno Dual Tape" };
+constexpr const char* fxSyncChoices[] = { "Off", "1/32", "1/24T", "1/16", "1/12T", "1/8", "1/6T", "1/4", "1/3T", "1/2", "1/1" };
+constexpr const char* fxDistChoices[] = { "Off", "Soft Clip", "Warm Tube", "Tape Drive", "Classic Overdrive", "Hard Clip", "Diode Crunch", "Thick Fuzz", "Wave Fold", "Rectifier", "Bit Crush", "Sine Warp", "Broken Radio" };
+constexpr const char* fxReverbChoices[] = { "Off", "Room", "Plate", "Hall", "Cathedral" };
 constexpr const char* midiChannelChoices[] = { "Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9",
                                                "10", "11", "12", "13", "14", "15", "16" };
-// Group tone, envelopes, response, then delay. IDs/lock slider numbers stay fixed.
-constexpr std::array<size_t, voiceParameterCount> voiceDisplayOrder {{
-    0, 35, 36, 7, 8, 9, 10, 14,         // oscillator, output, filter
-    1, 2, 3, 4, 5, 6, 15, 16,           // envelope, glide, accent
-    17, 18, 33, 34, 11, 12, 13, 19,    // performance, PWM, drive, delay
-    20, 21, 22, 23, 31, 32, 24, 25,    // delay sync, mode, dry/wet, EQ
-    26, 27, 28, 29, 30                 // delay EQ and modulation
+// Group tone, envelopes and response; delay is accessible only in shared FX.
+constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder {{
+    0, 35, 36, 7, 8, 9, 10, 14,
+    1, 2, 3, 4, 5, 6, 15, 16,
+    17, 18, 33, 34, 11, 12, 13
+}};
+// One classic delay: reuse B1's 14 historic, stable VST3 IDs; all other FX append new IDs.
+// Historic B2 delay params remain in the state for legacy loading, not in either grid.
+constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
+    fxParameterIndex (fx::delayType), fxParameterIndex (fx::delaySend1), fxParameterIndex (fx::delaySend2),
+    19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+    fxParameterIndex (fx::dualTime), fxParameterIndex (fx::dualSync),
+    fxParameterIndex (fx::dualSpeed1), fxParameterIndex (fx::dualSpeed2),
+    fxParameterIndex (fx::dualGlide), fxParameterIndex (fx::dualFeedback1),
+    fxParameterIndex (fx::dualFeedback2), fxParameterIndex (fx::dualTone1),
+    fxParameterIndex (fx::dualTone2), fxParameterIndex (fx::dualSpread),
+    fxParameterIndex (fx::dualDrive),
+    fxParameterIndex (fx::chorusOn), fxParameterIndex (fx::chorusLevel),
+    fxParameterIndex (fx::chorusRate), fxParameterIndex (fx::chorusWidth),
+    fxParameterIndex (fx::chorusSend1), fxParameterIndex (fx::chorusSend2),
+    fxParameterIndex (fx::distortionType), fxParameterIndex (fx::distortionAmount),
+    fxParameterIndex (fx::distortionHarmonics),
+    fxParameterIndex (fx::reverbType), fxParameterIndex (fx::reverbSend1),
+    fxParameterIndex (fx::reverbSend2), fxParameterIndex (fx::reverbPredelay),
+    fxParameterIndex (fx::reverbDecay), fxParameterIndex (fx::reverbDamping),
+    fxParameterIndex (fx::reverbWidth), fxParameterIndex (fx::reverbLevel)
 }};
 constexpr std::array<size_t, sequencerParameterCount> seqDisplayOrder {{
     2, 0, 5,   // Sequencer On, Pattern, MIDI channel — Bassline 1
@@ -100,9 +123,51 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         result[editTrackIndex] = { "seq_edit_track", "Editor Track", 0, 1, 1, 0, "", trackChoices, 2 };
         result[midiChannel1Index] = { "b1_midi_channel", "MIDI Channel Bassline 1", 0, 16, 1, 1, "", midiChannelChoices, 17 };
         result[midiChannel2Index] = { "b2_midi_channel", "MIDI Channel Bassline 2", 0, 16, 1, 2, "", midiChannelChoices, 17 };
+        const auto addFx = [&] (size_t i, const char* id, const char* name,
+                                float lo, float hi, float step, float initial,
+                                const char* unit = "", const char* const* choices = nullptr, int count = 0)
+        {
+            result[fxParameterIndex (i)] = { id, name, lo, hi, step, initial, unit, choices, count };
+        };
+        addFx (fx::delayType, "fx_delay_type", "Delay Type", 0, 2, 1, 1, "", fxDelayChoices, 3);
+        addFx (fx::delaySend1, "fx_delay_send1", "Delay Send Bassline 1", 0, 100, 1, 100, "%");
+        addFx (fx::delaySend2, "fx_delay_send2", "Delay Send Bassline 2", 0, 100, 1, 100, "%");
+        addFx (fx::dualTime, "fx_dual_time", "Dual Delay Time", 20, 2000, 1, 270, "ms");
+        addFx (fx::dualSync, "fx_dual_sync", "Dual Delay Sync", 0, 10, 1, 6, "", fxSyncChoices, 11);
+        addFx (fx::dualSpeed1, "fx_dual_speed1", "Dual Delay Speed 1", 0.25f, 4, 0.01f, 1, "x");
+        addFx (fx::dualSpeed2, "fx_dual_speed2", "Dual Delay Speed 2", 0.25f, 4, 0.01f, 1.5f, "x");
+        addFx (fx::dualGlide, "fx_dual_glide", "Dual Delay Glide", 1, 1500, 1, 180, "ms");
+        addFx (fx::dualFeedback1, "fx_dual_feedback1", "Dual Delay Feedback 1", 0, 200, 1, 75, "%");
+        addFx (fx::dualFeedback2, "fx_dual_feedback2", "Dual Delay Feedback 2", 0, 200, 1, 75, "%");
+        addFx (fx::dualTone1, "fx_dual_tone1", "Dual Delay Tone 1", 0, 200, 1, 50, "%");
+        addFx (fx::dualTone2, "fx_dual_tone2", "Dual Delay Tone 2", 0, 200, 1, 50, "%");
+        addFx (fx::dualSpread, "fx_dual_spread", "Dual Delay Stereo Spread", -100, 100, 1, 75, "%");
+        addFx (fx::dualDrive, "fx_dual_drive", "Dual Delay Tape Drive", 0, 100, 1, 20, "%");
+        addFx (fx::chorusOn, "fx_chorus_on", "Chorus", 0, 1, 1, 0, "", switchChoices, 2);
+        addFx (fx::chorusLevel, "fx_chorus_level", "Chorus Level", 0, 100, 1, 50, "%");
+        addFx (fx::chorusRate, "fx_chorus_rate", "Chorus Rate", 0, 100, 1, 30, "%");
+        addFx (fx::chorusWidth, "fx_chorus_width", "Chorus Width", 0, 100, 1, 100, "%");
+        addFx (fx::chorusSend1, "fx_chorus_send1", "Chorus Send Bassline 1", 0, 100, 1, 35, "%");
+        addFx (fx::chorusSend2, "fx_chorus_send2", "Chorus Send Bassline 2", 0, 100, 1, 35, "%");
+        addFx (fx::distortionType, "fx_distortion_type", "FX Distortion Type", 0, 12, 1, 0, "", fxDistChoices, 13);
+        addFx (fx::distortionAmount, "fx_distortion_amount", "FX Distortion Amount", 0, 100, 1, 0, "%");
+        addFx (fx::distortionHarmonics, "fx_distortion_harmonics", "FX Harmonics Even Odd", -100, 100, 1, 0, "%");
+        addFx (fx::reverbType, "fx_reverb_type", "Reverb Type", 0, 4, 1, 0, "", fxReverbChoices, 5);
+        addFx (fx::reverbSend1, "fx_reverb_send1", "Reverb Send Bassline 1", 0, 100, 1, 25, "%");
+        addFx (fx::reverbSend2, "fx_reverb_send2", "Reverb Send Bassline 2", 0, 100, 1, 25, "%");
+        addFx (fx::reverbPredelay, "fx_reverb_predelay", "Reverb Predelay", 0, 180, 1, 30, "ms");
+        addFx (fx::reverbDecay, "fx_reverb_decay", "Reverb Decay", 0.2f, 20, 0.1f, 3.0f, "s");
+        addFx (fx::reverbDamping, "fx_reverb_damping", "Reverb Damping", 500, 16000, 100, 7500, "Hz");
+        addFx (fx::reverbWidth, "fx_reverb_width", "Reverb Width", 0, 100, 1, 100, "%");
+        addFx (fx::reverbLevel, "fx_reverb_level", "Reverb Level", 0, 100, 1, 50, "%");
         return result;
     }();
     return values;
+}
+
+size_t fxDisplayGlobalIndex (size_t displayIndex) noexcept
+{
+    return fxDisplayOrder[juce::jmin (displayIndex, fxDisplayOrder.size() - 1)];
 }
 
 size_t displayToLocal (size_t context, size_t displayIndex) noexcept
@@ -137,7 +202,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         // without adding redundant prefixes to the accessible per-bassline grids.
         const auto hostName = index < audioParameterCount
             ? ("Bassline " + juce::String (1 + index / voiceParameterCount) + " - " + p.name)
-            : ("Sequencer - " + p.name);
+            : (index < legacyParameterCount ? ("Sequencer - " + p.name) : ("FX - " + p.name));
         if (p.choiceCount)
         {
             juce::StringArray options;

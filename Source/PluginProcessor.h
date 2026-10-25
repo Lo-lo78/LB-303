@@ -2,6 +2,7 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "BassEngine.h"
+#include "SharedEffects.h"
 #include "SequencerState.h"
 #include "SequencerPlayback.h"
 #include "PresetManager.h"
@@ -24,7 +25,7 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return true; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 10.0; }
+    double getTailLengthSeconds() const override { return 30.0; }
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram (int) override {}
@@ -47,6 +48,7 @@ public:
 
 private:
     std::array<lb303::BassEngine, lb303::basslineCount> engines;
+    lb303::SharedEffects sharedFx;
     std::array<lb303::SequencerState, lb303::basslineCount> sequenceBanks;
     lb303::SequencerPlayback sequencerPlayback;
     // Last running step per lane. -1 means the raw, host-automated baseline.

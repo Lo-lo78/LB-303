@@ -181,6 +181,8 @@ std::unique_ptr<juce::AccessibilityHandler> LB303AudioProcessorEditor::createAcc
 
 size_t LB303AudioProcessorEditor::globalIndex (int local) const
 {
+    if (context == static_cast<int> (lb303::fxContextIndex))
+        return lb303::fxDisplayGlobalIndex (static_cast<size_t> (local));
     const auto actual = lb303::displayToLocal (static_cast<size_t> (context),
                                                static_cast<size_t> (local));
     return context < 2
@@ -191,7 +193,7 @@ juce::String LB303AudioProcessorEditor::contextName() const
 {
     if (context == 0) return "Bassline 1";
     if (context == 1) return "Bassline 2";
-    return "Sequencer";
+    return context == 2 ? "Sequencer" : "FX";
 }
 void LB303AudioProcessorEditor::populateContext()
 {
@@ -213,8 +215,8 @@ void LB303AudioProcessorEditor::populateContext()
 void LB303AudioProcessorEditor::changeContext()
 {
     lastSelected[static_cast<size_t> (context)] = selected;
-    // Ctrl+Tab: Bassline 1 -> Bassline 2 -> Sequencer -> Bassline 1.
-    context = (context + 1) % static_cast<int> (lb303::basslineCount + 1);
+    // Ctrl+Tab: Bassline 1 -> Bassline 2 -> Sequencer -> FX -> Bassline 1.
+    context = (context + 1) % static_cast<int> (lb303::basslineCount + 2);
     populateContext();
     focusControl (Control::grid, true);
     juce::Timer::callAfterDelay (50,
@@ -240,7 +242,7 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
     g.drawText ("LB-303", 18, 8, 190, 34, juce::Justification::centredLeft);
     g.setColour (juce::Colour (0xffb5c9e2));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::plain)));
-    g.drawText (contextName() + " | Ctrl+Tab: Bassline 1 / Bassline 2 / Sequencer", 203, 12, getWidth() - 223, 27,
+    g.drawText (contextName() + " | Ctrl+Tab: Bassline 1 / Bassline 2 / Sequencer / FX", 203, 12, getWidth() - 223, 27,
                 juce::Justification::centredLeft);
 
     const int columns = columnsFor (currentParameterCount());
