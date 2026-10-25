@@ -43,6 +43,9 @@ void LB303AudioProcessorEditor::ParameterGrid::focusGained (FocusChangeType caus
 }
 bool LB303AudioProcessorEditor::ParameterGrid::keyPressed (const juce::KeyPress& k)
 {
+    if (k.getKeyCode() == juce::KeyPress::spaceKey
+        && ! editor.processor.spaceControlsSequencerPreview())
+        return false; // REAPER host command, not ComboBox popup
     return editor.handleKey (k, Control::grid) || juce::ComboBox::keyPressed (k);
 }
 
@@ -71,6 +74,9 @@ void LB303AudioProcessorEditor::ParameterValue::focusGained (FocusChangeType cau
 }
 bool LB303AudioProcessorEditor::ParameterValue::keyPressed (const juce::KeyPress& k)
 {
+    if (k.getKeyCode() == juce::KeyPress::spaceKey
+        && ! editor.processor.spaceControlsSequencerPreview())
+        return false;
     return editor.handleKey (k, Control::value) || juce::Slider::keyPressed (k);
 }
 
@@ -94,6 +100,9 @@ void LB303AudioProcessorEditor::NumericEdit::focusGained (FocusChangeType why)
 bool LB303AudioProcessorEditor::NumericEdit::keyPressed (const juce::KeyPress& k)
 {
     // Handle Alt shortcuts before the TextEditor can insert a letter.
+    if (k.getKeyCode() == juce::KeyPress::spaceKey
+        && ! editor.processor.spaceControlsSequencerPreview())
+        return false;
     return editor.handleKey (k, Control::edit) || juce::TextEditor::keyPressed (k);
 }
 
@@ -502,7 +511,7 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
     }
     g.setColour (juce::Colour (0xffb5c9e2));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::plain)));
-    g.drawText ("Grid / Value / Edit | Alt+Q: steps | Alt+B: browser | Alt+S: save | Alt+I: init | Alt+- / Alt++: presets",
+    g.drawText ("Grid / Value / Edit | Alt+P: Space DAW / Preview | Alt+Q: steps | Alt+B: browser | Alt+S: save | Alt+I: init",
                 18, getHeight() - 26, getWidth() - 36, 18, juce::Justification::centredLeft);
 }
 void LB303AudioProcessorEditor::resized()
@@ -924,6 +933,30 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
     {
         return ch == c || code == juce::CharacterFunctions::toUpperCase (c);
     };
+    // Space target is shared by all four parameter pages and the Alt+Q editor.
+    // It is instance-only and does not change the selected parameter or focus.
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown() && letter ('p'))
+    {
+        const bool toPreview = processor.toggleSpaceTarget();
+        auto* active = current == Control::grid ? static_cast<juce::Component*> (&parameterGrid)
+                     : current == Control::value ? static_cast<juce::Component*> (&parameterValue)
+                                                  : static_cast<juce::Component*> (&numericEdit);
+        lb303::announceToActiveScreenReader (*active,
+            toPreview ? "Space: Sequencer preview" : "Space: DAW");
+        return true;
+    }
+    if (code == juce::KeyPress::spaceKey && ! mods.isAltDown()
+        && ! mods.isCtrlDown() && ! mods.isCommandDown() && ! mods.isShiftDown())
+    {
+        if (! processor.spaceControlsSequencerPreview()) return false;
+        const bool running = processor.toggleSequencerPreview();
+        auto* active = current == Control::grid ? static_cast<juce::Component*> (&parameterGrid)
+                     : current == Control::value ? static_cast<juce::Component*> (&parameterValue)
+                                                  : static_cast<juce::Component*> (&numericEdit);
+        lb303::announceToActiveScreenReader (*active,
+            running ? "Both basslines preview playing" : "Both basslines preview stopped");
+        return true;
+    }
     // LJuno preset shortcuts work from Grid, Value and Edit, while preserving
     // the current parameter, context and the native three-control Tab cycle.
     if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown())

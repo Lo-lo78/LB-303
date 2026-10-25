@@ -45,6 +45,9 @@ public:
         int stepWidthIndex = 0;
         size_t fxSelectedGlobal = lb303::parameterIndex (0, 31); // per-instance, never serialized
         int fxSelectedColumn = 0;
+        // Space routing is UI history for THIS processor instance only.
+        // Never write it into VST project state or .lb preset snapshots.
+        bool spaceControlsPreview = false; // default: REAPER transport
     };
     EditorSessionState editorSession;
 
@@ -56,7 +59,24 @@ public:
     int currentPattern (size_t lane) const noexcept;
     // One preview transport for BOTH basslines, regardless of edited track.
     void requestSequencerPreview (bool enabled) noexcept
-    { previewEnabled.store (enabled, std::memory_order_relaxed); }
+    { previewEnabled.store (enabled, std::memory_order_release); }
+    bool spaceControlsSequencerPreview() const noexcept
+    { return editorSession.spaceControlsPreview; }
+    // Returns true when Space now controls the two-bassline preview.
+    bool toggleSpaceTarget() noexcept
+    {
+        editorSession.spaceControlsPreview = ! editorSession.spaceControlsPreview;
+        // Never leave a preview sounding with its stop key assigned to REAPER.
+        if (! editorSession.spaceControlsPreview) requestSequencerPreview (false);
+        return editorSession.spaceControlsPreview;
+    }
+    // Preview belongs to the processor, not to the Alt+Q editor window.
+    bool toggleSequencerPreview() noexcept
+    {
+        const bool next = ! previewEnabled.load (std::memory_order_acquire);
+        previewEnabled.store (next, std::memory_order_release);
+        return next;
+    }
     lb303::SequencerState& patternBank (size_t lane) noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
     const lb303::SequencerState& patternBank (size_t lane) const noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
 

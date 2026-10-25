@@ -1,4 +1,16 @@
-# LB-303 0.0.2 — TEST2.4.12 | Dual LFO and Volume-first grids
+# TEST2.4.13 — Alt+P: DAW / Sequencer preview (Windows VST3)
+
+- **Alt+P** alterna la destinazione di Spazio fra **DAW** (predefinito) e **Sequencer preview**. NVDA annuncia il nuovo modo.
+- Con **Sequencer preview**, Spazio avvia/ferma contemporaneamente i due pattern, sia dentro l'editor **Alt+Q** sia nelle quattro griglie Bassline 1 / Bassline 2 / Sequencer / FX, anche in Grid, Value ed Edit. Non occorre tenere un tasto MIDI premuto.
+- **Esc o Alt+Q** chiudono solo l'editor degli step. La riproduzione dell'anteprima prosegue se attiva, e può essere fermata con Spazio dopo essere tornati ai parametri.
+- Passando con **Alt+P** dalla modalità Sequencer preview alla modalità DAW, l'anteprima si ferma per evitare note in sottofondo prive di un comando di arresto.
+- Con destinazione **DAW**, il plugin lascia Spazio non gestito affinché REAPER possa usare il suo comando di trasporto. Il recapito effettivo del tasto da finestre VST3 dipende anche dalle impostazioni di tastiera/focus di REAPER.
+- La scelta Alt+P è specifica dell'istanza in uso e **non viene salvata** in preset `.lb` o progetti. Ogni nuova istanza parte in modalità DAW.
+- Il motore di sintesi, i due LFO, i 32 pattern, Parameter Locks, il browser preset e gli ID VST3 non cambiano.
+
+---
+
+# LB-303 0.0.2 — TEST2.4.13 | DAW / Sequencer Preview Space transport
 
 This update builds on TEST2.4.11. **Do not extract its patch over an older version.**
 
@@ -611,8 +623,10 @@ Within the editor:
 - **Backspace**: reset musical properties of selected steps (rest = MIDI note 128).
 - **Ctrl+C, Ctrl+X, Ctrl+V**: copy/cut/paste one or selected steps;
   **Ctrl+Z / Ctrl+Shift+Z**: undo/redo (50 actions).
-- **Space**: preview selected bassline even with REAPER stopped; pressing
-  again or leaving the editor stops preview. Existing MIDI 1/2 routing is kept.
+- **TEST2.4.13 replaces the original Space shortcut:** default Space belongs
+  to the DAW. **Alt+P** selects Sequencer preview, after which Space plays/stops
+  both lanes even outside the step editor; closing the editor no longer stops it.
+  Existing MIDI 1/2 routing is kept.
 - **Alt+I**: read track, pattern, page, step and current playback range.
 
 All 32 patterns are independent and are stored in the REAPER project via the

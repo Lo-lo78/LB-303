@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.12-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.13-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -160,7 +160,7 @@ step_h = (root / 'Source/SequencerStepEditor.h').read_text(encoding='utf-8')
 step = (root / 'Source/SequencerStepEditor.cpp').read_text(encoding='utf-8')
 assert 'struct StepChange' in step_h and 'std::vector<Action> undoStack, redoStack' in step_h
 assert 'returnControl = focus;' in step and 'safe->grabKeyboardFocus()' in step
-assert 'requestSequencerPreview (false)' in step
+assert 'processor.toggleSequencerPreview()' in step
 assert 'getRevision()' in step
 assert 'const auto index = track == 0 ? lb303::pattern1Index : lb303::pattern2Index;' in step
 assert 'processor.parameter (lb303::editTrackIndex)' in step
@@ -201,7 +201,7 @@ assert 'lb303::sequencerParameterIndex' in editor
 print('PASS: TEST2.2.1 Home/End track, Ctrl+Up/Down independent automatable patterns.')
 
 # TEST2.2.2: Ctrl+Tab must NOT change track inside the Alt+Q step editor.
-ctrl_section = step.split('if (mods.isCtrlDown())', 1)[1].split('if (code == juce::KeyPress::spaceKey)', 1)[0]
+ctrl_section = step.split('if (mods.isCtrlDown())', 1)[1].split("if (mods.isAltDown() && letter ('i'))", 1)[0]
 assert 'juce::KeyPress::tabKey' not in ctrl_section
 assert 'changeTrack' not in ctrl_section
 assert 'if (code == juce::KeyPress::homeKey) { changeTrack (-1); return true; }' in step
@@ -377,7 +377,7 @@ assert '.withChannel (' not in processor # JUCE MidiMessage uses setChannel(), n
 assert 'previewEnabled.store (enabled' in processor_h
 assert '(sequencerOn[0] && heldKeyCount[0] > 0) || activePreview' in processor
 assert '(sequencerOn[1] && heldKeyCount[1] > 0) || activePreview' in processor
-assert 'requestSequencerPreview (false); preview = false' in step
+assert 'if (preview) { processor.requestSequencerPreview (false); preview = false; }' not in step
 assert 'if (preview) { processor.requestSequencerPreview (false); preview = false; }\n    track = target;' not in step
 assert 'processor.editorSession.sequencerPage' in step
 assert 'lastPickerPosition[static_cast<size_t> (track)]' in step
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.12-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.13-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -731,3 +731,25 @@ assert 'const auto modulation = nextLfoSample();' in engine
 assert 'double BassEngine::nextLfoSample() noexcept' in engine
 assert 'return { static_cast<float> (synthL *' in engine
 print('PASS: TEST2.4.12 Volume-first, 2 independent LFOs, bipolar targets, PWM wave, step locks and all existing IDs.')
+
+# TEST2.4.13 — Space transport target and preview lifecycle.
+assert 'bool spaceControlsPreview = false;' in processor_h
+assert 'editorSession.spaceControlsPreview = ! editorSession.spaceControlsPreview;' in processor_h
+assert 'if (! editorSession.spaceControlsPreview) requestSequencerPreview (false);' in processor_h
+assert 'bool toggleSequencerPreview() noexcept' in processor_h
+assert 'return false; // leave Space to REAPER in default DAW mode' in step
+assert 'const bool running = processor.toggleSequencerPreview();' in step
+assert 'const bool running = processor.toggleSequencerPreview();' in editor
+assert 'mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown() && letter (\'p\')' in editor
+assert 'Space: Sequencer preview' in editor and 'Space: DAW' in editor
+assert 'Space: Sequencer preview' in step and 'Space: DAW' in step
+assert 'if (preview)' not in step and 'bool preview = false;' not in step_h
+assert 'if (pickerOpen) return handlePickerKey (key);' in step
+assert step.index('processor.toggleSpaceTarget()') < step.index('if (pickerOpen) return handlePickerKey (key);')
+assert 'if (preview) { processor.requestSequencerPreview (false); preview = false; }' not in step
+assert 'spaceControlsPreview' not in processor.split('void LB303AudioProcessor::getStateInformation',1)[1]
+assert 'spaceControlsPreview' not in processor.split('void LB303AudioProcessor::setStateInformation',1)[1]
+assert 'processor.editorSession.spaceControlsPreview' not in param_cpp
+assert 'getKeyCode() == juce::KeyPress::spaceKey' in editor
+assert '&& ! editor.processor.spaceControlsSequencerPreview()' in editor
+print('PASS: TEST2.4.13 DAW-default Space, Alt+P target, dual preview across edit exit and nonpersistent instance mode.')

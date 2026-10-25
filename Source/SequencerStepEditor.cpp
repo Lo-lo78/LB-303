@@ -23,7 +23,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Alt Q. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes.");
+    setDescription ("Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -57,7 +57,8 @@ void SequencerStepEditor::close()
     processor.editorSession.sequencerPage = page;
     opened = false;
     pickerOpen = false;
-    if (preview) { processor.requestSequencerPreview (false); preview = false; }
+    // Preview stays active when Alt+Q/Esc closes this editing overlay.
+    // Only Space in preview mode, Alt+P back to DAW or Alt+I stops it.
     setVisible (false);
     if (returnControl != nullptr)
     {
@@ -160,7 +161,9 @@ void SequencerStepEditor::refresh()
          << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Tab: active blocks"
          << "\nZ/X: Start Step -/+  |  C/V: End Step -/+"
          << "\nCtrl+C/V/X: Copy/Paste/Cut  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
-         << "\nSpace: preview both basslines  |  Esc / Alt+Q: return to original control";
+         << "\nAlt+P: Space target (" << (processor.spaceControlsSequencerPreview() ? "Preview" : "REAPER")
+         << ")  |  Space: " << (processor.spaceControlsSequencerPreview() ? "play/stop both basslines" : "REAPER play/stop")
+         << "  |  Esc / Alt+Q: return without stopping preview";
     setText (text, juce::dontSendNotification);
 }
 void SequencerStepEditor::announceCurrent()
@@ -696,9 +699,29 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         && (juce::CharacterFunctions::toLowerCase (key.getTextCharacter()) == 'q'
             || key.getKeyCode() == 'Q' || key.getKeyCode() == 'q'))
     { close(); return true; }
-    if (pickerOpen) return handlePickerKey (key);
     const int code = key.getKeyCode();
     const auto mods = key.getModifiers();
+    const auto character = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown()
+        && (character == 'p' || code == 'p' || code == 'P'))
+    {
+        const bool toPreview = processor.toggleSpaceTarget();
+        lastRevision = 0;
+        lastPattern = -1; // refresh transport hint even when pattern data is unchanged
+        refresh();
+        announce (toPreview ? "Space: Sequencer preview" : "Space: DAW");
+        return true;
+    }
+    if (code == juce::KeyPress::spaceKey && ! mods.isAltDown()
+        && ! mods.isCtrlDown() && ! mods.isCommandDown() && ! mods.isShiftDown())
+    {
+        if (! processor.spaceControlsSequencerPreview())
+            return false; // leave Space to REAPER in default DAW mode
+        const bool running = processor.toggleSequencerPreview();
+        announce (running ? "Both basslines preview playing" : "Both basslines preview stopped");
+        return true;
+    }
+    if (pickerOpen) return handlePickerKey (key);
     const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
     const auto letter = [code, ch] (juce::juce_wchar c)
     { return ch == c || code == juce::CharacterFunctions::toUpperCase (c); };
@@ -723,13 +746,6 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         if (letter ('v')) { pasteSteps(); return true; }
         if (letter ('z')) { undo (mods.isShiftDown()); return true; }
         if (letter ('y')) { undo (true); return true; }
-        return true;
-    }
-    if (code == juce::KeyPress::spaceKey)
-    {
-        preview = ! preview;
-        processor.requestSequencerPreview (preview);
-        announce (preview ? "Both basslines preview on" : "Preview off");
         return true;
     }
     if (mods.isAltDown() && letter ('i'))

@@ -46,7 +46,6 @@ private:
     std::array<bool, lb303::SequencerState::stepsPerSequence> selectedSteps {};
     std::vector<lb303::SequencerStep> clipboard;
     std::vector<Action> undoStack, redoStack;
-    bool preview = false;
     bool pickerOpen = false;
     int pickerIndex = 0; // display position 0..36 (mapped to stable DSP IDs)
     std::array<int, lb303::basslineCount> lastPickerPosition {{ 0, 0 }};
