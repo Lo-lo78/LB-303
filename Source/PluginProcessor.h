@@ -43,6 +43,8 @@ public:
         std::array<int, lb303::basslineCount + 2> selectedParameters {};
         int sequencerPage = 0;
         int stepWidthIndex = 0;
+        size_t fxSelectedGlobal = lb303::parameterIndex (0, 31); // per-instance, never serialized
+        int fxSelectedColumn = 0;
     };
     EditorSessionState editorSession;
 

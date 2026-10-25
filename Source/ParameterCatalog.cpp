@@ -40,8 +40,7 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     fxParameterIndex (fx::chorusOn), fxParameterIndex (fx::chorusLevel),
     fxParameterIndex (fx::chorusRate), fxParameterIndex (fx::chorusWidth),
     fxParameterIndex (fx::chorusSend1), fxParameterIndex (fx::chorusSend2),
-    // Select which serial effect comes first; the one downstream also hears
-    // the output of the upstream effect instead of two parallel returns.
+    // Legacy Order ID remains in catalog for old project automation, but not in FX GUI.
     fxParameterIndex (fx::effectOrder),
     fxParameterIndex (fx::delayType), fxParameterIndex (fx::delaySend1), fxParameterIndex (fx::delaySend2),
     19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32,
@@ -186,7 +185,7 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         addFx (fx::reverbDamping, "fx_reverb_damping", "Reverb Damping", 500, 16000, 100, 7500, "Hz");
         addFx (fx::reverbWidth, "fx_reverb_width", "Reverb Width", 0, 100, 1, 100, "%");
         addFx (fx::reverbLevel, "fx_reverb_level", "Reverb Level", 0, 100, 1, 50, "%");
-        addFx (fx::effectOrder, "fx_delay_reverb_order", "Delay Reverb Order",
+        addFx (fx::effectOrder, "fx_delay_reverb_order", "Legacy FX Order (unused)",
                0, 1, 1, 0, "", fxOrderChoices, 2);
         for (size_t lane = 0; lane < basslineCount; ++lane)
         {

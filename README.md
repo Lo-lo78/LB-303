@@ -1,3 +1,14 @@
+# TEST2.4.11 — Dynamic FX grid and fixed effect order
+
+- The FX page has six stable columns: **Dry Level**, **Distortion 1**, **Distortion 2**, **Chorus**, **Delay** and **Reverb**. This FX-only layout supports varying column lengths (up to 16 controls); all other grids continue to use eight rows per column.
+- Off effects show ONLY their Type/On-Off selector. Delay Classic displays only its historical 13 delay controls and sends; Dual Tape displays only its 11 dual controls and sends. Selecting Off collapses the column. The same applies to the two distortions, chorus and reverb.
+- Left/right arrows change FX column; up/down change rows within the current FX column; Home/End and PageUp/PageDown stay inside that column. Silent borders remain. Tab still cycles Grid / Value / Edit. The focused parameter is retained by its **VST parameter ID**, with fallback to the FX Type selector if a change hides it.
+- Fixed audio order **Distortion → Chorus → Delay → Reverb**. The old Delay Reverb Order automation ID remains loadable for compatibility but no longer affects sound and is hidden from the accessible FX grid; do not create new automation for it.
+- All existing preset `.lb` data, parameter/lock IDs and the 32 sequencer patterns are retained. When a preset changes FX types, visible columns refresh automatically. All previous DSP except alternate Reverb→Delay routing is unchanged.
+- Build with GitHub Actions; no local compilation/audio runtime verification was performed.
+
+---
+
 # LB-303 0.0.2 — TEST2.4.10 (correzione build Windows)
 
 La TEST2.4.9 falliva in GitHub Actions con errori C2059/C2143
@@ -728,11 +739,9 @@ Distortion. The stereo Chorus follows distortion; its two independently
 adjustable sends feed separate chorus lines with a shared modulation clock.
 The **Delay Send 1/2** and **Reverb Send 1/2** then operate on the resulting
 combined sound (distortion and chorus), rather than on oscillator dry alone.
-**FX → Delay Reverb Order** chooses:
-
-- **Delay then Reverb** (default): delay echoes feed the reverb. Its direct
-  Reverb Sends also feed the same reverb.
-- **Reverb then Delay**: the reverb return is also echoed by the delay.
+**Fixed Delay → Reverb routing (TEST2.4.11):** delay echoes feed the
+reverb together with the direct Reverb Sends. The alternate serial order
+is no longer selectable; its historical VST ID is kept for old project files.
 
 The downstream FX receives the upstream wet signal *in addition to* its own
 per-bassline sends; the destination send pair scales this crossfeed, so both
@@ -773,7 +782,7 @@ channels, accessibility and preset browser are preserved.
 ### Build and verification
 
 Source-only delivery. Run GitHub Actions for Windows VST3 (no local build).
-Check both FX orders while one line has chorus, verify FX Send = 0 edge
+Check the fixed Delay -> Reverb routing with chorus, verify FX Send = 0 edge
 cases, then test BPM Division 4 / 8 / 2, Shuffle, and separate bassline
 performance settings. Finally save and reload a `.lb` preset to verify the
 new append-only automation parameter IDs and the existing 32 pattern banks.

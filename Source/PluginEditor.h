@@ -6,6 +6,7 @@
 #include "PresetBrowser.h"
 #include <memory>
 #include <array>
+#include <vector>
 
 class SequencerStepEditor;
 
@@ -71,6 +72,12 @@ private:
     int context = 0; // 0 = Bassline 1, 1 = Bassline 2, 2 = Sequencer, 3 = FX
     std::array<int, lb303::basslineCount + 2> lastSelected { 0, 0, 0, 0 };
     int selected = 0; // per-context, not global parameter index
+    // Runtime FX display only: no changes to the stable AudioProcessor parameter IDs.
+    // One column per effect; hidden options are still stored in presets/automation.
+    std::vector<size_t> visibleFxParameters;
+    std::array<int, 6> fxColumnLengths { 1, 1, 1, 1, 1, 1 };
+    size_t rememberedFxGlobal = lb303::parameterIndex (0, 31);
+    int rememberedFxColumn = 0;
     int stepWidthIndex = 0; // LJuno: 1 / 5 / 10 / 15 / 20, saved with the project.
     bool changingParameter = false;
     bool editDirty = false;
@@ -81,7 +88,11 @@ private:
     size_t globalIndex() const { return globalIndex (selected); }
     int currentParameterCount() const { return context < 2 ? static_cast<int> (lb303::voiceGridParameterCount)
         : context == 2 ? static_cast<int> (lb303::sequencerDisplayParameterCount)
-                       : static_cast<int> (lb303::fxDisplayParameterCount); }
+                       : static_cast<int> (visibleFxParameters.size()); }
+    void updateFxColumns();
+    void syncFxColumns();
+    std::pair<int, int> fxCell (int index) const;
+    int fxCellIndex (int column, int row) const;
     juce::String contextName() const;
     void changeContext();
     void populateContext();

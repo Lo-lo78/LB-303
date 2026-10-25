@@ -372,8 +372,6 @@ std::pair<float, float> SharedEffects::process (float aL, float aR, float bL, fl
     // Master links respect destination send controls: both Reverb Sends at
     // zero must silence new reverb excitation, even in serial FX routing.
     const float reverbLink = std::max (c[fx::reverbSend1], c[fx::reverbSend2]) * .01f;
-    const float delayLink = std::max (c[fx::delaySend1], c[fx::delaySend2]) * .01f;
-    const bool delayFirst = c[fx::effectOrder] < .5f;
 
     const auto runDelay = [&] (float l, float r) -> std::pair<float, float>
     {
@@ -393,21 +391,12 @@ std::pair<float, float> SharedEffects::process (float aL, float aR, float bL, fl
         return verbEnabled ? reverb (l, r) : std::pair<float,float> { 0.0f, 0.0f };
     };
 
-    std::pair<float,float> delayWet, reverbWet;
-    if (delayFirst)
-    {
-        // Delay -> Reverb: repetitions diffuse into the reverb tail.
-        delayWet = runDelay (delayStem.first, delayStem.second);
-        reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink,
-                               reverbStem.second + delayWet.second * reverbLink);
-    }
-    else
-    {
-        // Reverb -> Delay: delay repeats capture the spacious reverb tail.
-        reverbWet = runReverb (reverbStem.first, reverbStem.second);
-        delayWet = runDelay (delayStem.first + reverbWet.first * delayLink,
-                              delayStem.second + reverbWet.second * delayLink);
-    }
+    // Fixed insert order: Delay -> Reverb. An old saved fx::effectOrder
+    // host parameter may still exist for backward-compatible snapshots,
+    // but no longer changes the routing or appears in the FX grid.
+    const auto delayWet = runDelay (delayStem.first, delayStem.second);
+    const auto reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink,
+                                      reverbStem.second + delayWet.second * reverbLink);
     return { bounded ((axL + bxL) * classicDryLevel + ch1L + ch2L
                        + delayWet.first + reverbWet.first),
              bounded ((axR + bxR) * classicDryLevel + ch1R + ch2R

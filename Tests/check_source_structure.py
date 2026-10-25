@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.10-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.11-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -422,7 +422,7 @@ assert 'fxDisplayOrder' in param_cpp
 assert 'voiceVisibleParameterCount = 23' in param_h
 assert 'std::array<int, lb303::basslineCount + 2>' in (root / 'Source/PluginEditor.h').read_text(encoding='utf-8')
 assert 'return context == 2 ? "Sequencer" : "FX"' in editor
-assert 'fxDisplayGlobalIndex' in editor and 'Source/SharedEffects.cpp' in cmake
+assert 'visibleFxParameters.at' in editor and 'Source/SharedEffects.cpp' in cmake
 assert 'std::pair<float, float> BassEngine::processClassicDelay' in engine
 assert 'return { synthL, synthR };' in engine
 assert 'BassEngine classic' in fxheader
@@ -646,12 +646,12 @@ assert 'sequencerDisplayParameterCount' in (root / 'Source/PluginEditor.h').read
 assert 'fx_delay_reverb_order' in param_cpp
 assert 'fxOrderChoices' in param_cpp
 assert 'fx::effectOrder' in param_cpp
-assert 'const bool delayFirst = c[fx::effectOrder] < .5f;' in fxcpp
+assert 'const bool delayFirst = c[fx::effectOrder] < .5f;' not in fxcpp
 assert fxcpp.index('const auto [axL, axR] = distort') < fxcpp.index('const auto first = chorus (')
 assert fxcpp.index('const auto first = chorus (') < fxcpp.index('const auto delayStem = send')
 assert 'reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink' in fxcpp
-assert 'delayWet = runDelay (delayStem.first + reverbWet.first * delayLink' in fxcpp
-assert 'const float reverbLink = std::max' in fxcpp and 'const float delayLink = std::max' in fxcpp
+assert 'const auto delayWet = runDelay (delayStem.first, delayStem.second);' in fxcpp
+assert 'const float reverbLink = std::max' in fxcpp and 'const float delayLink = std::max' not in fxcpp
 assert 'std::array<Ring, basslineCount> chorusL, chorusR;' in fxheader
 assert 'const auto second = chorus (bxL * s2, bxR * s2, 1);' in fxcpp
 assert 'const float s1 = c[fx::chorusSend1] * .01f;' in fxcpp
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.10-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.11-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -684,3 +684,21 @@ sequence_declaration = re.search(
 assert sequence_declaration is not None, 'Wrong braces at end of sequencer display order / namespace'
 assert not re.search(r'\}\};\s*\}\};\s*\}', param_cpp), 'Duplicate array closure before namespace'
 print('PASS: TEST2.4.10 ParameterCatalog sequencer array and namespace closure (C2059 regression).')
+
+# TEST2.4.11 — dynamic effect columns, fixed Delay -> Reverb and stable legacy IDs.
+assert 'void LB303AudioProcessorEditor::updateFxColumns()' in editor
+assert 'void LB303AudioProcessorEditor::syncFxColumns()' in editor
+assert 'std::array<int, 6> fxColumnLengths' in (root / 'Source/PluginEditor.h').read_text()
+assert 'if (delayType == 1)' in editor and 'else' in editor
+assert 'if (enabled (lb303::fx::chorusOn))' in editor
+assert 'if (enabled (lb303::fx::distortionType))' in editor
+assert 'if (enabled (lb303::fx::distortion2Type))' in editor
+assert 'if (enabled (lb303::fx::reverbType))' in editor
+assert 'fxCellIndex (targetCol' in editor and 'fxCell (selected)' in editor
+assert 'oldIndices == visibleFxParameters' in editor
+assert 'const auto delayWet = runDelay (delayStem.first, delayStem.second);' in fxcpp
+assert 'const auto reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink' in fxcpp
+assert 'delayFirst' not in fxcpp
+assert 'fx_delay_reverb_order' in param_cpp # legacy parameter ID for old projects
+assert 'addFx (4, lb303::fx::effectOrder)' not in editor # legacy selector hidden from dynamic FX grid
+print('PASS: TEST2.4.11 six independently collapsing FX columns, Type-dependent delay, stable IDs and fixed Delay->Reverb.')

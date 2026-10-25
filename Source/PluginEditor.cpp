@@ -113,6 +113,9 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
         lastSelected[static_cast<size_t> (i)] = juce::jmax (0,
             processor.editorSession.selectedParameters[static_cast<size_t> (i)]);
     stepWidthIndex = juce::jlimit (0, 4, processor.editorSession.stepWidthIndex);
+    rememberedFxGlobal = processor.editorSession.fxSelectedGlobal;
+    rememberedFxColumn = juce::jlimit (0, 5, processor.editorSession.fxSelectedColumn);
+    updateFxColumns();
 
     parameterGrid.setTextWhenNothingSelected ("Select parameter");
     parameterGrid.setWantsKeyboardFocus (true); // ensure Grid accepts arrows immediately after preset browser
@@ -163,7 +166,7 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
     addAndMakeVisible (*presetBrowser);
     presetBrowser->setVisible (false);
     presetBrowser->onClose = [this] { focusBackFromPreset(); };
-    presetBrowser->onPresetLoaded = [this] { refreshLabels (true); selectParameter(); };
+    presetBrowser->onPresetLoaded = [this] { syncFxColumns(); refreshLabels (true); selectParameter(); };
     stepEditor = std::make_unique<SequencerStepEditor> (processor);
     addAndMakeVisible (*stepEditor);
     stepEditor->setVisible (false);
@@ -194,6 +197,8 @@ void LB303AudioProcessorEditor::rememberEditorLocation()
     lastSelected[static_cast<size_t> (context)] = selected;
     processor.editorSession.activeContext = context;
     processor.editorSession.selectedParameters = lastSelected;
+    processor.editorSession.fxSelectedGlobal = rememberedFxGlobal;
+    processor.editorSession.fxSelectedColumn = rememberedFxColumn;
 }
 
 void LB303AudioProcessorEditor::focusGained (FocusChangeType)
@@ -254,7 +259,7 @@ void LB303AudioProcessorEditor::performInitialFocusTransfer()
 size_t LB303AudioProcessorEditor::globalIndex (int local) const
 {
     if (context == static_cast<int> (lb303::fxContextIndex))
-        return lb303::fxDisplayGlobalIndex (static_cast<size_t> (local));
+        return visibleFxParameters.at (static_cast<size_t> (local));
     if (context < 2)
     {
         // Reuse the existing, automated MIDI channel ID in each voice grid,
@@ -275,13 +280,156 @@ juce::String LB303AudioProcessorEditor::contextName() const
     if (context == 1) return "Bassline 2";
     return context == 2 ? "Sequencer" : "FX";
 }
+void LB303AudioProcessorEditor::updateFxColumns()
+{
+    // The FX grid is a filtered VIEW of stable host parameters, not a second
+    // parameter layout. Do not change any AudioProcessorValueTreeState IDs.
+    visibleFxParameters.clear();
+    fxColumnLengths.fill (0);
+    const auto add = [this] (int column, size_t global)
+    {
+        visibleFxParameters.push_back (global);
+        ++fxColumnLengths[static_cast<size_t> (column)];
+    };
+    const auto addFx = [&] (int column, lb303::fx::Control which)
+    { add (column, lb303::fxParameterIndex (which)); };
+    const auto enabled = [&] (lb303::fx::Control which)
+    { return processor.value (lb303::fxParameterIndex (which)) > 0.5f; };
+
+    // Column 0: the output dry return is always available.
+    add (0, lb303::parameterIndex (0, 31)); // historical slider032, Dry Level
+    // Columns 1 and 2: independent distortion inserts.
+    addFx (1, lb303::fx::distortionType);
+    if (enabled (lb303::fx::distortionType))
+    {
+        addFx (1, lb303::fx::distortionAmount);
+        addFx (1, lb303::fx::distortionHarmonics);
+    }
+    addFx (2, lb303::fx::distortion2Type);
+    if (enabled (lb303::fx::distortion2Type))
+    {
+        addFx (2, lb303::fx::distortion2Amount);
+        addFx (2, lb303::fx::distortion2Harmonics);
+    }
+    // Column 3: chorus is absent when Off, except its On/Off control.
+    addFx (3, lb303::fx::chorusOn);
+    if (enabled (lb303::fx::chorusOn))
+    {
+        addFx (3, lb303::fx::chorusLevel);
+        addFx (3, lb303::fx::chorusRate);
+        addFx (3, lb303::fx::chorusWidth);
+        addFx (3, lb303::fx::chorusSend1);
+        addFx (3, lb303::fx::chorusSend2);
+    }
+    // Column 4: one delay, whose controls depend on its selected algorithm.
+    addFx (4, lb303::fx::delayType);
+    const int delayType = juce::jlimit (0, 2,
+        juce::roundToInt (processor.value (lb303::fxParameterIndex (lb303::fx::delayType))));
+    if (delayType != 0)
+    {
+        addFx (4, lb303::fx::delaySend1);
+        addFx (4, lb303::fx::delaySend2);
+        if (delayType == 1)
+        {
+            // Retain original (Bassline 1) Classic IDs; slider032 is Dry Level
+            // and belongs ONLY to column zero, not to the delay.
+            for (size_t local = 19; local <= 30; ++local)
+                add (4, lb303::parameterIndex (0, local));
+            add (4, lb303::parameterIndex (0, 32));
+        }
+        else
+        {
+            for (const auto which : { lb303::fx::dualTime, lb303::fx::dualSync,
+                lb303::fx::dualSpeed1, lb303::fx::dualSpeed2, lb303::fx::dualGlide,
+                lb303::fx::dualFeedback1, lb303::fx::dualFeedback2,
+                lb303::fx::dualTone1, lb303::fx::dualTone2,
+                lb303::fx::dualSpread, lb303::fx::dualDrive })
+                addFx (4, which);
+        }
+    }
+    // Column 5: reverb type picker and only the parameters of an active type.
+    addFx (5, lb303::fx::reverbType);
+    if (enabled (lb303::fx::reverbType))
+        for (const auto which : { lb303::fx::reverbSend1, lb303::fx::reverbSend2,
+             lb303::fx::reverbPredelay, lb303::fx::reverbDecay,
+             lb303::fx::reverbDamping, lb303::fx::reverbWidth,
+             lb303::fx::reverbLevel })
+            addFx (5, which);
+    // Historical fx::effectOrder deliberately absent from this view.
+}
+
+std::pair<int, int> LB303AudioProcessorEditor::fxCell (int index) const
+{
+    int first = 0;
+    for (int col = 0; col < static_cast<int> (fxColumnLengths.size()); ++col)
+    {
+        const int length = fxColumnLengths[static_cast<size_t> (col)];
+        if (index < first + length) return { col, index - first };
+        first += length;
+    }
+    return { 0, 0 };
+}
+int LB303AudioProcessorEditor::fxCellIndex (int column, int row) const
+{
+    if (! juce::isPositiveAndBelow (column, static_cast<int> (fxColumnLengths.size())))
+        return -1;
+    const int length = fxColumnLengths[static_cast<size_t> (column)];
+    if (! juce::isPositiveAndBelow (row, length)) return -1;
+    int start = 0;
+    for (int col = 0; col < column; ++col)
+        start += fxColumnLengths[static_cast<size_t> (col)];
+    return start + row;
+}
+void LB303AudioProcessorEditor::syncFxColumns()
+{
+    if (context != static_cast<int> (lb303::fxContextIndex)) return;
+    const auto oldIndices = visibleFxParameters;
+    const size_t previousGlobal = oldIndices.empty()
+        ? lb303::parameterIndex (0, 31)
+        : oldIndices[static_cast<size_t> (juce::jlimit (0, static_cast<int> (oldIndices.size()) - 1, selected))];
+    const auto oldCell = fxCell (selected);
+    updateFxColumns();
+    if (oldIndices == visibleFxParameters) return;
+
+    // Retain the same parameter when possible. When it becomes hidden (FX Off
+    // or switched Classic/Dual), keep the selection in that column's Type picker.
+    auto found = std::find (visibleFxParameters.begin(), visibleFxParameters.end(), previousGlobal);
+    int nextSelected = found != visibleFxParameters.end()
+        ? static_cast<int> (std::distance (visibleFxParameters.begin(), found))
+        : fxCellIndex (oldCell.first, 0);
+    if (nextSelected < 0) nextSelected = 0;
+    selected = nextSelected;
+    lastSelected[static_cast<size_t> (context)] = selected;
+    changingParameter = true;
+    valueAttachment.reset();
+    parameterGrid.clear (juce::dontSendNotification);
+    for (int i = 0; i < currentParameterCount(); ++i)
+        parameterGrid.addItem (labelFor (i), i + 1);
+    parameterGrid.setSelectedId (selected + 1, juce::dontSendNotification);
+    changingParameter = false;
+    selectParameter();
+    rememberEditorLocation();
+    repaint (drawnGrid);
+}
+
 void LB303AudioProcessorEditor::populateContext()
 {
     changingParameter = true;
     valueAttachment.reset();
+    if (context == static_cast<int> (lb303::fxContextIndex)) updateFxColumns();
     parameterGrid.clear (juce::dontSendNotification);
     selected = juce::jlimit (0, currentParameterCount() - 1,
                              lastSelected[static_cast<size_t> (context)]);
+    if (context == static_cast<int> (lb303::fxContextIndex))
+    {
+        // Remember by global VST parameter ID rather than a shifting display
+        // index; when hidden, return to that effect's Type/Off selector.
+        const auto found = std::find (visibleFxParameters.begin(),
+                                     visibleFxParameters.end(), rememberedFxGlobal);
+        selected = found != visibleFxParameters.end()
+            ? static_cast<int> (std::distance (visibleFxParameters.begin(), found))
+            : juce::jmax (0, fxCellIndex (rememberedFxColumn, 0));
+    }
     for (int i = 0; i < currentParameterCount(); ++i)
         parameterGrid.addItem (labelFor (i), i + 1);
     parameterGrid.setSelectedId (selected + 1, juce::dontSendNotification);
@@ -326,21 +474,29 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
     g.drawText (contextName() + " | Ctrl+Tab: Bassline 1 / Bassline 2 / Sequencer / FX", 203, 12, getWidth() - 223, 27,
                 juce::Justification::centredLeft);
 
-    const int columns = columnsFor (currentParameterCount());
-    const int cw = (drawnGrid.getWidth() - (columns - 1) * gridGap) / columns;
-    const int rh = (drawnGrid.getHeight() - (rowsPerColumn - 1) * gridGap) / rowsPerColumn;
+    const bool fxView = context == static_cast<int> (lb303::fxContextIndex);
+    const int columns = fxView ? static_cast<int> (fxColumnLengths.size())
+                               : columnsFor (currentParameterCount());
+    const int maxRows = fxView ? *std::max_element (fxColumnLengths.begin(), fxColumnLengths.end())
+                                : rowsPerColumn;
+    const int gap = fxView ? 2 : gridGap;
+    const int cw = (drawnGrid.getWidth() - (columns - 1) * gap) / columns;
+    const int rh = (drawnGrid.getHeight() - (maxRows - 1) * gap) / maxRows;
     if (cw > 0 && rh > 0)
     {
         for (int i = 0; i < currentParameterCount(); ++i)
         {
-            const auto col = i / rowsPerColumn;
-            const auto row = i % rowsPerColumn;
-            const auto bounds = juce::Rectangle<int> (drawnGrid.getX() + col * (cw + gridGap),
-                                                       drawnGrid.getY() + row * (rh + gridGap), cw, rh);
+            const auto cell = fxView ? fxCell (i)
+                                     : std::pair<int,int> { i / rowsPerColumn, i % rowsPerColumn };
+            const auto col = cell.first;
+            const auto row = cell.second;
+            const auto bounds = juce::Rectangle<int> (drawnGrid.getX() + col * (cw + gap),
+                                                       drawnGrid.getY() + row * (rh + gap), cw, rh);
             g.setColour (i == selected ? juce::Colour (0xff395775) : juce::Colour (0xff202630));
             g.fillRoundedRectangle (bounds.toFloat(), 4.0f);
             g.setColour (i == selected ? juce::Colour (0xfff0f5ff) : juce::Colour (0xffd2ddeb));
-            g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::plain)));
+            g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(),
+                fxView && maxRows > 12 ? 10.0f : 12.0f, juce::Font::plain)));
             g.drawFittedText (labelFor (i), bounds.reduced (5, 2), juce::Justification::centredLeft, 1);
         }
     }
@@ -378,16 +534,21 @@ void LB303AudioProcessorEditor::resized()
 void LB303AudioProcessorEditor::mouseDown (const juce::MouseEvent& event)
 {
     if (! drawnGrid.contains (event.getPosition())) return;
-    const int columns = columnsFor (currentParameterCount());
-    const auto cw = (drawnGrid.getWidth() - (columns - 1) * gridGap) / columns;
-    const auto rh = (drawnGrid.getHeight() - (rowsPerColumn - 1) * gridGap) / rowsPerColumn;
+    const bool fxView = context == static_cast<int> (lb303::fxContextIndex);
+    const int columns = fxView ? static_cast<int> (fxColumnLengths.size())
+                               : columnsFor (currentParameterCount());
+    const int maxRows = fxView ? *std::max_element (fxColumnLengths.begin(), fxColumnLengths.end())
+                                : rowsPerColumn;
+    const int gap = fxView ? 2 : gridGap;
+    const auto cw = (drawnGrid.getWidth() - (columns - 1) * gap) / columns;
+    const auto rh = (drawnGrid.getHeight() - (maxRows - 1) * gap) / maxRows;
     if (cw <= 0 || rh <= 0) return;
     const auto p = event.getPosition() - drawnGrid.getPosition();
-    const int col = p.x / (cw + gridGap);
-    const int row = p.y / (rh + gridGap);
-    const int index = col * rowsPerColumn + row;
-    if (col >= 0 && col < columns && row >= 0 && row < rowsPerColumn
-        && index < currentParameterCount())
+    const int col = p.x / (cw + gap);
+    const int row = p.y / (rh + gap);
+    const int index = fxView ? fxCellIndex (col, row) : col * rowsPerColumn + row;
+    if (col >= 0 && col < columns && row >= 0 && row < maxRows
+        && juce::isPositiveAndBelow (index, currentParameterCount()))
     {
         changeSelection (index);
         focusControl (Control::grid);
@@ -396,7 +557,7 @@ void LB303AudioProcessorEditor::mouseDown (const juce::MouseEvent& event)
 void LB303AudioProcessorEditor::timerCallback()
 {
     if (stepEditor != nullptr && stepEditor->isOpen()) stepEditor->refresh();
-    else refreshLabels();
+    else { syncFxColumns(); refreshLabels(); }
 }
 void LB303AudioProcessorEditor::refreshLabels (bool force)
 {
@@ -431,6 +592,11 @@ void LB303AudioProcessorEditor::selectParameter()
     if (! juce::isPositiveAndBelow (chosen, currentParameterCount())) return;
     selected = chosen;
     lastSelected[static_cast<size_t> (context)] = chosen;
+    if (context == static_cast<int> (lb303::fxContextIndex))
+    {
+        rememberedFxGlobal = visibleFxParameters[static_cast<size_t> (chosen)];
+        rememberedFxColumn = fxCell (chosen).first;
+    }
     rememberEditorLocation();
     changingParameter = true;
     valueAttachment.reset();
@@ -453,6 +619,21 @@ void LB303AudioProcessorEditor::selectParameter()
 }
 void LB303AudioProcessorEditor::moveInGrid (int row, int column)
 {
+    if (context == static_cast<int> (lb303::fxContextIndex))
+    {
+        const auto cell = fxCell (selected);
+        const int targetCol = cell.first + column;
+        if (! juce::isPositiveAndBelow (targetCol, static_cast<int> (fxColumnLengths.size())))
+            return; // silent edge
+        const int desiredRow = cell.second + row;
+        if (column == 0 && ! juce::isPositiveAndBelow (
+                                  desiredRow, fxColumnLengths[static_cast<size_t> (targetCol)]))
+            return; // silent bottom/top of this effect's column
+        const int target = fxCellIndex (targetCol, column == 0 ? desiredRow
+            : juce::jmin (cell.second, fxColumnLengths[static_cast<size_t> (targetCol)] - 1));
+        if (target >= 0) changeSelection (target);
+        return;
+    }
     const auto r = selected % rowsPerColumn;
     const auto target = selected + row + column * rowsPerColumn;
     if (row < 0 && r == 0) return;
@@ -474,6 +655,10 @@ void LB303AudioProcessorEditor::setValue (float value)
         param->endChangeGesture();
         refreshLabels (true);
         announceSelectedValueChanged();
+        if (context == static_cast<int> (lb303::fxContextIndex))
+            juce::Timer::callAfterDelay (1,
+                [safe = juce::Component::SafePointer<LB303AudioProcessorEditor> (this)]
+                { if (safe != nullptr) safe->syncFxColumns(); });
     }
 }
 void LB303AudioProcessorEditor::announceSelectedValueChanged()
@@ -863,6 +1048,22 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
     { changeSelection (currentParameterCount() - 1); return true; }
     if (! mods.isCtrlDown() && ! mods.isCommandDown())
     {
+        if (context == static_cast<int> (lb303::fxContextIndex))
+        {
+            const auto cell = fxCell (selected);
+            const int count = fxColumnLengths[static_cast<size_t> (cell.first)];
+            if (code == juce::KeyPress::homeKey)
+            { const int pos = fxCellIndex (cell.first, 0); if (pos >= 0) changeSelection (pos); return true; }
+            if (code == juce::KeyPress::endKey)
+            { const int pos = fxCellIndex (cell.first, count - 1); if (pos >= 0) changeSelection (pos); return true; }
+            if (code == juce::KeyPress::pageUpKey || code == juce::KeyPress::pageDownKey)
+            {
+                const int offset = code == juce::KeyPress::pageUpKey ? -5 : 5;
+                const int pos = fxCellIndex (cell.first, juce::jlimit (0, count - 1, cell.second + offset));
+                if (pos >= 0) changeSelection (pos);
+                return true;
+            }
+        }
         if (code == juce::KeyPress::upKey) { moveInGrid (-1, 0); return true; }
         if (code == juce::KeyPress::downKey) { moveInGrid (1, 0); return true; }
         if (code == juce::KeyPress::leftKey) { moveInGrid (0, -1); return true; }
