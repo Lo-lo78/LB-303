@@ -1,4 +1,19 @@
-# LB-303 0.0.2 — TEST2.4.8 (versione corrente)
+# LB-303 0.0.2 — TEST2.4.10 (correzione build Windows)
+
+La TEST2.4.9 falliva in GitHub Actions con errori C2059/C2143
+nel file `Source/ParameterCatalog.cpp` a partire dalla riga 79: la
+definizione di `seqDisplayOrder` era seguita da una seconda chiusura `}};`
+non valida prima della chiusura del namespace anonimo. La TEST2.4.10
+la elimina e aggiunge un controllo di regressione specifico. Nessun
+parametro, ID VST3, routing DSP, comportamento MIDI, accessibilità o
+formato preset `.lb` è stato alterato.
+
+I controlli statici sono passati. Compilazione reale e funzionamento
+in REAPER devono ancora essere verificati su GitHub Actions.
+
+---
+
+# LB-303 0.0.2 — TEST2.4.8 (cronologia)
 
 ## Dry Level: controllo diretto globale
 

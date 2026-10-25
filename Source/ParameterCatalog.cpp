@@ -75,7 +75,6 @@ constexpr std::array<size_t, sequencerDisplayParameterCount> seqDisplayOrder {{
     perfRelative (1, seqPerformance::octaveShift), perfRelative (1, seqPerformance::semitoneShift),
     4
 }};
-}};
 }
 
 const std::array<ParameterInfo, parameterCount>& catalog()

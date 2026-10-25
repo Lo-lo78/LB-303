@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.9-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.10-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -672,5 +672,15 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.9-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.10-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
+
+# TEST2.4.10: guard against the stray second `}};` that broke MSVC
+# parsing at ParameterCatalog.cpp:79 in the TEST2.4.9 GitHub Actions log.
+# The namespace must close with just `}` after seqDisplayOrder.
+sequence_declaration = re.search(
+    r'constexpr std::array<size_t, sequencerDisplayParameterCount> seqDisplayOrder\s*\{\{(.*?)\}\};\s*\}\s*const std::array<ParameterInfo, parameterCount>& catalog\(\)',
+    param_cpp, re.S)
+assert sequence_declaration is not None, 'Wrong braces at end of sequencer display order / namespace'
+assert not re.search(r'\}\};\s*\}\};\s*\}', param_cpp), 'Duplicate array closure before namespace'
+print('PASS: TEST2.4.10 ParameterCatalog sequencer array and namespace closure (C2059 regression).')
