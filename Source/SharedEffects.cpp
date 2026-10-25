@@ -317,7 +317,10 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
     wetL *= .23f; wetR *= .23f;
     const float width = c[fx::reverbWidth]*.01f;
     const float middle = .5f*(wetL+wetR), side = .5f*(wetL-wetR)*width;
-    const float level = c[fx::reverbLevel]*.01f;
+    // TEST2.4.6: double ONLY the stereo wet return gain. Existing 100% now
+    // corresponds to the new 50%, with up to 200% of the previous return at
+    // 100%. No changes to decay, predelay, feedback, dry mix or other FX.
+    const float level = c[fx::reverbLevel]*.02f;
     return { bounded ((middle+side)*level), bounded ((middle-side)*level) };
 }
 std::pair<float, float> SharedEffects::process (float aL, float aR, float bL, float bR) noexcept

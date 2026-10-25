@@ -237,13 +237,16 @@ void LB303AudioProcessorEditor::performInitialFocusTransfer()
 
     initialFocusTransferAttempts = 0;
     parameterGrid.hidePopup();
+    // Match Alt+L and LJuno exactly: let NVDA read the NATIVE ComboBox
+    // focus event (page, Grid, control role, selected parameter/value,
+    // collapsed state, shortcut). A manual notification with only
+    // labelFor(selected) takes priority and hides the entry context.
+    // Normal arrow navigation keeps the concise item/value announcement.
     parameterGrid.setEntryAccessibility();
+    juce::AccessibilityHandler::clearCurrentlyFocusedHandler();
     parameterGrid.grabKeyboardFocus();
     if (parameterGrid.hasKeyboardFocus (false))
-    {
         handler->grabFocus();
-        lb303::announceToActiveScreenReader (parameterGrid, labelFor (selected));
-    }
     else if (++initialFocusTransferAttempts < 8)
         scheduleInitialFocusTransfer();
 }

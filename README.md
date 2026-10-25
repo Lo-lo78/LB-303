@@ -1,4 +1,4 @@
-# LB-303 0.0.2 — TEST2.4.5 (versione corrente)
+# LB-303 0.0.2 — TEST2.4.6 (versione corrente)
 
 La navigazione viene ricordata **solo nell'istanza VST attualmente in uso**.
 Chiudere e riaprire la finestra mantiene griglia, parametro e pagina del
@@ -8,6 +8,25 @@ questa regola. I suoni, gli effetti, i pattern e i preset `.lb` si salvano
 normalmente. Vedi la sezione TEST2.4.5 in fondo al documento.
 
 Le sezioni precedenti restano come cronologia dello sviluppo.
+
+## TEST2.4.6 — Grid all'ingresso e Reverb Level x2
+
+- **Ingresso nel plugin (NVDA/OSARA):** quando REAPER passa veramente il
+  focus all'editor, LB-303 usa l'evento di focus nativo della ComboBox, **come
+  Alt+L**, così NVDA può annunciare il contesto completo: ad esempio
+  «Bassline 2. Grid, casella combinata, Waveform, Square, non espanso, Alt+L».
+  Tolta la notifica manuale «solo parametro/valore» che copriva l'evento
+  nativo. La normale navigazione con le frecce mantiene gli annunci concisi.
+  Non viene catturato il focus dalla FX Chain alla semplice creazione.
+- **Riverbero:** soltanto il gain del ritorno wet è moltiplicato per 2, dopo
+  la rete FDN. Il nuovo Reverb Level 50% equivale al vecchio 100%; il nuovo
+  100% equivale al vecchio 200%. Restano identici la scala UI 0–100, gli ID,
+  i send, il dry e gli altri effetti. Attenzione a un possibile aumento dei
+  picchi/clip se il riverbero viene spinto al massimo.
+- I preset `.lb`, i pattern, i lock, la navigazione per istanza e gli ID VST3
+  non sono modificati. Come sempre, **solo test statici**, build su GitHub
+  Actions e ascolto da verificare con REAPER/NVDA.
+
 
 
 ## TEST2.4.4 — First Grid focus, remembered contexts and Reverb Predelay smoothing

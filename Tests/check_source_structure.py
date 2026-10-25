@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.5-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.6-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -582,3 +582,26 @@ state_loader = processor.split('void LB303AudioProcessor::setStateInformation ('
 assert 'editorSession' not in state_loader
 assert 'auto restored = juce::ValueTree::fromXml (*xml);' in state_loader
 print('PASS: TEST2.4.5 old projects cannot overwrite the live editor position.')
+
+# TEST2.4.6 — complete native Grid speech on FIRST host entry, as Alt+L.
+# No short UIA notification may mask JUCE's full combo-box focus context.
+entry = editor.split('void LB303AudioProcessorEditor::performInitialFocusTransfer()', 1)[1]\
+             .split('size_t LB303AudioProcessorEditor::globalIndex', 1)[0]
+assert 'parameterGrid.setEntryAccessibility();' in entry
+assert 'juce::AccessibilityHandler::clearCurrentlyFocusedHandler();' in entry
+assert entry.index('parameterGrid.setEntryAccessibility();') < entry.index('parameterGrid.grabKeyboardFocus();')
+assert 'handler->grabFocus();' in entry
+assert 'announceToActiveScreenReader (parameterGrid, labelFor (selected))' not in entry
+assert 'setTitle (editor.contextName() + ". Grid");' in editor
+assert 'setDescription ("Alt+L");' in editor
+assert 'if (letter (\'l\')) { focusControl (Control::grid,' in editor
+# DSP gain is post-FDN and acts exclusively on the wet return, with no
+# parameter range/IDs or preset serialization modifications.
+reverb = fxcpp.split('std::pair<float, float> SharedEffects::reverb (', 1)[1]\
+               .split('std::pair<float, float> SharedEffects::process (', 1)[0]
+assert 'const float level = c[fx::reverbLevel]*.02f;' in reverb
+assert 'return { bounded ((middle+side)*level), bounded ((middle-side)*level) };' in reverb
+assert '"fx_reverb_level"' in param_cpp
+assert '"Reverb Level", 0, 100, 1, 50' in param_cpp
+assert 'fx::reverbSend1' in fxcpp and 'fx::reverbSend2' in fxcpp
+print('PASS: TEST2.4.6 full Grid entrance announcement and double reverb wet only (static).')
