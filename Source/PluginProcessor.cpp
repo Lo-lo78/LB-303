@@ -371,6 +371,26 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             }
         }
         engines[voice].setLfoParameters (voiceLfo);
+        lb303::BassEngine::Osc2Values layerValues {};
+        for (size_t control = 0; control < layerValues.size(); ++control)
+            layerValues[control] = value (lb303::osc2ParameterIndex (voice, control));
+        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] == currentPattern (voice))
+        {
+            const auto step = sequenceBanks[voice].getStep (
+                activeLockPattern[voice], activeLockStep[voice]);
+            for (int i = 0; i < step.parameterLockCount; ++i)
+            {
+                const auto& lock = step.parameterLocks[static_cast<size_t> (i)];
+                const int control = lock.sliderNumber - 1 - static_cast<int> (lb303::osc2LocalBase);
+                if (! juce::isPositiveAndBelow (control, static_cast<int> (layerValues.size()))
+                    || ! std::isfinite (lock.value)) continue;
+                const auto& info = lb303::catalog()[lb303::osc2ParameterIndex (
+                    voice, static_cast<size_t> (control))];
+                layerValues[static_cast<size_t> (control)] =
+                    juce::jlimit (info.minimum, info.maximum, lock.value);
+            }
+        }
+        engines[voice].setOsc2Parameters (layerValues);
         // The historical Level ID remains loadable for old sessions but no
         // longer changes gain: slider008 Volume is the sole bassline level.
         const auto level = 1.0f;

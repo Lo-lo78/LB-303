@@ -1,3 +1,20 @@
+# LB-303 0.0.2 — TEST2.4.20
+
+This test adds a second oscillator to **each** bassline. Apply the patch to TEST2.4.18, or use the complete repository source archive. GitHub Actions builds the Windows VST3; the source is **not** locally compiled or audio-tested.
+
+### New parameters
+
+- **Osc 2 Volume** (0–100%, default 0%, `b1_osc2_volume` / `b2_osc2_volume`).
+- **Osc 2 Detune** (−100 to +100 **cents**, default +10 cents, `b1_osc2_detune` / `b2_osc2_detune`).
+
+The extra oscillator follows the same MIDI note, pitch glide, LFO pitch, Waveform (Saw/Square), PWM, accent, amplitude envelope and filter as the primary oscillator. Its phase is aligned at the start of a non-legato note; it then runs at the slightly detuned frequency to produce beats. Detune = 0 means unison. Both signals are combined **before the shared voice filter**. Osc 2 volume and detune have click-reducing ramps. At volume 0% the original oscillator waveform is unmodified. Note that high levels may increase resonance saturation or output level.
+
+The 4 new VST3 parameter IDs are appended after all existing parameters: legacy project automation and old lock slot numbers remain stable. New per-step lock slots are local 54 and 55. New controls are next to Waveform in the Bassline 1 / Bassline 2 Grid and page-7 parameter picker. Presets `.lb` and REAPER projects capture both per-bassline values. The classic PWM Rate and the dedicated LFO per bassline remain unchanged.
+
+Other features — 16 independent patterns per bassline, Alt+P/Space preview, four stereo output buses, and dynamic FX columns — remain intact.
+
+---
+
 # LB-303 0.0.2 — TEST2.4.16
 
 ## What's new
@@ -893,3 +910,13 @@ e confermare sul campo in REAPER/NVDA.
 Outputs have independent roles: **Master 1/2** = complete LB-303 mix, **Bassline 1 3/4** = distorted Bassline 1 dry stem (when Separate Output enabled), **Bassline 2 5/6** = distorted Bassline 2 dry stem (when enabled), **FX Wet 7/8** = chorus + delay + reverb only. Existing per-bassline output parameters remain unchanged and default to Off. The full master includes both direct voices and a single shared FX return even when stem outputs are enabled. The stems are parallel taps, not additional dry signals written into the master. Master FX Dry Level controls only the main direct signal and does not attenuate stems; FX wet 7/8 contains no dry signal.
 
 REAPER setup: increase track channel count to eight and open the VST3 pin connector to assign four distinct stereo output pairs. **Do not listen to Master 1/2 and the stem tracks summed together.** Master already includes those sounds. If you want to mix basslines and FX independently, monitor stems 3/4 + 5/6 + wet 7/8, and mute the master monitor. This is an unavoidable distinction between the requested full-mix master and isolated stems. No existing VST3 parameter ID, preset format, sequence, FX algorithm or keyboard shortcut is changed in this update.
+
+
+### TEST2.4.20 — Ctrl+A selects the focused 16-step block
+
+In Alt+Q, **Ctrl+A** selects only the 16 steps mapped to the computer
+keyboard on the current page (for example 33–48), not all 128 steps.
+Any older selection is replaced. If Start/End intersects only part of the
+block, only its active steps are selected; NVDA announces the count and
+first/last step. Ctrl+C/X/V still operate on selected individual steps,
+Ctrl+Shift+C/X/V on the current pattern. The shortcut changes no preset data.

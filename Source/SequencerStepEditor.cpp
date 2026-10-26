@@ -26,7 +26,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
+    setDescription ("Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -163,7 +163,7 @@ void SequencerStepEditor::refresh()
          << "  Step " << coarseSteps[static_cast<size_t> (valueStepIndex)]
          << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Tab: active blocks"
          << "\nZ/X: Start Step -/+  |  C/V: End Step -/+"
-         << "\nCtrl+C/V/X: steps  |  Ctrl+Shift+C/X/V: current pattern only"
+         << "\nCtrl+A: select visible 16 steps  |  Ctrl+C/V/X: steps  |  Ctrl+Shift+C/X/V: current pattern only"
          << "  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
          << "\nAlt+P: Space target (" << (processor.spaceControlsSequencerPreview() ? "Preview" : "REAPER")
          << ")  |  Space: " << (processor.spaceControlsSequencerPreview() ? "play/stop both basslines" : "REAPER play/stop")
@@ -208,6 +208,26 @@ void SequencerStepEditor::selectStep (int inBlock)
     refresh();
     announceCurrent();
 }
+void SequencerStepEditor::selectVisibleSteps()
+{
+    // The computer keyboard contains exactly one 16-step block (Q..I/A..K).
+    // Ctrl+A REPLACES any older selection, including on a different block.
+    // Never select steps that are outside this pattern's active Start/End range.
+    const auto [firstActive, lastActive] = activeStepBounds();
+    const int first = juce::jmax (firstActive, (currentStep / 16) * 16);
+    const int last = juce::jmin (lastActive, (currentStep / 16) * 16 + 15);
+    selectedSteps.fill (false);
+    for (int step = first; step <= last; ++step)
+        selectedSteps[static_cast<size_t> (step)] = true;
+    lastStepKey = -1; // Next physical press cannot accidentally toggle selection.
+    lastRevision = 0;
+    lastPattern = -1;
+    refresh();
+    const int count = juce::jmax (0, last - first + 1);
+    announce (juce::String (count) + " steps selected, "
+              + juce::String (first + 1) + " to " + juce::String (last + 1));
+}
+
 void SequencerStepEditor::changeBlock (int direction)
 {
     const auto [firstActive, lastActive] = activeStepBounds();
@@ -853,6 +873,9 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
     // so focus cannot escape to REAPER or the underlying parameter grids.
     if (mods.isCtrlDown())
     {
+        if (! mods.isAltDown() && ! mods.isShiftDown()
+            && (letter ('a') || code == 'a' || key.getTextCharacter() == 1))
+        { selectVisibleSteps(); return true; }
         if (code == juce::KeyPress::upKey) { changePattern (1); return true; }
         if (code == juce::KeyPress::downKey) { changePattern (-1); return true; }
         if (letter ('c')) { copySteps (false); return true; }

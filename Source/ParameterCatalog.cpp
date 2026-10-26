@@ -30,7 +30,7 @@ constexpr const char* midiChannelChoices[] = { "Omni", "1", "2", "3", "4", "5", 
 // Group tone, envelopes and response; delay is accessible only in shared FX.
 constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder {{
     // No duplicate Level: the original synth Volume slider007 now leads each grid.
-    7, 0, 36, 8, 9, 10, 14, 1,
+    7, 0, 53, 54, 36, 8, 9, 10, 14, 1,
     2, 3, 4, 5, 6, 15, 16, 17,
     18, 33, 34, 11, 12, 13,
     // Each bassline owns its own LFO, stored as virtual local lock slots 38..53.
@@ -254,6 +254,16 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             0, 1, 1, 0, "", output1Choices, 2 };
         result[separateOutputIndex (1)] = { "b2_separate_output", "Separate Output",
             0, 1, 1, 0, "", output2Choices, 2 };
+        // OSC 2 shares the first oscillator's waveform, gate, filter and envelope.
+        // Detune is in cents; +10 cents is ready when OSC 2 Volume is raised.
+        for (size_t lane = 0; lane < basslineCount; ++lane)
+        {
+            const auto prefix = lane == 0 ? "b1_osc2_" : "b2_osc2_";
+            result[osc2ParameterIndex (lane, osc2::volume)] = {
+                juce::String (prefix) + "volume", "Osc 2 Volume", 0, 100, 1, 0, "%" };
+            result[osc2ParameterIndex (lane, osc2::detune)] = {
+                juce::String (prefix) + "detune", "Osc 2 Detune", -100, 100, 1, 10, "cents" };
+        }
         return result;
     }();
     return values;
@@ -298,7 +308,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         const auto& p = catalog()[index];
         // Distinguish automated parameters in REAPER's global FX parameter list,
         // without adding redundant prefixes to the accessible per-bassline grids.
-        const auto hostName = index >= separateOutputBase
+        const auto hostName = index >= osc2ParameterBase
+            ? ("Bassline " + juce::String (1 + (index - osc2ParameterBase) / osc2ParameterCount)
+               + " - " + p.name)
+            : index >= separateOutputBase
             ? ("Bassline " + juce::String (1 + index - separateOutputBase) + " - " + p.name)
             : index >= lfoParameterBase
             ? ("Bassline " + juce::String (1 + (index - lfoParameterBase) / lfoParameterCount)

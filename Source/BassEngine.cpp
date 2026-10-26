@@ -148,7 +148,8 @@ void BassEngine::prepare (double sampleRate)
 
 void BassEngine::reset()
 {
-    freq = targetFreq = phase = pwmPhase = 0;
+    freq = targetFreq = phase = pwmPhase = osc2Phase = osc2GainSmooth = 0;
+    osc2DetuneSmooth = 10;
     lfo = {};
     envelope = lpgMemory = accentEnvelope = velNorm = 0;
     envelopeStage = 3;
@@ -201,6 +202,10 @@ void BassEngine::midi (const juce::MidiMessage& message)
             lfo.delayEnvelope = 0.0;
             lfo.previousPhase = 1.0;
         }
+        // Align the layer at the start of a new non-legato note. The second
+        // oscillator then runs freely at its detuned rate for audible beating;
+        // it has no independent MIDI voice, envelope or waveform selector.
+        if (! noteActive) osc2Phase = phase;
         targetFreq = 440.0 * std::pow (2.0, (message.getNoteNumber() - 69.0) / 12.0);
         const auto velocity = message.getVelocity();
         velNorm = std::pow (velocity / 127.0, 0.6);
@@ -307,16 +312,34 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
         pwmPhase -= std::floor (pwmPhase);
         pwmLfo = pwmPhase < 0.5 ? pwmPhase * 4.0 - 1.0 : 3.0 - pwmPhase * 4.0;
     }
-    const auto saw1 = (2.0*phase - 1.0)*0.5 - polyblep (phase, dt);
-    double osc = saw1;
-    if (p[0] > 0.5f)
+    // Shared Saw/Square selection and PWM: no separate waveform controls
+    // or independent filter/envelopes for the detuned layer.
+    const auto duty = clamp (0.5 + pwmLfo*p[12], 0.01, 0.99);
+    const auto waveform = [this, duty] (double currentPhase, double increment)
     {
-        const auto duty = clamp (0.5 + pwmLfo*p[12], 0.01, 0.99);
-        auto t2 = phase + 1.0 - duty;
-        t2 -= std::floor (t2);
-        const auto saw2 = 2.0*t2 - 1.0 - polyblep (t2, dt);
-        osc = 0.4 * (saw1 - saw2);
-    }
+        const auto saw = (2.0*currentPhase - 1.0)*0.5 - polyblep (currentPhase, increment);
+        if (p[0] <= 0.5f) return saw;
+        auto offsetPhase = currentPhase + 1.0 - duty;
+        offsetPhase -= std::floor (offsetPhase);
+        const auto otherSaw = 2.0*offsetPhase - 1.0 - polyblep (offsetPhase, increment);
+        return 0.4 * (saw - otherSaw);
+    };
+    const double primary = waveform (phase, dt);
+    // 5 ms gain ramp and 10 ms pitch ramp avoid abrupt automation/lock steps.
+    const auto gainCoeff = std::min (1.0, 1.0 / (0.005 * fs));
+    const auto tuneCoeff = std::min (1.0, 1.0 / (0.010 * fs));
+    osc2GainSmooth += (clamp (osc2Parameters[osc2::volume], 0.0, 100.0) * .01
+                       - osc2GainSmooth) * gainCoeff;
+    osc2DetuneSmooth += (clamp (osc2Parameters[osc2::detune], -100.0, 100.0)
+                         - osc2DetuneSmooth) * tuneCoeff;
+    // +/-100 cents = +/-1 semitone; do NOT quantize to MIDI semitones.
+    const double secondaryDt = clamp (dt * std::pow (2.0, osc2DetuneSmooth / 1200.0),
+                                      0.000001, 0.49);
+    osc2Phase += secondaryDt;
+    if (osc2Phase >= 1.0) osc2Phase -= 1.0;
+    // Both oscillators feed the SAME filter/envelope. Volume=0 reproduces the
+    // original single-oscillator DSP exactly, including its original gain.
+    const double osc = primary + osc2GainSmooth * waveform (osc2Phase, secondaryDt);
 
     const double transient = p[18] < 0.5f ? 0.7 : p[18] > 1.5f ? 1.6 : 1.0;
     const double decayMult = accent ? 1.8 : 1.0;

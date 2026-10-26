@@ -18,6 +18,8 @@ public:
     void setParameters (const Values& values, double bpm);
     using LfoValues = std::array<float, lfoParameterCount>;
     void setLfoParameters (const LfoValues& values) noexcept { lfoParameters = values; }
+    using Osc2Values = std::array<float, osc2ParameterCount>;
+    void setOsc2Parameters (const Osc2Values& values) noexcept { osc2Parameters = values; }
     void midi (const juce::MidiMessage& event);
     void releaseNote() noexcept; // stop a direct note when switching to sequencer mode
     std::pair<float, float> tick (float inputL, float inputR);
@@ -55,6 +57,7 @@ private:
     double fs = 44100.0, tempo = 120.0;
     Values p {};
     LfoValues lfoParameters {};
+    Osc2Values osc2Parameters {};
     struct LfoState
     {
         double phase = 0.0, shotPosition = 0.0;
@@ -64,6 +67,7 @@ private:
     } lfo;
     double nextLfoSample() noexcept;
     double freq = 0, targetFreq = 0, phase = 0, pwmPhase = 0;
+    double osc2Phase = 0, osc2GainSmooth = 0, osc2DetuneSmooth = 10;
     double envelope = 0, velNorm = 1, accentEnvelope = 0, lpgMemory = 0;
     double stage3 = 0, stage4 = 0;
     int envelopeStage = 3, lastNote = -1;

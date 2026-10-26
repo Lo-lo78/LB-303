@@ -64,6 +64,7 @@ private:
     void announce (const juce::String&);
     void announceCurrent();
     void selectStep (int inBlock);
+    void selectVisibleSteps();
     std::pair<int, int> activeStepBounds() const;
     void changeBlock (int direction);
     void changeActiveRange (bool editStart, int direction);

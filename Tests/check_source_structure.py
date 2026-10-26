@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.18-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.20-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -359,7 +359,7 @@ mapsrc = param_cpp
 match = re.search(r'constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder\s*\{\{([^}]+)\}\}', param_cpp)
 assert match
 voice_order = [int(n) for n in re.findall(r'\b\d+\b', re.sub(r'//[^\n]*', '', match.group(1)))]
-assert len(voice_order) == 38 and len(set(voice_order)) == 38
+assert len(voice_order) == 40 and len(set(voice_order)) == 40
 assert voice_order[:2] == [7, 0] # Volume before Waveform; historic Level is hidden
 assert 'sequencerDisplayParameterCount> seqDisplayOrder' in param_cpp
 assert 'midiChannel1Index = audioParameterCount + 5' in param_h
@@ -419,7 +419,7 @@ assert 'fxParameterCount = 35' in param_h
 assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount' in param_h
 assert 'legacyParameterCount = audioParameterCount + sequencerParameterCount' in param_h
 assert 'fxDisplayOrder' in param_cpp
-assert 'voiceVisibleParameterCount = 22 + lfoParameterCount' in param_h
+assert 'voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount' in param_h
 assert 'std::array<int, lb303::basslineCount + 2>' in (root / 'Source/PluginEditor.h').read_text(encoding='utf-8')
 assert 'return context == 2 ? "Sequencer" : "FX"' in editor
 assert 'visibleFxParameters.at' in editor and 'Source/SharedEffects.cpp' in cmake
@@ -493,7 +493,7 @@ print('PASS: TEST2.4.1 Value Home/End, two isolated distortions before shared se
 # TEST2.4.2: single parameter ID for channel in each sequencer/voice view,
 # persistent focus return from preset browsing, and full reset of 32 patterns.
 assert 'voiceGridParameterCount = voiceVisibleParameterCount + 2' in param_h
-assert 'voiceMidiDisplayIndex = 3' in param_h
+assert 'voiceMidiDisplayIndex = 5' in param_h
 assert 'midiChannel1Index : lb303::midiChannel2Index' in editor
 assert 'voiceGridParameterCount' in (root / 'Source/PluginEditor.h').read_text(encoding='utf-8')
 assert 'presetReturnContext = context;' in editor and 'presetReturnParameter = selected;' in editor
@@ -658,7 +658,7 @@ assert 'const float s1 = c[fx::chorusSend1] * .01f;' in fxcpp
 assert 'std::pair<float, float> chorus (float, float, size_t voice)' in fxheader
 assert 'fxParameterIndex (fx::effectOrder)' in param_cpp
 assert '31, // Dry Level' in param_cpp
-assert '7, 0, 36,' in param_cpp  # Volume, Waveform, Pan; no duplicated Level
+assert '7, 0, 53, 54, 36,' in param_cpp  # Volume, Waveform, Pan; no duplicated Level
 for idstub in ('bpm_division','shuffle','legato','skip_probability','note_random',
                'velocity_random','length_random','repeat_random','octave_shift','semitone_shift'):
     assert f'"{idstub}"' in param_cpp, idstub
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.18-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.20-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -705,10 +705,10 @@ print('PASS: TEST2.4.11 six independently collapsing FX columns, Type-dependent 
 
 # TEST2.4.12 — two fully independent LJuno-derived LFOs, no duplicate Level.
 assert 'lfoParameterBase = sequencerPerformanceBase + sequencerPerformanceCount' in param_h
-assert 'parameterCount = separateOutputBase + basslineCount' in param_h
-assert 'constexpr size_t voiceLocalParameterCount = voiceParameterCount + lfoParameterCount' in param_h
-assert 'constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount' in param_h
-assert len(voice_order) == 38 and voice_order[0] == 7 and 35 not in voice_order
+assert 'parameterCount = osc2ParameterBase + basslineCount * osc2ParameterCount' in param_h
+assert 'constexpr size_t voiceLocalParameterCount = osc2LocalBase + osc2ParameterCount' in param_h
+assert 'constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount' in param_h
+assert len(voice_order) == 40 and voice_order[0] == 7 and 35 not in voice_order
 assert voice_order[-16:] == list(range(37, 53))
 assert '"Legacy Level (unused)"' in param_cpp
 for suffix in ('mode','rate','bpm_sync','wave','square_pwm','delay','phase','upper_squash',
@@ -824,7 +824,7 @@ assert 'b2L[nextSample] += fx.dry[1].first;' in processor
 assert 'const float mainDry = sharedFx.dryLevel();' in processor
 assert 'mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first' in processor
 assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
-assert 'LB-303-0.0.2-TEST2.4.18-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.20-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.16 browser NVDA names + existing preview + 4 stereo buses + separate distortion stems + stable IDs (static).')
 
 # TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
@@ -856,3 +856,44 @@ assert 'toB2 ? 0.0f' not in processor
 assert '.withOutput ("FX Wet 7/8", juce::AudioChannelSet::stereo(), true)' in processor
 assert 'std::pair<float, float> wet; // Shared chorus' in (root/'Source/SharedEffects.h').read_text()
 print('PASS: TEST2.4.18 four stereo buses: full master, two optional distortion stems, isolated wet FX; no audio-input passthrough.')
+
+# TEST2.4.19 — shared-waveform detuned OSC 2 per bassline, appended stable IDs.
+assert 'osc2ParameterBase = separateOutputBase + basslineCount' in param_h
+assert 'parameterCount = osc2ParameterBase + basslineCount * osc2ParameterCount' in param_h
+assert 'voiceLocalParameterCount = osc2LocalBase + osc2ParameterCount' in param_h
+assert 'voiceMidiDisplayIndex = 5' in param_h
+assert 'voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount' in param_h
+assert voice_order[:5] == [7, 0, 53, 54, 36]
+assert voice_order[-16:] == list(range(37, 53))
+assert 'result[osc2ParameterIndex (lane, osc2::volume)]' in param_cpp
+assert 'result[osc2ParameterIndex (lane, osc2::detune)]' in param_cpp
+assert '"Osc 2 Volume", 0, 100, 1, 0, "%"' in param_cpp
+assert '"Osc 2 Detune", -100, 100, 1, 10, "cents"' in param_cpp
+assert '"b1_osc2_" : "b2_osc2_"' in param_cpp
+assert 'local < osc2LocalBase ? lfoParameterIndex' in param_h
+engine_h = (root / 'Source/BassEngine.h').read_text(encoding='utf-8')
+assert 'using Osc2Values = std::array<float, osc2ParameterCount>;' in engine_h
+assert 'double osc2Phase = 0' in engine_h
+assert 'if (! noteActive) osc2Phase = phase;' in engine
+assert 'const double secondaryDt = clamp (dt * std::pow (2.0, osc2DetuneSmooth / 1200.0)' in engine
+assert 'const double osc = primary + osc2GainSmooth * waveform (osc2Phase, secondaryDt);' in engine
+assert 'setOsc2Parameters (layerValues)' in processor
+assert 'lock.sliderNumber - 1 - static_cast<int> (lb303::osc2LocalBase)' in processor
+assert 'voiceParameterGlobalIndex' in step
+assert 'LB-303-0.0.2-TEST2.4.20-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+print('PASS: TEST2.4.19 two independent second oscillators, shared waveform/voice envelopes, cents detune, stable APVTS and lock slots.')
+
+# TEST2.4.20 — Ctrl+A selects only focused and active keyboard steps.
+assert 'void selectVisibleSteps();' in (root / 'Source/SequencerStepEditor.h').read_text()
+select_visible = step.split('void SequencerStepEditor::selectVisibleSteps()', 1)[1].split('void SequencerStepEditor::changeBlock', 1)[0]
+assert '(currentStep / 16) * 16' in select_visible
+assert '(currentStep / 16) * 16 + 15' in select_visible
+assert 'activeStepBounds()' in select_visible
+assert 'selectedSteps.fill (false);' in select_visible
+assert 'for (int step = first; step <= last; ++step)' in select_visible
+assert 'selectedSteps[static_cast<size_t> (step)] = true;' in select_visible
+assert 'lastStepKey = -1;' in select_visible
+assert 'steps selected' in select_visible
+assert "key.getTextCharacter() == 1" in step
+assert 'selectVisibleSteps(); return true;' in step
+print('PASS: TEST2.4.20 Ctrl+A selects only the focused 16 keys intersected with Start/End.')
