@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.20-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.21-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -298,8 +298,10 @@ assert 'engines[lane].releaseNote();' in processor
 assert 'void BassEngine::releaseNote() noexcept' in (root / 'Source/BassEngine.cpp').read_text()
 assert 'const std::array<double, 2>& triggerOrigins' in playback
 assert 'const double lanePpq = ppq - triggerOrigins[' in playback
-assert 'if (! playing) ppq = activePreview ? previewPpq : fallbackPpq;' in processor
-assert 'engineMidi.addEvents (generated, 0, segmentLength, beginSample);' in processor
+assert 'if (activePreview) ppq = previewPpq;' in processor
+assert 'else if (! playing) ppq = fallbackPpq;' in processor
+assert 'engineMidi.addEvents (generated, 0, segmentLength, cursor);' in processor
+# TEST2.4.21: generation may split a MIDI segment at Song boundaries.
 print('PASS: TEST2.2.8 Off = direct MIDI, On = MIDI-triggered sequencer, no double notes, independent lanes.')
 
 # TEST2.2.9 — LJuno-style keyboard transposition, two independent lanes.
@@ -328,7 +330,7 @@ assert 'struct StepEvent' in playback_h
 assert 'maximumStepEvents = 2048' in playback_h
 assert 'const int stepIndex = start + stepInPattern;' in playback
 assert playback.index('stepEvents[static_cast<size_t> (stepEventCount++)]') < playback.index('if (step.note >= 128')
-assert 'stepEvents, stepEventCount, beginSample' in processor
+assert 'stepEvents, stepEventCount, cursor' in processor
 assert 'std::sort (stepEvents.begin()' in processor
 assert 'const auto applyVoiceParameters = [&] (size_t voice)' in processor
 assert 'activeLockStep[lane] = event.step;' in processor
@@ -671,8 +673,8 @@ for field in ('bpmDivision', 'shuffle', 'legato', 'noteSkipProbability',
 assert 'randomValue (lane, pattern, tick' in playback
 assert 'const double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
-assert 'performance,\n            playing' in processor
-assert 'LB-303-0.0.2-TEST2.4.20-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'performance,\n                playing' in processor
+assert 'LB-303-0.0.2-TEST2.4.21-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -824,7 +826,7 @@ assert 'b2L[nextSample] += fx.dry[1].first;' in processor
 assert 'const float mainDry = sharedFx.dryLevel();' in processor
 assert 'mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first' in processor
 assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
-assert 'LB-303-0.0.2-TEST2.4.20-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.21-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.16 browser NVDA names + existing preview + 4 stereo buses + separate distortion stems + stable IDs (static).')
 
 # TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
@@ -880,7 +882,7 @@ assert 'const double osc = primary + osc2GainSmooth * waveform (osc2Phase, secon
 assert 'setOsc2Parameters (layerValues)' in processor
 assert 'lock.sliderNumber - 1 - static_cast<int> (lb303::osc2LocalBase)' in processor
 assert 'voiceParameterGlobalIndex' in step
-assert 'LB-303-0.0.2-TEST2.4.20-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.21-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.19 two independent second oscillators, shared waveform/voice envelopes, cents detune, stable APVTS and lock slots.')
 
 # TEST2.4.20 — Ctrl+A selects only focused and active keyboard steps.
@@ -897,3 +899,49 @@ assert 'steps selected' in select_visible
 assert "key.getTextCharacter() == 1" in step
 assert 'selectVisibleSteps(); return true;' in step
 print('PASS: TEST2.4.20 Ctrl+A selects only the focused 16 keys intersected with Start/End.')
+
+# TEST2.4.21 — two-column Song Editor; selection and playback are independent.
+song_h = (root / 'Source/SongArrangement.h').read_text(encoding='utf-8')
+song_cpp = (root / 'Source/SongArrangement.cpp').read_text(encoding='utf-8')
+step = (root / 'Source/SequencerStepEditor.cpp').read_text(encoding='utf-8')
+step_h = (root / 'Source/SequencerStepEditor.h').read_text(encoding='utf-8')
+processor = (root / 'Source/PluginProcessor.cpp').read_text(encoding='utf-8')
+processor_h = (root / 'Source/PluginProcessor.h').read_text(encoding='utf-8')
+playback = (root / 'Source/SequencerPlayback.cpp').read_text(encoding='utf-8')
+assert 'Source/SongArrangement.cpp' in (root / 'CMakeLists.txt').read_text()
+assert 'using Column = std::vector<int>' in song_h
+assert 'std::array<Snapshot, 2> columns' in song_h
+assert 'std::atomic_load_explicit' in song_cpp and 'std::atomic_store_explicit' in song_cpp
+assert 'LB303SongArrangement' in processor and 'songs.restore' in processor
+assert 'songs.reset(); // old .lb presets have no arrangement' in processor
+assert 'removeChildElement (song, true)' in processor
+assert 'songs.reset();' in processor.split('void LB303AudioProcessor::resetToInitialState()', 1)[1]
+assert 'songMode()' in song_h and 'setSongMode' in song_h
+assert 'SongArrangement::locate' in processor
+assert 'const auto songColumns' in processor
+assert 'segmentEnd = juce::jmin' in processor
+assert 'oldSongEntryIds[lane] != songEntryIds[lane]' in playback
+assert 'previewRestartEpoch' in processor_h and 'if (activePreview) ppq = previewPpq;' in processor
+assert 'songView = ! songView' in step
+assert 'if (songView) return handleSongKey (key);' in step
+assert 'std::array<int, 2> songCursor' in step_h
+assert 'std::array<std::set<int>, 2> songSelected' in step_h
+assert 'songShiftBaseline' in step_h and 'songShiftAnchor' in step_h
+assert 'songSelected[lane] = songShiftBaseline[lane]' in step
+assert 'if (details && count > 1)' in step
+assert 'const bool marked = count > 1' in step
+assert 'code == juce::KeyPress::tabKey) { announceSong (true)' in step
+assert 'juce::KeyPress::pageUpKey ? -5 : 5' in step
+assert 'if (letter (\'i\'))' in step and 'if (letter (\'l\'))' in step
+assert 'if (letter (\'m\'))' in step and 'auditionSongPattern' in step
+assert 'if (letter (\'r\'))' in step and 'setSongMode (next)' in step
+assert 'songConfirmClear' in step and 'Clear entire Bassline' in step
+assert 'LB303-SONG-ITEMS-V1:' in step
+assert 'for (int i : selection)' in step
+assert 'data.insert (data.begin() + index, paste.begin(), paste.end());' in step
+assert 'data.erase (data.begin() + *it)' in step
+assert 'songUndo.push_back' in step and 'songUndoRedo (bool redo)' in step
+assert 'lastSongRevision != processor.songs.getRevision()' in step
+assert 'void SequencerStepEditor::selectVisibleSteps()' in step # step mode remains unchanged
+assert 'songCursor' not in song_cpp and 'songSelected' not in song_cpp # transient navigation only
+print('PASS: TEST2.4.21 Song columns, independent realtime pattern chaining, portable sparse clipboard, NVDA and per-column undo.')

@@ -35,6 +35,7 @@ bool shouldSkip (int track, int pattern, std::int64_t step, float chance)
 void SequencerPlayback::reset() noexcept
 {
     oldPattern = { -1, -1 };
+    oldSongEntryIds = { -3, -3 };
     oldEnabled = { false, false };
     lastNote = { -1, -1 };
     lastSourceNote = { -1, -1 };
@@ -45,6 +46,7 @@ void SequencerPlayback::reset() noexcept
 void SequencerPlayback::generate (juce::MidiBuffer& output,
                                   const std::array<SequencerState, 2>& banks,
                                   const std::array<int, 2>& patterns,
+                                  const std::array<std::int64_t, 2>& songEntryIds,
                                   const std::array<bool, 2>& enabled,
                                   const std::array<double, 2>& triggerOrigins,
                                   const std::array<int, 2>& keyboardTransposes,
@@ -66,13 +68,15 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
     for (int lane = 0; lane < 2; ++lane)
     {
         if (lastNote[lane] >= 0 && (timelineJump || ! playing || ! enabled[lane]
-                                    || ! oldEnabled[lane] || oldPattern[lane] != patterns[lane]))
+                                    || ! oldEnabled[lane] || oldPattern[lane] != patterns[lane]
+                                    || oldSongEntryIds[lane] != songEntryIds[lane]))
         {
             output.addEvent (juce::MidiMessage::noteOff (lane + 1, lastNote[lane]), 0);
             lastNote[lane] = -1;
             lastSourceNote[lane] = -1;
         }
         oldPattern[lane] = patterns[lane];
+        oldSongEntryIds[lane] = songEntryIds[lane];
         oldEnabled[lane] = enabled[lane];
     }
     previousPpq = endPpq;

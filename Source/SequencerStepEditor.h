@@ -5,6 +5,7 @@
 #include <array>
 #include <functional>
 #include <vector>
+#include <set>
 #include <utility>
 
 // Keyboard-centric overlay derived from the LJuno step editor. Its 16-key
@@ -49,6 +50,32 @@ private:
     std::array<bool, lb303::SequencerState::stepsPerSequence> selectedSteps {};
     std::vector<lb303::SequencerStep> clipboard;
     std::vector<Action> undoStack, redoStack;
+    // Song editor uses the same Alt+Q accessible surface, but retains independent
+    // per-column cursors, discontinuous selections and history.
+    bool songView = false;
+    std::uint64_t lastSongRevision = 0;
+    std::uint64_t lastSongLoadEpoch = 0;
+    bool songChoosingPattern = false;
+    int songPatternChoice = 0;
+    bool songConfirmClear = false;
+    std::array<int, 2> songCursor {{ 0, 0 }};
+    std::array<std::set<int>, 2> songSelected;
+    std::array<std::set<int>, 2> songShiftBaseline;
+    std::array<int, 2> songShiftAnchor {{ -1, -1 }};
+    std::vector<int> songClipboard;
+    struct SongAction
+    {
+        int lane = 0;
+        lb303::SongArrangement::Snapshot before, after;
+        bool beforeLoop = false, afterLoop = false;
+    };
+    std::vector<SongAction> songUndo, songRedo;
+    void renderSong();
+    void announceSong (bool details = false);
+    void changeSongCursor (int difference, bool shift, bool keepDiscontinuous);
+    void applySongEdit (lb303::SongArrangement::Column data);
+    void songUndoRedo (bool redo);
+    bool handleSongKey (const juce::KeyPress&);
     bool pickerOpen = false;
     int pickerIndex = 0; // display position 0..36 (mapped to stable DSP IDs)
     std::array<int, lb303::basslineCount> lastPickerPosition {{ 0, 0 }};

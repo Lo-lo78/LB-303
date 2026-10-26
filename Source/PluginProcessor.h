@@ -5,6 +5,7 @@
 #include "SharedEffects.h"
 #include "SequencerState.h"
 #include "SequencerPlayback.h"
+#include "SongArrangement.h"
 #include "PresetManager.h"
 #include <array>
 #include <atomic>
@@ -53,13 +54,21 @@ public:
 
     juce::AudioProcessorValueTreeState parameters;
     lb303::PresetManager presetManager;
+    lb303::SongArrangement songs;
+    // Alt+M auditions only the focused song pattern; -1 returns to normal song playback.
+    void auditionSongPattern (int lane, int pattern) noexcept;
+    int songAuditionLane() const noexcept { return auditionLane.load (std::memory_order_acquire); }
+    bool isPreviewPlaying() const noexcept { return previewEnabled.load (std::memory_order_acquire); }
+    void restartSongPreviewClock() noexcept
+    { previewRestartEpoch.fetch_add (1, std::memory_order_release); }
     float value (size_t index) const;
     juce::RangedAudioParameter* parameter (size_t index);
     // Independent patterns, independent MIDI input channels (Omni or 1..16).
     int currentPattern (size_t lane) const noexcept;
     // One preview transport for BOTH basslines, regardless of edited track.
     void requestSequencerPreview (bool enabled) noexcept
-    { previewEnabled.store (enabled, std::memory_order_release); }
+    { previewEnabled.store (enabled, std::memory_order_release);
+      if (! enabled) auditionLane.store (-1, std::memory_order_release); }
     bool spaceControlsSequencerPreview() const noexcept
     { return editorSession.spaceControlsPreview; }
     // Returns true when Space now controls the two-bassline preview.
@@ -75,6 +84,7 @@ public:
     {
         const bool next = ! previewEnabled.load (std::memory_order_acquire);
         previewEnabled.store (next, std::memory_order_release);
+        if (! next) auditionLane.store (-1, std::memory_order_release);
         return next;
     }
     lb303::SequencerState& patternBank (size_t lane) noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
@@ -89,6 +99,8 @@ private:
     // These are not VST parameters and never overwrite host automation.
     std::array<int, lb303::basslineCount> activeLockStep {{ -1, -1 }};
     std::array<int, lb303::basslineCount> activeLockPattern {{ -1, -1 }};
+    // Detect new Song rows even when two consecutive rows both reference P1.
+    std::array<std::int64_t, lb303::basslineCount> previousLockSongEntry {{ -9, -9 }};
     double sampleRateHz = 44100.0;
     double fallbackPpq = 0.0;
     double previewPpq = 0.0;
@@ -109,6 +121,10 @@ private:
     std::array<bool, lb303::basslineCount> previousSequencerOn {};
     std::array<int, lb303::basslineCount> previousMidiChannel {{ 1, 2 }};
     std::atomic<bool> previewEnabled { false };
+    std::atomic<int> auditionLane { -1 };
+    std::atomic<int> auditionPattern { 0 };
+    std::atomic<unsigned int> previewRestartEpoch { 0 };
+    unsigned int consumedPreviewRestartEpoch = 0; // audio thread only
     std::atomic<bool> resetRuntimeRequested { false };
     std::array<std::atomic<float>*, lb303::parameterCount> rawParameters {};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessor)

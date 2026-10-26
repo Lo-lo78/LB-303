@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <limits>
 
 namespace
 {
@@ -14,6 +15,7 @@ const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift"
 constexpr int maxUndo = 50;
 // Versioned clipboard marker prevents pasting ordinary text as a sequencer.
 const juce::String patternClipboardHeader = "LB303-PATTERN-V1:";
+const juce::String songClipboardHeader = "LB303-SONG-ITEMS-V1:";
 }
 
 SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
@@ -26,7 +28,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
+    setDescription ("Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -44,6 +46,7 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
     selectedLockIndex = 0;
     lastRevision = 0;
     lastPattern = -1;
+    songView = false;
     setVisible (true);
     toFront (false);
     refresh();
@@ -58,6 +61,7 @@ void SequencerStepEditor::close()
 {
     if (! opened) return;
     processor.editorSession.sequencerPage = page;
+    songChoosingPattern = false;
     opened = false;
     pickerOpen = false;
     // Preview stays active when Alt+Q/Esc closes this editing overlay.
@@ -114,6 +118,21 @@ std::pair<int, int> SequencerStepEditor::activeStepBounds() const
 void SequencerStepEditor::refresh()
 {
     if (! opened) return;
+    if (songView)
+    {
+        const auto epoch = processor.songs.getLoadEpoch();
+        if (lastSongLoadEpoch != epoch)
+        {
+            lastSongLoadEpoch = epoch;
+            songUndo.clear(); songRedo.clear();
+            songChoosingPattern = songConfirmClear = false;
+            for (auto& set : songSelected) set.clear();
+            songShiftAnchor = { -1, -1 };
+            lastSongRevision = 0;
+        }
+        if (lastSongRevision != processor.songs.getRevision()) renderSong();
+        return;
+    }
     if (pickerOpen) { renderParameterPicker(); return; }
     // The range belongs to the selected pattern in the selected bassline.
     // Also handle external edits/host state restore while the editor is open.
@@ -814,6 +833,363 @@ bool SequencerStepEditor::handlePickerKey (const juce::KeyPress& key)
     return true;
 }
 
+// A Song row holds one of this lane's sixteen patterns, NOT a copy of its steps.
+// Selections can be discontinuous; Ctrl+C/X/V always compacts selected rows
+// in ascending song order. Cursors and selections are runtime editor state.
+void SequencerStepEditor::renderSong()
+{
+    lastSongRevision = processor.songs.getRevision();
+    const auto a = processor.songs.column (0);
+    const auto b = processor.songs.column (1);
+    juce::String text = "LB-303 SONG — two independent bassline columns\n";
+    text << "Bassline 1: " << (int) a->size() << " items, "
+         << (processor.songs.loop (0) ? "Loop On" : "Loop Off")
+         << "     Bassline 2: " << (int) b->size() << " items, "
+         << (processor.songs.loop (1) ? "Loop On" : "Loop Off") << "\n";
+    text << "Song playback: " << (processor.songs.songMode() ? "Song" : "Pattern")
+         << "   Active column: Bassline " << (track + 1) << "\n\n";
+    for (int n = 0; n < 17; ++n)
+    {
+        for (int lane = 0; lane < 2; ++lane)
+        {
+            const auto& v = lane == 0 ? *a : *b;
+            const int start = juce::jmax (0, songCursor[static_cast<size_t> (lane)] - 8);
+            const int i = start + n;
+            juce::String cell;
+            if (i < static_cast<int> (v.size()))
+            {
+                const bool selected = songSelected[static_cast<size_t> (lane)].size() > 1
+                    && songSelected[static_cast<size_t> (lane)].count (i) != 0;
+                cell << (songCursor[static_cast<size_t> (lane)] == i ? "> " : "  ")
+                     << (selected ? "* " : "  ") << (i + 1) << ": P" << (v[static_cast<size_t> (i)] + 1);
+            }
+            if (lane == 0) text << cell.paddedRight (' ', 30) << " | ";
+            else text << cell;
+        }
+        text << "\n";
+    }
+    text << "\nLeft/Right: remembered columns | Up/Down: item | PgUp/PgDn: five | Home/End: first/last"
+         << "\nShift+Up/Down: select range | Ctrl+Space: toggle item | Ctrl+Shift+Up/Down: add range"
+         << "\nCtrl+A: whole column | Ctrl+C/X/V: compact copy/cut/insert | Ctrl+Z/Shift+Z: undo/redo"
+         << "\nAlt+I: insert | Delete: delete | Ctrl+Delete: clear with confirmation"
+         << "\nEnter: choose P1–P16 | Alt+L: lane loop | Alt+M: audition focused pattern"
+         << "\nAlt+R: Song/Pattern playback | Tab: full row details | Alt+S: Steps editor"
+         << "\nAlt+P: Space target | Space: play/stop preview (when routed to Sequencer) | Esc: close";
+    if (songChoosingPattern) text << "\nChoose Pattern " << (songPatternChoice + 1)
+                                  << ": Up/Down changes, Enter confirms, Esc cancels";
+    if (songConfirmClear) text << "\nConfirm clearing entire song column with Ctrl+Delete or Enter. Esc cancels.";
+    setText (text, juce::dontSendNotification);
+}
+
+void SequencerStepEditor::announceSong (bool details)
+{
+    const auto lane = static_cast<size_t> (track);
+    const auto column = processor.songs.column (track);
+    if (column->empty())
+    {
+        announce (details ? "Song, Bassline " + juce::String (track + 1) + ", empty column, "
+            + (processor.songs.loop (track) ? "Loop On" : "Loop Off") : "Empty column");
+        return;
+    }
+    songCursor[lane] = juce::jlimit (0, static_cast<int> (column->size()) - 1, songCursor[lane]);
+    const int cursor = songCursor[lane];
+    const auto count = songSelected[lane].size();
+    const bool marked = count > 1 && songSelected[lane].count (cursor) != 0;
+    juce::String message;
+    if (details)
+        message << "Song, Bassline " << (track + 1) << ", element " << (cursor + 1)
+                << " of " << static_cast<int> (column->size()) << ", Pattern "
+                << (column->at (static_cast<size_t> (cursor)) + 1) << ", "
+                << (processor.songs.loop (track) ? "Loop On" : "Loop Off")
+                << ", " << (processor.songs.songMode() ? "Song playback" : "Pattern playback");
+    else
+        message << (marked ? "Selected " : "") << "P"
+                << (column->at (static_cast<size_t> (cursor)) + 1)
+                << ", " << (cursor + 1) << " of " << static_cast<int> (column->size());
+    if (details && count > 1) message << ", " << static_cast<int> (count) << " selected";
+    announce (message);
+}
+
+void SequencerStepEditor::changeSongCursor (int difference, bool extend, bool)
+{
+    const auto lane = static_cast<size_t> (track);
+    const auto data = processor.songs.column (track);
+    if (data->empty()) return;
+    const int old = songCursor[lane];
+    const int next = juce::jlimit (0, static_cast<int> (data->size()) - 1, old + difference);
+    if (next == old) return; // silent boundaries
+    if (extend)
+    {
+        if (songShiftAnchor[lane] < 0)
+        {
+            songShiftAnchor[lane] = old;
+            songShiftBaseline[lane] = songSelected[lane];
+            if (songShiftBaseline[lane].empty()) songShiftBaseline[lane].insert (old);
+        }
+        songSelected[lane] = songShiftBaseline[lane];
+        for (int i = juce::jmin (songShiftAnchor[lane], next);
+             i <= juce::jmax (songShiftAnchor[lane], next); ++i)
+            songSelected[lane].insert (i);
+    }
+    else
+        songShiftAnchor[lane] = -1; // keep the selection until copy/cut/explicit toggle
+    songCursor[lane] = next;
+    renderSong();
+    announceSong();
+}
+
+void SequencerStepEditor::applySongEdit (lb303::SongArrangement::Column data)
+{
+    const auto before = processor.songs.column (track);
+    if (*before == data) return;
+    const int lane = track;
+    const bool loop = processor.songs.loop (lane);
+    processor.songs.replace (lane, std::move (data));
+    songUndo.push_back ({ lane, before, processor.songs.column (lane), loop, loop });
+    if (songUndo.size() > 64) songUndo.erase (songUndo.begin());
+    songRedo.clear();
+    const auto snapshot = processor.songs.column (lane);
+    if (! snapshot->empty())
+        songCursor[static_cast<size_t> (lane)] = juce::jlimit (0, static_cast<int> (snapshot->size()) - 1,
+                                                              songCursor[static_cast<size_t> (lane)]);
+    else songCursor[static_cast<size_t> (lane)] = 0;
+    songSelected[static_cast<size_t> (lane)].clear();
+    songShiftAnchor[static_cast<size_t> (lane)] = -1;
+    renderSong();
+}
+
+void SequencerStepEditor::songUndoRedo (bool redo)
+{
+    auto& from = redo ? songRedo : songUndo;
+    auto& to = redo ? songUndo : songRedo;
+    if (from.empty()) { announce ("Nothing to " + juce::String (redo ? "redo" : "undo")); return; }
+    auto action = from.back();
+    from.pop_back();
+    processor.songs.restoreSnapshot (action.lane, redo ? action.after : action.before);
+    processor.songs.setLoop (action.lane, redo ? action.afterLoop : action.beforeLoop);
+    to.push_back (std::move (action));
+    track = to.back().lane;
+    auto snapshot = processor.songs.column (track);
+    auto& cursor = songCursor[static_cast<size_t> (track)];
+    cursor = snapshot->empty() ? 0 : juce::jlimit (0, static_cast<int> (snapshot->size()) - 1, cursor);
+    songSelected[static_cast<size_t> (track)].clear();
+    songShiftAnchor[static_cast<size_t> (track)] = -1;
+    renderSong();
+    announce (redo ? "Song edit redone" : "Song edit undone");
+}
+
+bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
+{
+    const auto code = key.getKeyCode();
+    const auto mods = key.getModifiers();
+    const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+    const auto letter = [ch, code] (juce::juce_wchar c)
+    { return ch == c || code == c || code == juce::CharacterFunctions::toUpperCase (c); };
+    auto data = *processor.songs.column (track);
+    const auto lane = static_cast<size_t> (track);
+    auto& cursor = songCursor[lane];
+    if (songChoosingPattern)
+    {
+        if (code == juce::KeyPress::escapeKey) { songChoosingPattern = false; renderSong(); announce ("Pattern change cancelled"); return true; }
+        if (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey)
+        {
+            songPatternChoice = juce::jlimit (0, 15, songPatternChoice + (code == juce::KeyPress::upKey ? 1 : -1));
+            renderSong(); announce ("Pattern " + juce::String (songPatternChoice + 1)); return true;
+        }
+        if (code == juce::KeyPress::returnKey)
+        {
+            songChoosingPattern = false;
+            if (! data.empty()) { data[static_cast<size_t> (cursor)] = songPatternChoice; applySongEdit (std::move (data)); }
+            renderSong(); announceSong (true); return true;
+        }
+        return true;
+    }
+    if (songConfirmClear)
+    {
+        if (code == juce::KeyPress::escapeKey) { songConfirmClear = false; announce ("Clear cancelled"); renderSong(); return true; }
+        if (code == juce::KeyPress::returnKey || (mods.isCtrlDown() && code == juce::KeyPress::deleteKey))
+        {
+            songConfirmClear = false;
+            applySongEdit ({});
+            announce ("Bassline " + juce::String (track + 1) + ", song column cleared");
+            return true;
+        }
+        return true;
+    }
+    if (code == juce::KeyPress::escapeKey) { close(); return true; }
+    if (code == juce::KeyPress::tabKey) { announceSong (true); return true; }
+    if (mods.isAltDown())
+    {
+        if (letter ('l'))
+        {
+            const bool before = processor.songs.loop (track);
+            processor.songs.setLoop (track, ! before);
+            songUndo.push_back ({ track, processor.songs.column (track),
+                                  processor.songs.column (track), before, ! before });
+            if (songUndo.size() > 64) songUndo.erase (songUndo.begin());
+            songRedo.clear(); renderSong();
+            announce ("Bassline " + juce::String (track + 1) + (before ? ", Loop Off" : ", Loop On"));
+            return true;
+        }
+        if (letter ('r'))
+        {
+            const bool next = ! processor.songs.songMode();
+            processor.songs.setSongMode (next);
+            processor.restartSongPreviewClock(); renderSong();
+            announce (next ? "Song playback" : "Pattern playback"); return true;
+        }
+        if (letter ('i'))
+        {
+            const int p = data.empty() ? 0 : data[static_cast<size_t> (cursor)];
+            const auto pos = data.empty() ? data.begin() : data.begin() + cursor + 1;
+            const int newIndex = data.empty() ? 0 : cursor + 1;
+            data.insert (pos, p);
+            applySongEdit (std::move (data));
+            cursor = newIndex; renderSong(); announce ("Inserted P" + juce::String (p + 1)
+                + ", " + juce::String (cursor + 1)); return true;
+        }
+        if (letter ('m'))
+        {
+            if (data.empty()) return true;
+            processor.auditionSongPattern (track, data[static_cast<size_t> (cursor)]);
+            announce (processor.isPreviewPlaying() ? "Audition P" + juce::String (data[static_cast<size_t> (cursor)] + 1)
+                                                   : "Pattern audition stopped");
+            return true;
+        }
+        return true;
+    }
+    if (mods.isCtrlDown())
+    {
+        if (code == juce::KeyPress::deleteKey)
+        {
+            if (data.empty()) return true;
+            songConfirmClear = true; renderSong();
+            announce ("Clear entire Bassline " + juce::String (track + 1)
+                    + " song column? Enter or Ctrl Delete confirms, Escape cancels");
+            return true;
+        }
+        if (letter ('z') || letter ('y')) { songUndoRedo (letter ('y') || mods.isShiftDown()); return true; }
+        if (letter ('a'))
+        {
+            songSelected[lane].clear();
+            for (int i = 0; i < static_cast<int> (data.size()); ++i) songSelected[lane].insert (i);
+            songShiftAnchor[lane] = -1; renderSong();
+            announce (juce::String (data.size()) + " song elements selected"); return true;
+        }
+        if (code == juce::KeyPress::spaceKey)
+        {
+            if (data.empty()) return true;
+            if (songSelected[lane].count (cursor) != 0) songSelected[lane].erase (cursor);
+            else songSelected[lane].insert (cursor);
+            songShiftAnchor[lane] = -1; renderSong(); announceSong(); return true;
+        }
+        if ((code == juce::KeyPress::upKey || code == juce::KeyPress::downKey) && mods.isShiftDown())
+        {
+            changeSongCursor (code == juce::KeyPress::upKey ? -1 : 1, true, true);
+            return true;
+        }
+        if (letter ('c') || letter ('x'))
+        {
+            songClipboard.clear();
+            if (data.empty()) return true;
+            const auto& selection = songSelected[lane];
+            if (selection.size() > 1)
+                for (int i : selection) if (i >= 0 && i < static_cast<int> (data.size()))
+                    songClipboard.push_back (data[static_cast<size_t> (i)]);
+            else songClipboard.push_back (data[static_cast<size_t> (cursor)]);
+            juce::String text = songClipboardHeader;
+            for (int p : songClipboard) text << "," << (p + 1);
+            juce::SystemClipboard::copyTextToClipboard (text);
+            const int copied = static_cast<int> (songClipboard.size());
+            if (letter ('x'))
+            {
+                if (selection.size() > 1)
+                {
+                    for (auto it = selection.rbegin(); it != selection.rend(); ++it)
+                        if (*it >= 0 && *it < static_cast<int> (data.size())) data.erase (data.begin() + *it);
+                }
+                else data.erase (data.begin() + cursor);
+                applySongEdit (std::move (data));
+            }
+            else { songSelected[lane].clear(); songShiftAnchor[lane] = -1; renderSong(); }
+            announce (juce::String (copied) + (letter ('x') ? " song elements cut" : " song elements copied"));
+            return true;
+        }
+        if (letter ('v'))
+        {
+            const auto clipboardText = juce::SystemClipboard::getTextFromClipboard().trim();
+            if (! clipboardText.startsWith (songClipboardHeader))
+            { announce ("No LB-303 Song elements in clipboard"); return true; }
+            const auto values = juce::StringArray::fromTokens (
+                clipboardText.substring (songClipboardHeader.length()), ",", "");
+            std::vector<int> paste;
+            for (const auto& token : values)
+            {
+                if (token.isEmpty()) continue;
+                const int p = token.getIntValue();
+                if (p < 1 || p > 16 || ! token.trim().containsOnly ("0123456789"))
+                { announce ("Invalid Song clipboard"); return true; }
+                paste.push_back (p - 1);
+            }
+            if (paste.empty()) return true;
+            const int index = data.empty() ? 0 : cursor + 1;
+            data.insert (data.begin() + index, paste.begin(), paste.end());
+            applySongEdit (std::move (data));
+            cursor = index;
+            renderSong(); announce (juce::String (paste.size()) + " song elements inserted"); return true;
+        }
+        return true;
+    }
+    if (code == juce::KeyPress::leftKey || code == juce::KeyPress::rightKey)
+    {
+        const int to = juce::jlimit (0, 1, track + (code == juce::KeyPress::rightKey ? 1 : -1));
+        if (track == to) return true;
+        songShiftAnchor[lane] = -1;
+        track = to; renderSong(); announceSong (true); return true;
+    }
+    if (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey)
+    {
+        changeSongCursor (code == juce::KeyPress::upKey ? -1 : 1, mods.isShiftDown(), false);
+        return true;
+    }
+    if (code == juce::KeyPress::pageUpKey || code == juce::KeyPress::pageDownKey)
+    { changeSongCursor (code == juce::KeyPress::pageUpKey ? -5 : 5, mods.isShiftDown(), false); return true; }
+    if (code == juce::KeyPress::homeKey || code == juce::KeyPress::endKey)
+    {
+        if (data.empty()) return true;
+        changeSongCursor ((code == juce::KeyPress::homeKey ? 0 : static_cast<int> (data.size()) - 1) - cursor,
+                          mods.isShiftDown(), false);
+        return true;
+    }
+    if (code == juce::KeyPress::returnKey)
+    {
+        if (data.empty()) { announce ("Empty column. Alt I inserts the first pattern"); return true; }
+        songPatternChoice = data[static_cast<size_t> (cursor)];
+        songChoosingPattern = true;
+        renderSong(); announce ("Choose Pattern " + juce::String (songPatternChoice + 1) + " of 16"); return true;
+    }
+    if (code == juce::KeyPress::deleteKey)
+    {
+        if (data.empty()) return true;
+        auto& selection = songSelected[lane];
+        if (selection.size() == data.size() && ! data.empty())
+        {
+            songConfirmClear = true;
+            announce ("Delete all song elements? Enter confirms, Escape cancels"); return true;
+        }
+        const int n = selection.size() > 1 ? static_cast<int> (selection.size()) : 1;
+        if (selection.size() > 1)
+        {
+            for (auto it = selection.rbegin(); it != selection.rend(); ++it)
+                if (*it >= 0 && *it < static_cast<int> (data.size())) data.erase (data.begin() + *it);
+        }
+        else data.erase (data.begin() + cursor);
+        applySongEdit (std::move (data));
+        announce (juce::String (n) + " song elements deleted"); return true;
+    }
+    return true;
+}
+
 bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
 {
     if (! opened) return juce::Label::keyPressed (key);
@@ -844,6 +1220,27 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         announce (running ? "Both basslines preview playing" : "Both basslines preview stopped");
         return true;
     }
+    // Alt+S inside Alt+Q changes editor mode, never opens preset Save As.
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown()
+        && (character == 's' || code == 's' || code == 'S'))
+    {
+        songView = ! songView;
+        songChoosingPattern = false;
+        songConfirmClear = false;
+        pickerOpen = false;
+        if (songView)
+        {
+            processor.songs.setSongMode (true);
+            processor.restartSongPreviewClock();
+        }
+        lastRevision = 0;
+        refresh();
+        announce (songView ? "Song editor. Bassline " + juce::String (track + 1)
+                    : "Step editor. Bassline " + juce::String (track + 1));
+        if (songView) announceSong (true);
+        return true;
+    }
+    if (songView) return handleSongKey (key);
     // Whole-pattern clipboard shortcuts have priority even with the parameter
     // picker open. Ctrl+C/X/V without Shift still edit just selected steps.
     if (mods.isCtrlDown() && mods.isShiftDown() && ! mods.isAltDown())

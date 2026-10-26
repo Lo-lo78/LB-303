@@ -18,12 +18,28 @@ LB303AudioProcessor::LB303AudioProcessor()
         rawParameters[i] = parameters.getRawParameterValue (lb303::catalog()[i].id);
 }
 
+void LB303AudioProcessor::auditionSongPattern (int lane, int pattern) noexcept
+{
+    if (lane == auditionLane.load (std::memory_order_acquire)
+        && pattern == auditionPattern.load (std::memory_order_acquire)
+        && isPreviewPlaying())
+    {
+        requestSequencerPreview (false);
+        return;
+    }
+    auditionPattern.store (juce::jlimit (0, 15, pattern), std::memory_order_release);
+    auditionLane.store (juce::jlimit (0, 1, lane), std::memory_order_release);
+    requestSequencerPreview (true);
+    restartSongPreviewClock();
+}
+
 void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
 {
     sampleRateHz = sampleRate;
     fallbackPpq = 0.0;
     previewPpq = 0.0;
     previousPreview = false;
+    consumedPreviewRestartEpoch = previewRestartEpoch.load (std::memory_order_acquire);
     previewOriginPpq = 0.0;
     heldKeys = {};
     heldKeyCount = {};
@@ -35,9 +51,11 @@ void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
     previousSequencerOn = {};
     previousMidiChannel = { 1, 2 };
     previewEnabled.store (false, std::memory_order_relaxed);
+    auditionLane.store (-1, std::memory_order_release);
     sequencerPlayback.reset();
     activeLockStep = { -1, -1 };
     activeLockPattern = { -1, -1 };
+    previousLockSongEntry = { -9, -9 };
     for (auto& engine : engines) engine.prepare (sampleRate);
     sharedFx.prepare (sampleRate);
 }
@@ -85,6 +103,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         sequencerPlayback.reset();
         fallbackPpq = previewPpq = previewOriginPpq = 0.0;
         previousPreview = false;
+        auditionLane.store (-1, std::memory_order_release);
         heldKeys = {};
         heldKeyCount = {};
         heldKeyAge = {};
@@ -96,6 +115,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         previousMidiChannel = { 1, 2 };
         activeLockStep = { -1, -1 };
         activeLockPattern = { -1, -1 };
+        previousLockSongEntry = { -9, -9 };
     }
     double bpm = 120.0;
     double ppq = fallbackPpq;
@@ -110,20 +130,34 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     if (! std::isfinite (bpm) || bpm <= 0.0) bpm = 120.0;
     if (! std::isfinite (ppq)) ppq = 0.0;
     const bool activePreview = previewEnabled.load (std::memory_order_relaxed);
-    if (activePreview && ! previousPreview)
+    const auto restartEpoch = previewRestartEpoch.load (std::memory_order_acquire);
+    if (activePreview && (! previousPreview || consumedPreviewRestartEpoch != restartEpoch))
     {
         previewPpq = 0.0;
-        previewOriginPpq = playing ? ppq : 0.0;
+        previewOriginPpq = 0.0;
+        sequencerPlayback.reset(); // restart audition / song on step one
+        activeLockStep = { -1, -1 };
+        activeLockPattern = { -1, -1 };
+        previousLockSongEntry = { -9, -9 };
     }
+    consumedPreviewRestartEpoch = restartEpoch;
     previousPreview = activePreview;
-    // Many hosts report a fixed PPQ position while stopped. Keyboard-held
-    // patterns must keep advancing on our own sample clock instead of replaying
-    // their first step on every audio block.
-    if (! playing) ppq = activePreview ? previewPpq : fallbackPpq;
+    // Preview has its OWN clock even if REAPER's transport is playing. This
+    // prevents a host Play/Stop transition from jumping song time backwards.
+    // Held MIDI notes without preview retain the original fallback clock.
+    if (activePreview) ppq = previewPpq;
+    else if (! playing) ppq = fallbackPpq;
+    const auto songColumns = std::array<lb303::SongArrangement::Snapshot, 2> {{
+        songs.column (0), songs.column (1)
+    }};
+    const bool useSong = songs.songMode();
+    const int audition = activePreview ? auditionLane.load (std::memory_order_acquire) : -1;
+    const int auditionPat = auditionPattern.load (std::memory_order_acquire);
+    std::array<int, 2> playingPatterns {{ currentPattern (0), currentPattern (1) }};
     const int count = audio.getNumSamples();
     const double beatsPerSample = bpm / (60.0 * sampleRateHz);
     const double nextPpq = ppq + count * beatsPerSample;
-    if (! playing && activePreview) previewPpq = nextPpq;
+    if (activePreview) previewPpq = nextPpq;
     else fallbackPpq = nextPpq;
 
     const std::array<bool, 2> sequencerOn {{
@@ -162,7 +196,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         const bool gated = (sequencerOn[lane] && heldKeyCount[lane] > 0)
                             || activePreview;
         if (! gated || (activeLockStep[lane] >= 0
-                         && activeLockPattern[lane] != currentPattern (lane)))
+                         && ! useSong && activeLockPattern[lane] != currentPattern (lane)))
         {
             activeLockStep[lane] = -1;
             activeLockPattern[lane] = -1;
@@ -181,12 +215,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     midi.clear(); // VST MIDI output; always preserve original external channel once
     auto generateSegment = [&] (int beginSample, int endSample)
     {
-        const int segmentLength = endSample - beginSample;
-        if (segmentLength <= 0) return;
-        const std::array<bool, 2> audible {{
-            (sequencerOn[0] && heldKeyCount[0] > 0) || activePreview,
-            (sequencerOn[1] && heldKeyCount[1] > 0) || activePreview
-        }};
+        if (endSample <= beginSample) return;
         const std::array<double, 2> origins {{
             activePreview ? previewOriginPpq : triggerOriginPpq[0],
             activePreview ? previewOriginPpq : triggerOriginPpq[1]
@@ -212,24 +241,84 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             config.octaveShift = juce::roundToInt (v (lb303::seqPerformance::octaveShift));
             config.semitoneShift = juce::roundToInt (v (lb303::seqPerformance::semitoneShift));
         }
-        juce::MidiBuffer generated;
-        sequencerPlayback.generate (generated, sequenceBanks,
-            { currentPattern (0), currentPattern (1) }, audible, origins, transposes, performance,
-            playing || activePreview || audible[0] || audible[1],
-            ppq + beginSample * beatsPerSample, bpm, sampleRateHz, segmentLength,
-            stepEvents, stepEventCount, beginSample);
-        engineMidi.addEvents (generated, 0, segmentLength, beginSample);
-        // Preserve each lane internally while sending MIDI out on its configured
-        // channel. In Omni, keep the original lane default (1 or 2).
-        for (const auto event : generated)
+        // Divide a host audio segment at each Song pattern boundary. This
+        // prevents a buffer straddling the boundary from delaying the change
+        // until the next callback. The two columns never wait for one another.
+        int cursor = beginSample;
+        while (cursor < endSample)
         {
-            const auto lane = event.getMessage().getChannel() - 1;
-            if (lane < 0 || lane >= 2) continue;
-            const int outputChannel = inputChannels[static_cast<size_t> (lane)] == 0
-                ? lane + 1 : inputChannels[static_cast<size_t> (lane)];
-            auto outputMessage = event.getMessage();
-            outputMessage.setChannel (outputChannel);
-            midi.addEvent (outputMessage, beginSample + event.samplePosition);
+            const double nowPpq = ppq + cursor * beatsPerSample;
+            auto laneOrigins = origins;
+            std::array<int, 2> patterns {{ currentPattern (0), currentPattern (1) }};
+            std::array<std::int64_t, 2> entries {{ -1, -1 }};
+            std::array<bool, 2> audible {{
+                (sequencerOn[0] && heldKeyCount[0] > 0) || activePreview,
+                (sequencerOn[1] && heldKeyCount[1] > 0) || activePreview
+            }};
+            int segmentEnd = endSample;
+            for (int lane = 0; lane < 2; ++lane)
+            {
+                if (audition >= 0)
+                {
+                    audible[static_cast<size_t> (lane)] = lane == audition;
+                    if (lane == audition) patterns[static_cast<size_t> (lane)] = auditionPat;
+                    entries[static_cast<size_t> (lane)] = -2;
+                }
+                else if (useSong && audible[static_cast<size_t> (lane)])
+                {
+                    const double localBeat = nowPpq - origins[static_cast<size_t> (lane)];
+                    const auto pos = lb303::SongArrangement::locate (
+                        *songColumns[static_cast<size_t> (lane)], songs.loop (lane),
+                        sequenceBanks[static_cast<size_t> (lane)], localBeat,
+                        performance[static_cast<size_t> (lane)].bpmDivision);
+                    if (! pos.active)
+                    {
+                        audible[static_cast<size_t> (lane)] = false;
+                        entries[static_cast<size_t> (lane)] = -3;
+                    }
+                    else
+                    {
+                        patterns[static_cast<size_t> (lane)] = pos.pattern;
+                        laneOrigins[static_cast<size_t> (lane)] += pos.startBeat;
+                        entries[static_cast<size_t> (lane)] = static_cast<std::int64_t> (
+                            std::llround (pos.startBeat * 1000000.0));
+                        const double leftBeats = origins[static_cast<size_t> (lane)]
+                            + pos.endBeat - nowPpq;
+                        const int untilNext = juce::jmax (1, static_cast<int> (
+                            std::ceil (leftBeats / beatsPerSample - 1.0e-8)));
+                        segmentEnd = juce::jmin (segmentEnd, cursor + untilNext);
+                    }
+                }
+                const auto index = static_cast<size_t> (lane);
+                if (! audible[index]
+                    || playingPatterns[index] != patterns[index]
+                    || previousLockSongEntry[index] != entries[index])
+                {
+                    activeLockStep[index] = -1;
+                    activeLockPattern[index] = -1;
+                }
+                previousLockSongEntry[index] = entries[index];
+                playingPatterns[index] = patterns[index];
+            }
+            const int segmentLength = segmentEnd - cursor;
+            juce::MidiBuffer generated;
+            sequencerPlayback.generate (generated, sequenceBanks,
+                patterns, entries, audible, laneOrigins, transposes, performance,
+                playing || activePreview || audible[0] || audible[1],
+                nowPpq, bpm, sampleRateHz, segmentLength,
+                stepEvents, stepEventCount, cursor);
+            engineMidi.addEvents (generated, 0, segmentLength, cursor);
+            for (const auto event : generated)
+            {
+                const int lane = event.getMessage().getChannel() - 1;
+                if (lane < 0 || lane >= 2) continue;
+                const int outputChannel = inputChannels[static_cast<size_t> (lane)] == 0
+                    ? lane + 1 : inputChannels[static_cast<size_t> (lane)];
+                auto outputMessage = event.getMessage();
+                outputMessage.setChannel (outputChannel);
+                midi.addEvent (outputMessage, cursor + event.samplePosition);
+            }
+            cursor = segmentEnd;
         }
     };
     int previousSample = 0;
@@ -328,7 +417,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         std::array<float, lb303::voiceParameterCount> effective {};
         for (size_t i = 0; i < effective.size(); ++i)
             effective[i] = value (lb303::parameterIndex (voice, i));
-        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] == currentPattern (voice))
+        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] >= 0)
         {
             const auto step = sequenceBanks[voice].getStep (
                 activeLockPattern[voice], activeLockStep[voice]);
@@ -354,7 +443,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         lb303::BassEngine::LfoValues voiceLfo {};
         for (size_t c = 0; c < voiceLfo.size(); ++c)
             voiceLfo[c] = value (lb303::lfoParameterIndex (voice, c));
-        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] == currentPattern (voice))
+        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] >= 0)
         {
             const auto step = sequenceBanks[voice].getStep (
                 activeLockPattern[voice], activeLockStep[voice]);
@@ -374,7 +463,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         lb303::BassEngine::Osc2Values layerValues {};
         for (size_t control = 0; control < layerValues.size(); ++control)
             layerValues[control] = value (lb303::osc2ParameterIndex (voice, control));
-        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] == currentPattern (voice))
+        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] >= 0)
         {
             const auto step = sequenceBanks[voice].getStep (
                 activeLockPattern[voice], activeLockStep[voice]);
@@ -409,7 +498,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         for (size_t i = 0; i < legacy.size(); ++i)
             legacy[i] = value (lb303::parameterIndex (0, i));
         // Preserve older B1 per-step delay locks as automations of that shared delay.
-        if (activeLockStep[0] >= 0 && activeLockPattern[0] == currentPattern (0))
+        if (activeLockStep[0] >= 0 && activeLockPattern[0] >= 0)
         {
             const auto step = sequenceBanks[0].getStep (activeLockPattern[0], activeLockStep[0]);
             for (int i = 0; i < step.parameterLockCount; ++i)
@@ -567,6 +656,8 @@ void LB303AudioProcessor::resetToInitialState()
         }
     }
     for (auto& bank : sequenceBanks) bank.reset();
+    songs.reset();
+    auditionLane.store (-1, std::memory_order_release);
     // Alt+I resets this instance's editing increment, without writing UI
     // history into the state saved by REAPER or the preset browser.
     editorSession.stepWidthIndex = 0;
@@ -607,6 +698,8 @@ void LB303AudioProcessor::getStateInformation (juce::MemoryBlock& data)
         bank1->setAttribute ("data", sequenceBanks[0].serialiseToBase64());
         auto* bank2 = xml->createNewChildElement ("LB303PatternBank2");
         bank2->setAttribute ("data", sequenceBanks[1].serialiseToBase64());
+        auto* song = xml->createNewChildElement ("LB303SongArrangement");
+        song->setAttribute ("data", songs.serialise());
         copyXmlToBinary (*xml, data);
     }
 }
@@ -624,6 +717,12 @@ void LB303AudioProcessor::setStateInformation (const void* data, int size)
                 else
                     sequenceBanks[static_cast<size_t> (lane)].reset(); // legacy TEST1 projects
             }
+            if (auto* song = xml->getChildByName ("LB303SongArrangement"))
+            {
+                if (! songs.restore (song->getStringAttribute ("data"))) songs.reset();
+                xml->removeChildElement (song, true);
+            }
+            else songs.reset(); // old .lb presets have no arrangement
             if (auto* a = xml->getChildByName ("LB303PatternBank1")) xml->removeChildElement (a, true);
             if (auto* b = xml->getChildByName ("LB303PatternBank2")) xml->removeChildElement (b, true);
             auto restored = juce::ValueTree::fromXml (*xml);

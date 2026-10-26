@@ -1,4 +1,13 @@
-# LB-303 0.0.2 — TEST2.4.20
+# LB-303 0.0.2 — TEST2.4.21 Song Editor
+
+**Nuovo in TEST2.4.21:** Song Editor accessibile a due colonne indipendenti,
+con riproduzione concatenata P1–P16, selezione anche discontinua, appunti Song,
+loop per bassline e Undo/Redo. Tutti i dettagli e le scorciatoie sono riportati
+nella sezione TEST2.4.21 in fondo al documento. Questo archivio contiene
+l'intero sorgente e il workflow GitHub Actions. Verifica in REAPER/NVDA non ancora
+effettuata; nessuna compilazione locale.
+
+## Funzioni TEST2.4.19–20 preservate
 
 This test adds a second oscillator to **each** bassline. Apply the patch to TEST2.4.18, or use the complete repository source archive. GitHub Actions builds the Windows VST3; the source is **not** locally compiled or audio-tested.
 
@@ -920,3 +929,59 @@ Any older selection is replaced. If Start/End intersects only part of the
 block, only its active steps are selected; NVDA announces the count and
 first/last step. Ctrl+C/X/V still operate on selected individual steps,
 Ctrl+Shift+C/X/V on the current pattern. The shortcut changes no preset data.
+
+## TEST2.4.21 — Song Editor dentro Alt+Q
+
+La nuova modalita Song organizza i 16 pattern per ciascuna bassline in due colonne
+verticali **indipendenti e di lunghezza variabile**, senza limite fisso in numero
+di righe (la lunghezza effettiva dipende dalla memoria e dai limiti dei file preset).
+Ogni riga e un riferimento P1–P16: non copia gli step del pattern originale.
+Le colonne hanno cursori ricordati separatamente, e non sono righe di una
+singola timeline sincronizzata: i pattern possono avere Start/End differenti.
+
+- Dentro Alt+Q, **Alt+S** alterna editor Steps e Song. Quando si entra in Song
+  viene attivato Song playback; l'editor Steps mantiene tutte le scorciatoie
+  e le 7 pagine preesistenti. Fuori da Alt+Q Alt+S salva i preset come prima.
+- **Alt+R** in Song alterna Song playback e Pattern playback. La modalita si
+  salva in `.lb` e nello stato REAPER; Alt+P continua a decidere se Space
+  controlla REAPER o l'anteprima, senza modificare il tipo di riproduzione.
+- **Alt+M** ascolta soltanto il P1–P16 della riga focalizzata tramite l'unico
+  motore anteprima; un'altra pressione sullo stesso elemento lo ferma.
+- Frecce sinistra/destra cambiano bassline e ripristinano la posizione precedente
+  dell'altra colonna; su/giu avanza di una riga, Pagina su/giu di **5**;
+  Home/End va alla prima/ultima riga. I bordi sono silenziosi.
+- **Tab** pronuncia Bassline, riga, numero totale, Pattern, Loop, modalita
+  playback e numero selezionato. Le frecce pronunciano soltanto, per esempio,
+  `P3, 24 of 64`; `Selected` e pronunciato sulle righe selezionate soltanto
+  se la selezione multipla contiene almeno due elementi.
+- **Invio** entra nella scelta del pattern (freccia su/giu P1–P16, Invio
+  conferma ed Esc annulla). **Alt+I** inserisce dopo il cursore un'altra
+  occorrenza del pattern corrente; se la colonna e vuota inserisce P1.
+- **Alt+L** cambia il Loop solo della bassline corrente. Con Loop Off una
+  colonna si ferma alla fine, mentre l'altra puo continuare. Con Loop On la
+  colonna ricomincia indipendentemente; entrambe condividono solo il BPM.
+- **Shift+su/giu** amplia o restringe un intervallo. Rilasciando Shift,
+  frecce normali spostano il cursore senza cancellare la selezione.
+  **Ctrl+Spazio** seleziona/deseleziona la riga focalizzata; **Ctrl+Shift+su/giu**
+  consente di aggiungere un altro intervallo disgiunto; **Ctrl+A** seleziona
+  tutte le righe della sola colonna corrente.
+- **Ctrl+C/X/V** copia/taglia e incolla le righe selezionate, in ordine,
+  *senza includere gli elementi deselezionati tra due gruppi*. Incolla DOPO
+  l'elemento focalizzato senza sovrascrivere le righe esistenti. Gli appunti
+  sono condivisibili fra istanze LB-303, con formato `LB303-SONG-ITEMS-V1`.
+- **Delete** cancella uno o piu elementi; **Ctrl+Delete** chiede conferma
+  per svuotare la colonna. **Ctrl+Z / Ctrl+Shift+Z** ripristina un'intera
+  operazione, anche quando comprende molti elementi.
+
+Le colonne, il loop e la modalita Song/Pattern sono salvati nei preset `.lb` e
+nei progetti REAPER mediante un nodo XML aggiuntivo; i preset piu vecchi
+restano compatibili e caricano una Song vuota in Pattern mode. Non si salva
+la posizione dei cursori, ne le selezioni o gli appunti. La versione mantiene
+tutti i parametri VST3, i 32 pattern, gli FX, gli output a 8 canali, i due
+oscillatori per bassline e i due LFO.
+
+**Verifica richiesta**: compilazione su GitHub Actions e prova pratica REAPER/NVDA.
+I test inclusi sono statici e non dimostrano che audio, routing, lock e screen
+reader funzionino correttamente a runtime. In particolare verificare i cambi
+fra pattern di lunghezza diversa, i loop indipendenti e Alt+M mentre l'anteprima
+Song e gia in riproduzione.

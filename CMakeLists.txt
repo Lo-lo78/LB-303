@@ -41,6 +41,8 @@ target_sources(LB303 PRIVATE
     Source/SharedEffects.cpp
     Source/SequencerState.h
     Source/SequencerState.cpp
+    Source/SongArrangement.h
+    Source/SongArrangement.cpp
     Source/SequencerPlayback.h
     Source/SequencerPlayback.cpp
     Source/PluginProcessor.h
