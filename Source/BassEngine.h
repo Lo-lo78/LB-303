@@ -72,6 +72,7 @@ private:
     double stage3 = 0, stage4 = 0;
     int envelopeStage = 3, lastNote = -1;
     bool noteActive = false, legato = false, accent = false;
+    int pendingSequencerAccent = -1;
     double smoothDelay = 0, delayTargetSamples = 0, delayPhase = 0;
     DelayLine delayL, delayR;
     PitchShift pitchShift;
