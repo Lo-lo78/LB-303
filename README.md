@@ -1,3 +1,6 @@
+# TEST2.4.29 — Delete deseleziona tutti gli step
+In Alt+Q, nella vista Steps, **Delete** annulla tutta la selezione di step (anche discontinua), mantiene il focus sullo step corrente e annuncia "All steps deselected" con NVDA. Non modifica note, pause, valori o Undo. Nel Song Editor Delete continua a cancellare gli elementi della Song; nel selettore dei Parameter Locks mantiene le funzioni precedenti. Nella pagina Parameters, con una selezione attiva Delete la cancella; senza selezione Delete conserva la funzione di eliminare il lock corrente.
+
 # TEST2.4.28 — Song loop e modifica relativa degli step selezionati
 **LB-303 TEST2.4.28:** correzione avvio delle prime note di ciascun pattern della Song in loop, anche quando il confine cade tra due campioni o il primo step ha Shift negativo; le note successive e lo Shuffle mantengono i tempi originali. Nell’editor Alt+Q le selezioni di step sono ora autoritative (non viene modificato uno step solo focalizzato ma non selezionato). Invio sulla pagina Note inverte note/pausa di ogni step selezionato; Su/Giù modifica relativamente gli step attivi, lasciando intatte le pause. Le pagine 1–5 operano sui selezionati; Parameters pagina 7 resta individuale.
 

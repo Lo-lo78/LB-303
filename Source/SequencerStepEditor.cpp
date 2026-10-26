@@ -28,7 +28,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
+    setDescription ("Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -173,7 +173,7 @@ void SequencerStepEditor::refresh()
         }
         if (page == 6)
             text << "\nEnter: select a synth parameter, Up/Down: edit current lock. "
-                 << "Alt+Home/End: previous/next lock. Delete: remove, Alt+Delete: remove all."
+                 << "Alt+Home/End: previous/next lock. Delete clears selected steps first; with no selected steps it removes the current lock. Alt+Delete: remove all."
                  << "\nPlayback of locks: enabled.\n";
     }
     text << "\nStart " << config.startStep << "  End " << config.endStep
@@ -181,7 +181,7 @@ void SequencerStepEditor::refresh()
          << "  Step " << coarseSteps[static_cast<size_t> (valueStepIndex)]
          << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Tab: active blocks"
          << "\nZ/X: Start Step -/+  |  C/V: End Step -/+"
-         << "\nCtrl+A: select visible 16 steps  |  Ctrl+C/V/X: steps  |  Ctrl+Shift+C/X/V: current pattern only"
+         << "\nCtrl+A: select visible 16 steps  |  Delete: deselect all  |  Ctrl+C/V/X: steps  |  Ctrl+Shift+C/X/V: current pattern only"
          << "  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
          << "\nAlt+P: Space target (" << (processor.spaceControlsSequencerPreview() ? "Preview" : "REAPER")
          << ")  |  Space: " << (processor.spaceControlsSequencerPreview() ? "play/stop both basslines" : "REAPER play/stop")
@@ -1289,6 +1289,27 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         if (chord ('v')) { pasteCurrentPattern(); return true; }
     }
     if (pickerOpen) return handlePickerKey (key);
+    // TEST2.4.29: Delete clears the entire explicit step selection, without
+    // changing any note, value, pattern, or Undo history. Song Editor has its
+    // own Delete handler above, so deleting Song entries is unaffected.
+    // On the Parameters page, Delete with no selection keeps its old purpose
+    // of deleting the selected Parameter Lock.
+    if (code == juce::KeyPress::deleteKey && ! mods.isAnyModifierKeyDown())
+    {
+        const bool anySelected = std::any_of (selectedSteps.begin(), selectedSteps.end(),
+                                              [] (bool selected) { return selected; });
+        if (anySelected)
+        {
+            selectedSteps.fill (false);
+            lastStepKey = -1;
+            lastPressTime = 0.0;
+            lastRevision = 0;
+            refresh();
+            announce ("All steps deselected");
+            return true;
+        }
+        if (page != 6) return true; // Nothing to deselect: no step data is deleted.
+    }
     const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
     const auto letter = [code, ch] (juce::juce_wchar c)
     { return ch == c || code == juce::CharacterFunctions::toUpperCase (c); };
