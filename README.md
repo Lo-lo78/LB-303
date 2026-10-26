@@ -1,3 +1,36 @@
+# TEST2.4.24 — Alt+M e Ctrl+Su/Giù anche nelle griglie
+
+- **Alt+M** funziona da Grid, Value ed Edit in tutte e quattro le griglie e alterna
+  **Pattern/Song** della stessa istanza. Il selettore è condiviso con Alt+Q:
+  passare da una schermata all'altra non perde la modalità. Alt+M non avvia
+  automaticamente la riproduzione se era ferma. Quando l'anteprima è già
+  attiva, il cambio modalità ne riavvia il clock dal principio, come dentro Alt+Q.
+- **Alt+P è indipendente:** in modalità DAW lo Spazio resta destinato a REAPER;
+  in modalità Sequencer Preview lo Spazio avvia/ferma il contenuto selezionato
+  da Alt+M (Pattern oppure Song), sia nelle griglie sia in Alt+Q.
+- **Ctrl+freccia su/giù** in Grid, Value ed Edit cambia subito il pattern
+  1–16, senza dover cercare il parametro Pattern. Il comando non cambia il
+  parametro focalizzato e rispetta i confini silenziosi. Nei contesti Bassline
+  1 e Bassline 2 agisce sulla rispettiva traccia; nella griglia Sequencer segue
+  il gruppo di parametri B1/B2 focalizzato, oppure il parametro **Editor Track**
+  quando il focus è su quello; nella griglia FX segue **Editor Track**.
+- Dopo un cambio pattern, tutti i valori Performance per-pattern visibili
+  nella griglia sono sincronizzati immediatamente. Se si è in Edit, eventuale
+  valore digitato è confermato prima del cambio; il focus resta in Edit.
+- Nessun nuovo parametro VST3, nessun cambiamento di DSP, Song, preset `.lb`
+  o comportamento delle scorciatoie dentro Alt+Q.
+
+# TEST2.4.23 — Repeat musicale e Alt+M globale
+
+- **Alt+M** ora alterna **Pattern preview / Song preview** da qualunque punto di Alt+Q: editor Steps, editor Song o selettore Parameter Locks. Non serve più aprire Song con Alt+S. Il tipo di anteprima è distinto dal trasporto Alt+P/Spazio; Alt+M non attiva Play se è Stop. Cambiando tipo l'anteprima, se attiva, riparte dal primo step per evitare una posizione incoerente.
+- Nel Song Editor, **Alt+Shift+M** conserva l'ascolto isolato del solo pattern sotto il cursore. Alt+R rimane come comando alternativo per cambiare Pattern/Song.
+- **Repeat a tempo come in LJuno:** ogni ripetizione utilizza un intero intervallo musicale determinato dal **BPM Division** del pattern, anziché comprimere tutti i retrigger nella durata di un singolo step. Anche lo **Shuffle** alterna intervalli lunghi/corti su ciascuna ripetizione. Repeat Random sceglie il numero di ripetizioni una volta per step, con scelte diverse ai passaggi successivi.
+- La durata di ogni pattern nella Song include tutte le ripetizioni e il Launch Delay: il pattern successivo non scatta più prima che siano terminate. Le due bassline mantengono durate/loop indipendenti. I nuovi calcoli sono condivisi dal player e dal Song locator, per evitare disallineamenti.
+- Nessun ID VST3 cambiato. Nessun nuovo parametro, né modifica al formato dei preset `.lb`. È cambiata la **durata musicale** dei pattern con Repeat maggiore di 1: una scelta voluta per ottenere retrigger sincronizzati e non mitragliate.
+- Sorgente integrale GitHub-ready, test statici, non compilato in locale. Verificare GitHub Actions, REAPER, NVDA e comportamento audio/CPU.
+
+---
+
 # TEST2.4.22 — Performance per Pattern, Random vivo e Song Editor
 
 - I dieci controlli Sequencer di ogni bassline (BPM Division, Shuffle, Legato, Skip, Note/Velocity/Length/Repeat Random, Octave e Semitone Shift) sono ora **specifici per il pattern selezionato**. Cambiando P1–P16 la griglia aggiorna i valori dal pattern senza alterare gli altri pattern; anche i pattern mai programmati partono dai default. Il player usa questi valori anche nella Song, che calcola separatamente la durata di ogni pattern usando il proprio BPM Division.
@@ -950,10 +983,10 @@ singola timeline sincronizzata: i pattern possono avere Start/End differenti.
 - Dentro Alt+Q, **Alt+S** alterna editor Steps e Song. Quando si entra in Song
   viene attivato Song playback; l'editor Steps mantiene tutte le scorciatoie
   e le 7 pagine preesistenti. Fuori da Alt+Q Alt+S salva i preset come prima.
-- **Alt+R** in Song alterna Song playback e Pattern playback. La modalita si
+- **Alt+M** ovunque in Alt+Q alterna Song preview e Pattern preview. **Alt+R** in Song continua a essere un comando alternativo. La modalita si
   salva in `.lb` e nello stato REAPER; Alt+P continua a decidere se Space
   controlla REAPER o l'anteprima, senza modificare il tipo di riproduzione.
-- **Alt+M** ascolta soltanto il P1–P16 della riga focalizzata tramite l'unico
+- **Alt+Shift+M** ascolta soltanto il P1–P16 della riga focalizzata tramite l'unico
   motore anteprima; un'altra pressione sullo stesso elemento lo ferma.
 - Frecce sinistra/destra cambiano bassline e ripristinano la posizione precedente
   dell'altra colonna; su/giu avanza di una riga, Pagina su/giu di **5**;

@@ -517,7 +517,7 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
     }
     g.setColour (juce::Colour (0xffb5c9e2));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 12.0f, juce::Font::plain)));
-    g.drawText ("Grid / Value / Edit | Alt+P: Space DAW / Preview | Alt+Q: steps | Alt+B: browser | Alt+S: save | Alt+I: init",
+    g.drawText ("Grid / Value / Edit | Alt+M: Pattern / Song | Ctrl+Up/Down: pattern | Alt+P: Space target | Alt+Q: steps",
                 18, getHeight() - 26, getWidth() - 36, 18, juce::Justification::centredLeft);
 }
 void LB303AudioProcessorEditor::resized()
@@ -932,6 +932,56 @@ void LB303AudioProcessorEditor::openStepEditor()
                              && origin != &numericEdit)) origin = &parameterGrid;
     stepEditor->open (lane, origin);
 }
+// Pattern shortcuts are available from all parameter contexts, even when a
+// different parameter has keyboard focus. In the Sequencer context, a B1/B2
+// parameter targets its own lane; the shared Editor Track parameter (and FX)
+// targets the lane chosen by Editor Track. This never changes GUI focus.
+int LB303AudioProcessorEditor::shortcutPatternLane() const
+{
+    if (context == 0 || context == 1) return context;
+    if (context == static_cast<int> (lb303::sequencerContextIndex))
+    {
+        const auto index = globalIndex();
+        if (index == lb303::pattern1Index || index == lb303::sequencer1EnabledIndex
+            || index == lb303::midiChannel1Index
+            || (index >= lb303::seqPerformanceIndex (0, 0)
+                && index < lb303::seqPerformanceIndex (0, lb303::sequencerPerformancePerLane)))
+            return 0;
+        if (index == lb303::pattern2Index || index == lb303::sequencer2EnabledIndex
+            || index == lb303::midiChannel2Index
+            || (index >= lb303::seqPerformanceIndex (1, 0)
+                && index < lb303::seqPerformanceIndex (1, lb303::sequencerPerformancePerLane)))
+            return 1;
+    }
+    return juce::jlimit (0, 1, juce::roundToInt (processor.value (lb303::editTrackIndex)));
+}
+
+void LB303AudioProcessorEditor::changePatternFromGrid (int direction, Control current)
+{
+    const int lane = shortcutPatternLane();
+    const auto patternParameter = lane == 0 ? lb303::pattern1Index : lb303::pattern2Index;
+    const int old = processor.currentPattern (static_cast<size_t> (lane));
+    const int next = juce::jlimit (0, 15, old + direction);
+    if (next == old) return; // identical to Alt+Q: silent at first/last pattern
+    if (auto* parameter = processor.parameter (patternParameter))
+    {
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost (parameter->convertTo0to1 (static_cast<float> (next)));
+        parameter->endChangeGesture();
+    }
+    // On TEST2.4.22+ these controls are per pattern, so update their proxy
+    // values immediately rather than waiting for the editor's polling timer.
+    processor.syncSelectedPatternPerformance();
+    selectParameter(); // update Value/Edit when the selected parameter also changed
+    auto& active = current == Control::grid ? static_cast<juce::Component&> (parameterGrid)
+                 : current == Control::value ? static_cast<juce::Component&> (parameterValue)
+                                             : static_cast<juce::Component&> (numericEdit);
+    lb303::announceToActiveScreenReader (active,
+        "Bassline " + juce::String (lane + 1) + ", Pattern " + juce::String (next + 1));
+    if (current == Control::edit)
+        numericEdit.selectAll();
+}
+
 bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control current)
 {
     const auto code = key.getKeyCode();
@@ -963,6 +1013,33 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
                                                   : static_cast<juce::Component*> (&numericEdit);
         lb303::announceToActiveScreenReader (*active,
             running ? "Both basslines preview playing" : "Both basslines preview stopped");
+        return true;
+    }
+    // TEST2.4.24: share the same Song/Pattern state as Alt+Q, but keep Alt+P
+    // completely independent. In DAW mode Space remains REAPER's key. In
+    // Preview mode Space plays whichever of Song/Pattern Alt+M selected here.
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown()
+        && ! mods.isShiftDown() && letter ('m'))
+    {
+        const bool song = ! processor.songs.songMode();
+        processor.endSongAudition();
+        processor.songs.setSongMode (song);
+        processor.restartSongPreviewClock();
+        auto& active = current == Control::grid ? static_cast<juce::Component&> (parameterGrid)
+                     : current == Control::value ? static_cast<juce::Component&> (parameterValue)
+                                                 : static_cast<juce::Component&> (numericEdit);
+        lb303::announceToActiveScreenReader (active,
+            song ? "Sequencer preview: Song" : "Sequencer preview: Pattern");
+        return true;
+    }
+    if (mods.isCtrlDown() && ! mods.isAltDown() && ! mods.isCommandDown()
+        && ! mods.isShiftDown()
+        && (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey))
+    {
+        // If an Edit value is being typed, commit it before switching patterns
+        // so the new pattern's stored value is not overwritten by stale text.
+        if (current == Control::edit && editDirty && ! commitEdit()) return true;
+        changePatternFromGrid (code == juce::KeyPress::upKey ? 1 : -1, current);
         return true;
     }
     // LJuno preset shortcuts work from Grid, Value and Edit, while preserving

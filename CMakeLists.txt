@@ -43,6 +43,7 @@ target_sources(LB303 PRIVATE
     Source/SequencerState.cpp
     Source/SongArrangement.h
     Source/SongArrangement.cpp
+    Source/SequencerTiming.h
     Source/SequencerPlayback.h
     Source/SequencerPlayback.cpp
     Source/PluginProcessor.h

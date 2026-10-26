@@ -28,7 +28,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
+    setDescription ("Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -185,7 +185,7 @@ void SequencerStepEditor::refresh()
          << "  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
          << "\nAlt+P: Space target (" << (processor.spaceControlsSequencerPreview() ? "Preview" : "REAPER")
          << ")  |  Space: " << (processor.spaceControlsSequencerPreview() ? "play/stop both basslines" : "REAPER play/stop")
-         << "  |  Esc / Alt+Q: return without stopping preview";
+         << "  |  Alt+M: Pattern/Song preview | Esc / Alt+Q: return without stopping preview";
     setText (text, juce::dontSendNotification);
 }
 void SequencerStepEditor::announceCurrent()
@@ -872,8 +872,8 @@ void SequencerStepEditor::renderSong()
          << "\nShift+Up/Down: select range | Ctrl+Space: toggle item | Ctrl+Shift+Up/Down: add range"
          << "\nCtrl+A: whole column | Ctrl+C/X/V: compact copy/cut/insert | Ctrl+Z/Shift+Z: undo/redo"
          << "\nAlt+I: insert | Delete: delete | Ctrl+Delete: clear with confirmation"
-         << "\nCtrl+Up/Down: change P1–P16 | Alt+L: lane loop | Alt+M: audition focused pattern"
-         << "\nAlt+R: Song/Pattern playback | Tab: full row details | Alt+S: Steps editor"
+         << "\nCtrl+Up/Down: change P1–P16 | Alt+L: lane loop | Alt+M: Song/Pattern preview | Alt+Shift+M: audition focused pattern"
+         << "\nAlt+R: Song/Pattern preview | Tab: full row details | Alt+S: Steps editor"
          << "\nAlt+P: Space target | Space: play/stop preview (when routed to Sequencer) | Esc: close";
     if (songConfirmClear) text << "\nConfirm clearing entire song column with Ctrl+Delete or Enter. Esc cancels.";
     setText (text, juce::dontSendNotification);
@@ -1016,6 +1016,7 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
         if (letter ('r'))
         {
             const bool next = ! processor.songs.songMode();
+            processor.endSongAudition();
             processor.songs.setSongMode (next);
             processor.restartSongPreviewClock(); renderSong();
             announce (next ? "Song playback" : "Pattern playback"); return true;
@@ -1030,7 +1031,7 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
             cursor = newIndex; renderSong(); announce ("Inserted P" + juce::String (p + 1)
                 + ", " + juce::String (cursor + 1)); return true;
         }
-        if (letter ('m'))
+        if (letter ('m') && mods.isShiftDown())
         {
             if (data.empty()) return true;
             processor.auditionSongPattern (track, data[static_cast<size_t> (cursor)]);
@@ -1214,6 +1215,23 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             return false; // leave Space to REAPER in default DAW mode
         const bool running = processor.toggleSequencerPreview();
         announce (running ? "Both basslines preview playing" : "Both basslines preview stopped");
+        return true;
+    }
+    // Alt+M always chooses between Pattern and Song preview, regardless of
+    // whether Steps, Song, or the Parameter Lock picker currently has focus.
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown()
+        && ! mods.isShiftDown()
+        && (character == 'm' || code == 'm' || code == 'M'))
+    {
+        const bool song = ! processor.songs.songMode();
+        processor.endSongAudition();
+        processor.songs.setSongMode (song);
+        processor.restartSongPreviewClock();
+        lastRevision = 0;
+        lastPattern = -1;
+        lastSongRevision = 0;
+        refresh();
+        announce (song ? "Sequencer preview: Song" : "Sequencer preview: Pattern");
         return true;
     }
     // Alt+S inside Alt+Q changes editor mode, never opens preset Save As.

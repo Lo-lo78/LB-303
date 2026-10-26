@@ -115,6 +115,8 @@ private:
     void performInitialFocusTransfer();
     void rememberEditorLocation();
     bool handleKey (const juce::KeyPress&, Control);
+    int shortcutPatternLane() const;
+    void changePatternFromGrid (int direction, Control current);
     void openStepEditor();
     void openPresetBrowser (bool save);
     void focusBackFromPreset();

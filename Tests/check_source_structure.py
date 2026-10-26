@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.22-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.24-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -328,7 +328,7 @@ print('PASS: TEST2.2.9 keyboard transpose reference C4, MIDI1/MIDI2 independence
 # TEST2.3 — locks drive actual audio snapshots per step, including paused steps.
 assert 'struct StepEvent' in playback_h
 assert 'maximumStepEvents = 2048' in playback_h
-assert 'const int stepIndex = start + stepInPattern;' in playback
+assert 'const int stepIndex = start + index;' in playback
 assert playback.index('stepEvents[static_cast<size_t> (stepEventCount++)]') < playback.index('if (step.note >= 128')
 assert 'stepEvents, stepEventCount, cursor' in processor
 assert 'std::sort (stepEvents.begin()' in processor
@@ -671,7 +671,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n                playing' not in processor
-assert 'LB-303-0.0.2-TEST2.4.22-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.24-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -823,7 +823,7 @@ assert 'b2L[nextSample] += fx.dry[1].first;' in processor
 assert 'const float mainDry = sharedFx.dryLevel();' in processor
 assert 'mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first' in processor
 assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
-assert 'LB-303-0.0.2-TEST2.4.22-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.24-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.16 browser NVDA names + existing preview + 4 stereo buses + separate distortion stems + stable IDs (static).')
 
 # TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
@@ -879,7 +879,7 @@ assert 'const double osc = primary + osc2GainSmooth * waveform (osc2Phase, secon
 assert 'setOsc2Parameters (layerValues)' in processor
 assert 'lock.sliderNumber - 1 - static_cast<int> (lb303::osc2LocalBase)' in processor
 assert 'voiceParameterGlobalIndex' in step
-assert 'LB-303-0.0.2-TEST2.4.22-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.24-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.19 two independent second oscillators, shared waveform/voice envelopes, cents detune, stable APVTS and lock slots.')
 
 # TEST2.4.20 — Ctrl+A selects only focused and active keyboard steps.
@@ -930,7 +930,7 @@ assert 'const bool marked = count > 1' in step
 assert 'code == juce::KeyPress::tabKey) { announceSong (true)' in step
 assert 'juce::KeyPress::pageUpKey ? -5 : 5' in step
 assert 'if (letter (\'i\'))' in step and 'if (letter (\'l\'))' in step
-assert 'if (letter (\'m\'))' in step and 'auditionSongPattern' in step
+assert "if (letter ('m') && mods.isShiftDown())" in step and 'auditionSongPattern' in step
 assert 'if (letter (\'r\'))' in step and 'setSongMode (next)' in step
 assert 'songConfirmClear' in step and 'Clear entire Bassline' in step
 assert 'LB303-SONG-ITEMS-V1:' in step
@@ -951,14 +951,68 @@ assert 'processor.syncSelectedPatternPerformance();' in editor
 assert 'LB303PatternPerformancePerPattern' in processor
 assert 'if (oldLaneWidePerformance)' in processor
 assert 'const auto config = bank.getConfig (pattern);' in playback
-assert 'c.bpmDivision' in song_cpp and 'double bpmDivision) noexcept' not in song_h
+assert 'sequencerTiming::duration' in song_cpp and 'double bpmDivision) noexcept' not in song_h
 assert 'SongArrangement::locate' in processor
 assert 'songEntryIds[static_cast<size_t> (lane)]' in playback
 assert 'randomSeed += 0x9e3779b9u' in playback
-assert 'x ^= x << 13; x ^= x >> 17; x ^= x << 5;' in playback
+assert 'return sequencerTiming::random (randomSeed' in playback
 assert 'for (int n = 0; n < 6; ++n)' in playback # LJuno velocity/gate distributions
 assert 'static_cast<std::uint32_t> (repeat)' in playback # varying per retrigger
 assert 'Same Ctrl+Up/Down pattern selection as in Alt+Q Steps' in step
 assert 'if (code == juce::KeyPress::returnKey)' in step # reads details in Song
 assert 'songChoosingPattern = true;' not in step # no second picker
 print('PASS: TEST2.4.22 per-pattern parameters, dynamic Song divisions, evolving random, direct Song Ctrl+Up/Down.')
+
+# TEST2.4.23 — Alt+M in both Alt+Q views, BPM-step Repeat / per-pulse Shuffle.
+timing = (root / 'Source/SequencerTiming.h').read_text(encoding='utf-8')
+assert 'Alt+M always chooses between Pattern and Song preview' in step
+assert step.index('Alt+M always chooses between Pattern and Song preview') < step.index('if (songView) return handleSongKey (key);')
+assert step.index('Alt+M always chooses between Pattern and Song preview') < step.index('if (pickerOpen) return handlePickerKey (key);')
+assert 'processor.endSongAudition();' in step
+assert 'sequencerTiming::interval (' in playback
+assert 'const double intervalBeats = sequencerTiming::interval (' in playback
+assert 'pulseBeat += intervalBeats;' in playback
+assert 'sequencerTiming::count (' in playback
+assert 'double stepBeats' in timing and 'config.shuffle' in playback
+assert 'stepBeats / repeats' not in playback and 'repeat * repeatBeats' not in playback
+assert 'sequencerTiming::duration (' in song_cpp
+assert 'sequencerPlayback.getRandomSeed(), bpm' in processor
+assert 'double beats, int lane, std::uint32_t seed, double bpm' in song_h
+print('PASS: TEST2.4.23 repeat pulses at pattern BPM/Shuffle, correct Song durations, global Alt+M.')
+
+# Note on each musical clock pulse, not an irregular gate-end subdivision.
+beat = 0.25   # 16th note at division=4
+shuffle = 0.5
+interval = lambda index: beat * (1.0 + (0.5 * shuffle if index % 2 == 0 else -0.5 * shuffle))
+assert abs(sum(interval(i) for i in range(3)) - 0.8125) < 1e-10
+assert abs(sum(interval(i) for i in range(4)) - 1.0) < 1e-10
+assert sum(interval(i) for i in range(3)) > beat  # 3 repeats exceed one step
+assert sum(interval(i) for i in range(3)) != beat / 3.0
+print('PASS: TEST2.4.23 numeric swing timing model; repeated pulses extend pattern.')
+
+# TEST2.4.24 — Pattern/Song transport selection and pattern navigation on all grids.
+editor_header_2424 = (root / 'Source' / 'PluginEditor.h').read_text(encoding='utf-8')
+assert 'int shortcutPatternLane() const;' in editor_header_2424
+assert 'void changePatternFromGrid (int direction, Control current);' in editor_header_2424
+assert 'int LB303AudioProcessorEditor::shortcutPatternLane() const' in editor
+assert 'void LB303AudioProcessorEditor::changePatternFromGrid (int direction, Control current)' in editor
+main_keys = editor.split('bool LB303AudioProcessorEditor::handleKey (', 1)[1]
+assert 'const bool song = ! processor.songs.songMode();' in main_keys
+assert 'processor.endSongAudition();' in main_keys
+assert 'processor.songs.setSongMode (song);' in main_keys
+assert 'processor.restartSongPreviewClock();' in main_keys
+assert main_keys.index("letter ('m')") < main_keys.index('// LJuno preset shortcuts work')
+assert 'changePatternFromGrid (code == juce::KeyPress::upKey ? 1 : -1, current);' in main_keys
+assert main_keys.index('changePatternFromGrid (code == juce::KeyPress::upKey ? 1 : -1, current);') < main_keys.index('if (current == Control::edit)')
+assert 'current == Control::edit && editDirty && ! commitEdit()' in main_keys
+shortcuts = editor.split('void LB303AudioProcessorEditor::changePatternFromGrid (', 1)[1].split('bool LB303AudioProcessorEditor::handleKey', 1)[0]
+assert 'processor.currentPattern (static_cast<size_t> (lane))' in shortcuts
+assert 'juce::jlimit (0, 15, old + direction)' in shortcuts
+assert 'if (next == old) return;' in shortcuts
+assert 'parameter->beginChangeGesture();' in shortcuts and 'parameter->endChangeGesture();' in shortcuts
+assert 'processor.syncSelectedPatternPerformance();' in shortcuts
+assert 'selectParameter();' in shortcuts
+assert 'lb303::announceToActiveScreenReader (active,' in shortcuts
+assert 'lb303::editTrackIndex' in editor.split('int LB303AudioProcessorEditor::shortcutPatternLane()', 1)[1].split('void LB303AudioProcessorEditor::changePatternFromGrid', 1)[0]
+assert 'TEST2.4.24' in (root / '.github/workflows/build-windows.yml').read_text()
+print('PASS: TEST2.4.24 Alt+M and Ctrl+Up/Down accessible across all four parameter grids.')

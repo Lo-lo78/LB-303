@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "SongArrangement.h"
+#include "SequencerTiming.h"
 #include <cmath>
 #include <limits>
 
@@ -93,41 +94,63 @@ bool SongArrangement::restore (const juce::String& text)
     return true;
 }
 SongArrangement::Position SongArrangement::locate (const Column& column, bool repeat,
-    const SequencerState& bank, double beats) noexcept
+    const SequencerState& bank, double beats, int lane, std::uint32_t seed, double bpm) noexcept
 {
     Position result;
     if (column.empty() || ! std::isfinite (beats) || beats < 0.0) return result;
-    // Walk the song's pattern references, not its steps. Cache-free and fully
-    // deterministic across block sizes, host seeks and repeat playback.
-    std::array<double, SequencerState::maximumSequences> durations {};
-    for (int p = 0; p < SequencerState::maximumSequences; ++p)
+    // Each Repeat consumes one complete BPM Division clock pulse. The Song
+    // duration must include every one, plus the selected pattern's launch delay.
+    // Repeat Random uses the SAME deterministic musical event hash as the
+    // playback engine so variable-length Song entries are never truncated.
+    std::array<double, SequencerState::maximumSequences> fixedDurations {};
+    bool variable = false;
+    for (int p : column)
     {
         const auto c = bank.getConfig (p);
-        const auto stepBeats = 1.0 / juce::jlimit (0.03125, 64.0,
-            static_cast<double> (c.bpmDivision));
-        durations[static_cast<size_t> (p)] =
-            (juce::jlimit (c.startStep, 128, c.endStep) - c.startStep + 1) * stepBeats;
+        variable |= c.repeatRandomDepth > 0.0f;
+        if (c.repeatRandomDepth <= 0.0f)
+            fixedDurations[static_cast<size_t> (p)] = sequencerTiming::duration (
+                bank, p, seed, lane, -1) + sequencerTiming::launchBeats (c, bpm);
     }
-    double cycle = 0.0;
-    for (int p : column) cycle += durations[static_cast<size_t> (p)];
-    if (cycle <= 0.0) return result;
-    const double startCycle = repeat ? std::floor (beats / cycle) * cycle : 0.0;
-    if (! repeat && beats >= cycle) return result;
-    double cursor = startCycle;
-    for (size_t index = 0; index < column.size(); ++index)
+    // Fast seek for patterns with fixed Repeat counts (the common case):
+    // even very long looping playback is O(number of Song rows), not O(loops).
+    double cursor = 0.0;
+    if (repeat && ! variable)
     {
-        const int p = column[index];
-        const double duration = durations[static_cast<size_t> (p)];
-        if (beats < cursor + duration || (index + 1 == column.size() && repeat))
+        double cycle = 0.0;
+        for (int p : column) cycle += fixedDurations[static_cast<size_t> (p)];
+        if (cycle <= 0.0) return result;
+        cursor = std::floor (beats / cycle) * cycle;
+    }
+    // When Repeat Random is active, the musical duration of each entry can
+    // vary with the absolute Song occurrence. Walk the true durations (never
+    // infer them from buffer length or a fixed pattern-step count).
+    for (std::int64_t songLoop = 0; songLoop < 65536; ++songLoop)
+    {
+        for (size_t index = 0; index < column.size(); ++index)
         {
-            result.pattern = p;
-            result.row = static_cast<int> (index);
-            result.startBeat = cursor;
-            result.endBeat = cursor + duration;
-            result.active = true;
-            return result;
+            const int p = column[index];
+            const auto c = bank.getConfig (p);
+            const auto entry = static_cast<std::int64_t> (std::llround (cursor * 1000000.0));
+            const double duration = c.repeatRandomDepth <= 0.0f
+                ? fixedDurations[static_cast<size_t> (p)]
+                : sequencerTiming::duration (bank, p, seed, lane, entry, 0, bpm)
+                    + sequencerTiming::launchBeats (c, bpm);
+            if (beats < cursor + duration)
+            {
+                result.pattern = p;
+                result.row = static_cast<int> (index);
+                result.startBeat = cursor;
+                result.endBeat = cursor + duration;
+                result.active = true;
+                return result;
+            }
+            cursor += duration;
         }
-        cursor += duration;
+        if (! repeat || (! variable && songLoop >= 1)) return result;
+        // For a fixed-length song the floor-based seek above normally finds
+        // the active cycle immediately. Checking one adjacent cycle avoids
+        // a possible silent sample at floating-point cycle boundaries.
     }
     return result;
 }

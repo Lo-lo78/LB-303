@@ -1,36 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "SequencerPlayback.h"
+#include "SequencerTiming.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 
 namespace lb303
 {
-namespace
-{
-int positiveModulo (std::int64_t number, int divisor)
-{
-    const auto result = number % divisor;
-    return static_cast<int> (result < 0 ? result + divisor : result);
-}
-
-}
 float SequencerPlayback::randomValue (int lane, int pattern, std::int64_t tick,
                                       std::int64_t entryId, std::uint32_t salt) const noexcept
 {
-    // The same xorshift32 core as LJuno's sequencerRandom, with independent
-    // per-instance, lane, musical-tick and Song-occurrence mixing. A repeated
-    // song row / loop receives a different entryId; host audio block boundaries
-    // never change random decisions for a given onset.
-    std::uint32_t x = randomSeed ^ salt ^ (static_cast<std::uint32_t> (tick) * 0x9e3779b9u);
-    x ^= static_cast<std::uint32_t> (tick >> 32) * 0x85ebca6bu;
-    x ^= static_cast<std::uint32_t> (entryId) * 0xc2b2ae35u;
-    x ^= static_cast<std::uint32_t> (entryId >> 32) * 0x27d4eb2du;
-    x ^= static_cast<std::uint32_t> (lane + 1) * 0x165667b1u;
-    x ^= static_cast<std::uint32_t> (pattern + 1) * 0x7feb352du;
-    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
-    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
-    return static_cast<float> (x & 0x00ffffffu) / 16777216.0f;
+    return sequencerTiming::random (randomSeed, lane, pattern, tick, entryId, salt);
 }
 void SequencerPlayback::reset() noexcept
 {
@@ -101,109 +81,139 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         const int start = juce::jlimit (1, 128, config.startStep) - 1;
         const int finish = juce::jlimit (start + 1, 128, config.endStep);
         const int patternLength = finish - start;
-        const auto division = juce::jlimit (0.03125, 64.0, static_cast<double> (config.bpmDivision));
+        const double division = juce::jlimit (0.03125, 64.0, static_cast<double> (config.bpmDivision));
         const double stepBeats = 1.0 / division;
-        // LJuno's Launch Step is a delayed pattern start, not the note number
-        // of the first step. Keep phase/launch independent for each bank.
-        const double launchDelay = (juce::jlimit (1, 128, config.launchStep) - 1) * stepBeats
-            + static_cast<double> (config.launchOffsetMs) * bpm / 60000.0;
-        const std::int64_t first = static_cast<std::int64_t> (
-            std::floor ((lanePpq - launchDelay) / stepBeats)) - 2;
-        const std::int64_t last = static_cast<std::int64_t> (
-            std::ceil ((laneEndPpq - launchDelay) / stepBeats)) + 2;
-        // Bound CPU for pathological host jumps or extreme divisions.
-        for (std::int64_t tick = first; tick <= last && tick < first + 1024; ++tick)
+        const double launchDelay = sequencerTiming::launchBeats (config, bpm);
+        const std::int64_t entry = songEntryIds[static_cast<size_t> (lane)];
+        const bool songEntry = entry >= 0;
+        // A pattern in the Song plays once; a freely selected pattern repeats.
+        // The SONG locator uses this exact same clock/repeat-count law.
+        const double baseTime = launchDelay;
+        if (laneEndPpq < baseTime - stepBeats * 3.0) continue;
+
+        std::int64_t firstCycle = 0;
+        double cycleBeat = baseTime;
+        const bool randomRepeats = config.repeatRandomDepth > 0.0f;
+        if (! songEntry && ! randomRepeats)
         {
-            const int stepInPattern = positiveModulo (tick, patternLength);
-            const int stepIndex = start + stepInPattern;
-            const auto step = bank.getStep (pattern, stepIndex);
-            const auto random = [&] (std::uint32_t salt)
-                { return randomValue (lane, pattern, tick,
-                                      songEntryIds[static_cast<size_t> (lane)], salt); };
-            // LJuno: when Repeat Random is enabled, choose a fresh repeat
-            // count for each musical step instead of freezing a sequence.
-            const float repeatDepth = juce::jlimit (0.0f, 1.0f, config.repeatRandomDepth);
-            const int repeats = repeatDepth > 0.0f
-                ? juce::jlimit (1, 16, 1 + static_cast<int> (random (0x1b873593u) * 16.0f * repeatDepth))
-                : juce::jlimit (1, 16, step.repeat);
-            const double repeatBeats = stepBeats / repeats;
-            const double swing = (positiveModulo (tick, 2) != 0)
-                ? juce::jlimit (-0.45, 0.45, static_cast<double> (config.shuffle)) * stepBeats : 0.0;
-            const double shift = juce::jlimit (-0.45, 0.45,
-                static_cast<double> (step.shift - 0.5f)) * repeatBeats;
-            // Parameter Locks take effect at this step's first onset, before
-            // its Note On, including on steps which contain a pause.
-            const double firstOnPpq = launchDelay + tick * stepBeats + swing + shift;
-            if (firstOnPpq >= lanePpq && firstOnPpq < laneEndPpq
-                && stepEventCount < maximumStepEvents)
-            {
-                const int sample = juce::jlimit (0, samples - 1,
-                    static_cast<int> (std::floor ((firstOnPpq - lanePpq) / beatsPerSample + 0.5)));
-                stepEvents[static_cast<size_t> (stepEventCount++)] =
-                    { blockOffset + sample, lane, pattern, stepIndex };
-            }
-            if (step.note >= 128 || step.velocity <= 0
-                || random (0x9e3779b9u) < juce::jlimit (0.0f, 1.0f, config.noteSkipProbability)) continue;
-            // Same C4-based keyboard transposition as LJuno. Each lane uses
-            // its own physical MIDI channel and independent held-note stack.
-            const int randomSemitones = juce::roundToInt (
-                (random (0x3972bc53u) * 2 - 1) *
-                12.0f * juce::jlimit (0.0f, 1.0f, config.noteRandomDepth));
-            const int note = juce::jlimit (0, 127, step.note + randomSemitones + keyboardTransposes[lane]
-                + config.semitoneShift + 12 * config.octaveShift);
-            // LJuno: a six-sample centred distribution sounds more like
-            // human velocity variation than flat uniform +/-63 jumps.
-            float gaussian = 0.0f;
-            for (int n = 0; n < 6; ++n)
-                gaussian += random (0x23ab4e21u + static_cast<std::uint32_t> (n) * 0x9e3779b9u) - 0.5f;
-            gaussian = juce::jlimit (-1.0f, 1.0f, gaussian / 3.0f);
-            const int velocity = juce::jlimit (1, 127, juce::roundToInt (
-                step.velocity + gaussian * 48.0f
-                * juce::jlimit (0.0f, 1.0f, config.velocityRandomDepth)));
-            for (int repeat = 0; repeat < repeats; ++repeat)
-            {
-                const double onPpq = launchDelay + tick * stepBeats + repeat * repeatBeats + swing + shift;
-                double lengthFactor = (step.length > 100 || (config.legato && step.length >= 100))
-                    ? 1.02 : juce::jmax (0.01, static_cast<double> (step.length) / 100.0);
-                const float lengthDepth = juce::jlimit (0.0f, 1.0f, config.noteLengthRandomDepth);
-                const auto repeatSalt = static_cast<std::uint32_t> (repeat) * 0x85ebca6bu;
-                if (lengthDepth > 0.0f && random (0x4f3b9e12u ^ repeatSalt) < lengthDepth)
-                {
-                    // LJuno's occasional six-draw random gate multiplier.
-                    float r = 0.0f;
-                    for (int n = 0; n < 6; ++n)
-                        r += random (0x5f356495u ^ repeatSalt
-                                 ^ static_cast<std::uint32_t> (n) * 0x9e3779b9u) - 0.5f;
-                    const auto multiplier = static_cast<double> ((r / 3.0f + 0.5f) * 3.0f);
-                    lengthFactor = juce::jlimit (0.01, 2.5, lengthFactor * multiplier);
-                }
-                const double offPpq = onPpq + repeatBeats * lengthFactor;
-                const auto emit = [&] (bool noteOn, double eventPpq)
-                {
-                    if (eventPpq < lanePpq || eventPpq >= laneEndPpq) return;
-                    const int sample = juce::jlimit (0, samples - 1,
-                        static_cast<int> (std::floor ((eventPpq - lanePpq) / beatsPerSample + 0.5)));
-                    if (noteOn)
-                    {
-                        output.addEvent (juce::MidiMessage::noteOn (
-                            lane + 1, note, static_cast<juce::uint8> (velocity)), sample);
-                        lastNote[lane] = note;
-                        lastSourceNote[lane] = step.note;
-                    }
-                    else if (lastNote[lane] >= 0 && lastSourceNote[lane] == step.note)
-                    {
-                        // Match the pitch emitted at Note On, not the current
-                        // transpose: the player may have changed keys meanwhile.
-                        output.addEvent (juce::MidiMessage::noteOff (
-                            lane + 1, lastNote[lane]), sample);
-                        lastNote[lane] = -1;
-                        lastSourceNote[lane] = -1;
-                    }
-                };
-                emit (true, onPpq);
-                emit (false, offPpq);
-            }
+            const double cycleLength = sequencerTiming::duration (
+                bank, pattern, randomSeed, lane, entry, 0, bpm);
+            if (cycleLength <= 0.0) continue;
+            // Include the preceding pattern pass for Note Offs that extend
+            // across the cycle boundary. A host seek does not need a scan
+            // of thousands of old pattern cycles.
+            firstCycle = juce::jmax (static_cast<std::int64_t> (0),
+                static_cast<std::int64_t> (std::floor (
+                    juce::jmax (0.0, lanePpq - baseTime) / cycleLength)) - 1);
+            cycleBeat += static_cast<double> (firstCycle) * cycleLength;
         }
+        // With random Repeat, the duration itself can change on every pass.
+        // Walk those durations in musical beats; never derive the event count
+        // or location from host audio-buffer boundaries.
+        for (std::int64_t cycle = firstCycle; cycle < firstCycle + 65536; ++cycle)
+        {
+            if (songEntry && cycle > 0) break;
+            const auto cycleLength = sequencerTiming::duration (
+                bank, pattern, randomSeed, lane, entry, cycle, bpm);
+            if (cycleLength <= 0.0) break;
+            if (cycleBeat - stepBeats > laneEndPpq) break;
+            if (cycleBeat + cycleLength + stepBeats * 3.0 < lanePpq)
+            {
+                cycleBeat += cycleLength;
+                continue;
+            }
+            double pulseBeat = cycleBeat;
+            std::int64_t pulseIndex = 0;
+            for (int index = 0; index < patternLength; ++index)
+            {
+                const int stepIndex = start + index;
+                const auto step = bank.getStep (pattern, stepIndex);
+                const std::int64_t tick = cycle * static_cast<std::int64_t> (patternLength) + index;
+                const int repeats = sequencerTiming::count (
+                    step, config, randomSeed, lane, pattern, tick, entry);
+                const double shift = juce::jlimit (-0.45, 0.45,
+                    static_cast<double> (step.shift - 0.5f)) * stepBeats;
+                const auto random = [&] (std::uint32_t salt)
+                    { return randomValue (lane, pattern, tick, entry, salt); };
+                // One parameter-lock event per original step, not per
+                // retrigger. Even a paused step can contain Parameter Locks.
+                const double firstOnPpq = pulseBeat + shift;
+                if (firstOnPpq >= lanePpq && firstOnPpq < laneEndPpq
+                    && stepEventCount < maximumStepEvents)
+                {
+                    const int sample = juce::jlimit (0, samples - 1,
+                        static_cast<int> (std::floor ((firstOnPpq - lanePpq)
+                                                      / beatsPerSample + 0.5)));
+                    stepEvents[static_cast<size_t> (stepEventCount++)] =
+                        { blockOffset + sample, lane, pattern, stepIndex };
+                }
+                for (int repeat = 0; repeat < repeats; ++repeat)
+                {
+                    // Each Repeat consumes a complete tempo-synchronised
+                    // clock pulse; Shuffle alternates on every pulse, exactly
+                    // as LJuno's repeatCounter/stepInterval scheduler does.
+                    const double intervalBeats = sequencerTiming::interval (
+                        stepBeats, config.shuffle, pulseIndex++);
+                    const double onPpq = pulseBeat + shift;
+                    pulseBeat += intervalBeats;
+                    if (step.note >= 128 || step.velocity <= 0) continue;
+                    const auto repeatSalt = static_cast<std::uint32_t> (repeat) * 0x85ebca6bu;
+                    if (random (0x9e3779b9u ^ repeatSalt)
+                        < juce::jlimit (0.0f, 1.0f, config.noteSkipProbability)) continue;
+                    const int randomSemitones = juce::roundToInt (
+                        (random (0x3972bc53u ^ repeatSalt) * 2 - 1) * 12.0f
+                        * juce::jlimit (0.0f, 1.0f, config.noteRandomDepth));
+                    const int note = juce::jlimit (0, 127, step.note + randomSemitones + keyboardTransposes[lane] + config.semitoneShift + 12 * config.octaveShift);
+                    float gaussian = 0.0f;
+                    for (int n = 0; n < 6; ++n)
+                        gaussian += random (0x23ab4e21u ^ repeatSalt
+                            ^ (static_cast<std::uint32_t> (n) * 0x9e3779b9u)) - 0.5f;
+                    gaussian = juce::jlimit (-1.0f, 1.0f, gaussian / 3.0f);
+                    const int velocity = juce::jlimit (1, 127, juce::roundToInt (
+                        step.velocity + gaussian * 48.0f
+                        * juce::jlimit (0.0f, 1.0f, config.velocityRandomDepth)));
+                    double lengthFactor = (step.length > 100 || (config.legato && step.length >= 100))
+                        ? 1.02 : juce::jmax (0.01, static_cast<double> (step.length) / 100.0);
+                    const float lengthDepth = juce::jlimit (0.0f, 1.0f, config.noteLengthRandomDepth);
+                    if (lengthDepth > 0.0f && random (0x4f3b9e12u ^ repeatSalt) < lengthDepth)
+                    {
+                        float r = 0.0f;
+                        for (int n = 0; n < 6; ++n)
+                            r += random (0x5f356495u ^ repeatSalt
+                                    ^ (static_cast<std::uint32_t> (n) * 0x9e3779b9u)) - 0.5f;
+                        lengthFactor = juce::jlimit (0.01, 2.5,
+                            lengthFactor * static_cast<double> ((r / 3.0f + 0.5f) * 3.0f));
+                    }
+                    const double offPpq = onPpq + intervalBeats * lengthFactor;
+                    const auto emit = [&] (bool noteOn, double eventPpq)
+                    {
+                        if (eventPpq < lanePpq || eventPpq >= laneEndPpq) return;
+                        const int sample = juce::jlimit (0, samples - 1,
+                            static_cast<int> (std::floor ((eventPpq - lanePpq)
+                                                          / beatsPerSample + 0.5)));
+                        if (noteOn)
+                        {
+                            output.addEvent (juce::MidiMessage::noteOn (
+                                lane + 1, note, static_cast<juce::uint8> (velocity)), sample);
+                            lastNote[lane] = note;
+                            lastSourceNote[lane] = step.note;
+                        }
+                        else if (lastNote[lane] >= 0 && lastSourceNote[lane] == step.note)
+                        {
+                            output.addEvent (juce::MidiMessage::noteOff (
+                                lane + 1, lastNote[lane]), sample);
+                            lastNote[lane] = -1;
+                            lastSourceNote[lane] = -1;
+                        }
+                    };
+                    emit (true, onPpq);
+                    emit (false, offPpq);
+                }
+            }
+            cycleBeat += cycleLength;
+            if (songEntry || cycleBeat > laneEndPpq + stepBeats * 3.0) break;
+        }
+
     }
 }
 }

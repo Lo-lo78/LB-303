@@ -323,7 +323,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                     const double localBeat = nowPpq - origins[static_cast<size_t> (lane)];
                     const auto pos = lb303::SongArrangement::locate (
                         *songColumns[static_cast<size_t> (lane)], songs.loop (lane),
-                        sequenceBanks[static_cast<size_t> (lane)], localBeat);
+                        sequenceBanks[static_cast<size_t> (lane)], localBeat, lane,
+                        sequencerPlayback.getRandomSeed(), bpm);
                     if (! pos.active)
                     {
                         audible[static_cast<size_t> (lane)] = false;

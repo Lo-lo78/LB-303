@@ -56,8 +56,10 @@ public:
     juce::AudioProcessorValueTreeState parameters;
     lb303::PresetManager presetManager;
     lb303::SongArrangement songs;
-    // Alt+M auditions only the focused song pattern; -1 returns to normal song playback.
+    // Alt+Shift+M auditions the focused Song row; Alt+M returns to the global Pattern/Song preview.
     void auditionSongPattern (int lane, int pattern) noexcept;
+    void endSongAudition() noexcept
+    { auditionLane.store (-1, std::memory_order_release); }
     int songAuditionLane() const noexcept { return auditionLane.load (std::memory_order_acquire); }
     bool isPreviewPlaying() const noexcept { return previewEnabled.load (std::memory_order_acquire); }
     void restartSongPreviewClock() noexcept

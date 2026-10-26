@@ -23,6 +23,7 @@ public:
     // The host PPQ is the shared clock; changing a pattern never writes the other lane.
     void reset() noexcept;
     void setRandomSeed (std::uint32_t seed) noexcept { randomSeed = seed ? seed : 0x51e90001u; }
+    std::uint32_t getRandomSeed() const noexcept { return randomSeed; }
     void generate (juce::MidiBuffer& output, const std::array<SequencerState, 2>& banks,
                    const std::array<int, 2>& patterns, const std::array<std::int64_t, 2>& songEntryIds,
                    const std::array<bool, 2>& enabled,
