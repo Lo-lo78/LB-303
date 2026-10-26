@@ -331,10 +331,10 @@ std::vector<int> SequencerStepEditor::editingSteps() const
     const auto [firstActive, lastActive] = activeStepBounds();
     for (int i = firstActive; i <= lastActive; ++i)
         if (selectedSteps[static_cast<size_t> (i)]) indices.push_back (i);
-    const int bounded = juce::jlimit (firstActive, lastActive, currentStep);
-    if (std::find (indices.begin(), indices.end(), bounded) == indices.end())
-        indices.push_back (bounded);
-    std::sort (indices.begin(), indices.end());
+    // Explicit selection takes precedence over the focused step. The cursor
+    // can move away from selected cells without adding an unintended edit.
+    if (indices.empty())
+        indices.push_back (juce::jlimit (firstActive, lastActive, currentStep));
     return indices;
 }
 void SequencerStepEditor::commitAction (Action&& action)
@@ -382,10 +382,16 @@ void SequencerStepEditor::modifyValue (int direction, int amount)
     Action action; action.track = track; action.pattern = pattern();
     const auto layer = static_cast<lb303::SequencerLayer> (page);
     const float delta = page == 4 ? 0.01f * direction * amount : static_cast<float> (direction * amount);
-    for (auto index : editingSteps())
+    const auto indices = editingSteps();
+    const bool multiple = indices.size() > 1;
+    for (auto index : indices)
     {
         StepChange change; change.index = index;
         change.before = bank().getStep (pattern(), index);
+        // During a relative multi-step pitch move, silence stays silence.
+        // Enter on the Note page toggles every selected rest individually.
+        if (multiple && page == 0 && change.before.note >= 128)
+            continue;
         const auto before = bank().getStepValue (pattern(), index, layer);
         bank().addStepDelta (pattern(), index, layer, delta);
         const auto after = bank().getStepValue (pattern(), index, layer);
@@ -396,8 +402,12 @@ void SequencerStepEditor::modifyValue (int direction, int amount)
         }
     }
     if (action.changes.empty()) return; // silent limits
+    const int changed = static_cast<int> (action.changes.size());
     commitAction (std::move (action));
-    announceCurrent();
+    if (multiple)
+        announce (juce::String (changed) + " selected steps changed, " + pageName());
+    else
+        announceCurrent();
 }
 void SequencerStepEditor::changeLaunch (int direction, int amount)
 {
@@ -450,8 +460,12 @@ void SequencerStepEditor::toggleCurrentNote()
         change.after = bank().getStep (pattern(), index);
         action.changes.push_back (std::move (change));
     }
+    const int changed = static_cast<int> (action.changes.size());
     commitAction (std::move (action));
-    announceCurrent();
+    if (changed > 1)
+        announce (juce::String (changed) + " selected notes toggled");
+    else
+        announceCurrent();
 }
 void SequencerStepEditor::copySteps (bool cut)
 {

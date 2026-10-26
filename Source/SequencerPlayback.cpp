@@ -48,6 +48,16 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
     const bool timelineJump = previousPlaying && (previousPpq < 0.0
         || std::abs (ppq - previousPpq) > 0.025); // loop, seek or discontinuity
 
+    // A Song boundary normally falls between sample frames. The processor
+    // starts the new row on the first sample at/after that beat; allow the
+    // first note/lock to land on that frame instead of silently discarding it.
+    // Grace applies ONCE on entry, not to every buffer (no double attacks).
+    std::array<bool, 2> newSongEntry {{ false, false }};
+    for (int lane = 0; lane < 2; ++lane)
+        newSongEntry[static_cast<size_t> (lane)] = songEntryIds[lane] >= 0
+            && (oldSongEntryIds[lane] != songEntryIds[lane]
+                || oldPattern[lane] != patterns[lane] || ! oldEnabled[lane]);
+
     // Explicit note-off on stop, disabling a lane or switching its pattern.
     // Does not interfere with the other lane's MIDI channel.
     for (int lane = 0; lane < 2; ++lane)
@@ -86,6 +96,12 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         const double launchDelay = sequencerTiming::launchBeats (config, bpm);
         const std::int64_t entry = songEntryIds[static_cast<size_t> (lane)];
         const bool songEntry = entry >= 0;
+        const double entryGrace = newSongEntry[static_cast<size_t> (lane)]
+            ? beatsPerSample * 1.01 : 0.0;
+        const auto inBlock = [&] (double eventBeat)
+        {
+            return eventBeat >= lanePpq - entryGrace && eventBeat < laneEndPpq;
+        };
         // A pattern in the Song plays once; a freely selected pattern repeats.
         // The SONG locator uses this exact same clock/repeat-count law.
         const double baseTime = launchDelay;
@@ -137,8 +153,12 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                     { return randomValue (lane, pattern, tick, entry, salt); };
                 // One parameter-lock event per original step, not per
                 // retrigger. Even a paused step can contain Parameter Locks.
-                const double firstOnPpq = pulseBeat + shift;
-                if (firstOnPpq >= lanePpq && firstOnPpq < laneEndPpq
+                // A negative shift on the FIRST Song pulse would place the
+                // attack before the Song row exists. Keep that attack at the
+                // row start; later notes retain their programmed shift.
+                const double firstOnPpq = songEntry && index == 0
+                    ? juce::jmax (cycleBeat, pulseBeat + shift) : pulseBeat + shift;
+                if (inBlock (firstOnPpq)
                     && stepEventCount < maximumStepEvents)
                 {
                     const int sample = juce::jlimit (0, samples - 1,
@@ -154,7 +174,8 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                     // as LJuno's repeatCounter/stepInterval scheduler does.
                     const double intervalBeats = sequencerTiming::interval (
                         stepBeats, config.shuffle, pulseIndex++);
-                    const double onPpq = pulseBeat + shift;
+                    const double onPpq = songEntry && index == 0 && repeat == 0
+                        ? juce::jmax (cycleBeat, pulseBeat + shift) : pulseBeat + shift;
                     pulseBeat += intervalBeats;
                     if (step.note >= 128 || step.velocity <= 0) continue;
                     const auto repeatSalt = static_cast<std::uint32_t> (repeat) * 0x85ebca6bu;
@@ -187,7 +208,11 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                     const double offPpq = onPpq + intervalBeats * lengthFactor;
                     const auto emit = [&] (bool noteOn, double eventPpq)
                     {
-                        if (eventPpq < lanePpq || eventPpq >= laneEndPpq) return;
+                        // Grace is intentionally limited to Note Ons at the
+                        // new-row boundary. A late Note Off must never cancel
+                        // the first note of the next row.
+                        if (noteOn ? ! inBlock (eventPpq)
+                                   : (eventPpq < lanePpq || eventPpq >= laneEndPpq)) return;
                         const int sample = juce::jlimit (0, samples - 1,
                             static_cast<int> (std::floor ((eventPpq - lanePpq)
                                                           / beatsPerSample + 0.5)));
