@@ -93,17 +93,18 @@ bool SongArrangement::restore (const juce::String& text)
     return true;
 }
 SongArrangement::Position SongArrangement::locate (const Column& column, bool repeat,
-    const SequencerState& bank, double beats, double division) noexcept
+    const SequencerState& bank, double beats) noexcept
 {
     Position result;
     if (column.empty() || ! std::isfinite (beats) || beats < 0.0) return result;
-    const double stepBeats = 1.0 / juce::jlimit (0.03125, 64.0, division);
     // Walk the song's pattern references, not its steps. Cache-free and fully
     // deterministic across block sizes, host seeks and repeat playback.
     std::array<double, SequencerState::maximumSequences> durations {};
     for (int p = 0; p < SequencerState::maximumSequences; ++p)
     {
         const auto c = bank.getConfig (p);
+        const auto stepBeats = 1.0 / juce::jlimit (0.03125, 64.0,
+            static_cast<double> (c.bpmDivision));
         durations[static_cast<size_t> (p)] =
             (juce::jlimit (c.startStep, 128, c.endStep) - c.startStep + 1) * stepBeats;
     }

@@ -1,4 +1,14 @@
-# LB-303 0.0.2 — TEST2.4.21 Song Editor
+# TEST2.4.22 — Performance per Pattern, Random vivo e Song Editor
+
+- I dieci controlli Sequencer di ogni bassline (BPM Division, Shuffle, Legato, Skip, Note/Velocity/Length/Repeat Random, Octave e Semitone Shift) sono ora **specifici per il pattern selezionato**. Cambiando P1–P16 la griglia aggiorna i valori dal pattern senza alterare gli altri pattern; anche i pattern mai programmati partono dai default. Il player usa questi valori anche nella Song, che calcola separatamente la durata di ogni pattern usando il proprio BPM Division.
+- Compatibilità: gli stati salvati prima della TEST2.4.22 vengono migrati, copiando i vecchi valori condivisi nei 16 pattern di quella bassline per conservare il suono preesistente. Le nuove impostazioni individuali sono salvate nello stesso bank `.lb` e nel progetto REAPER. Nessun ID VST3 precedente è stato cambiato.
+- Random dinamico ispirato a LJuno (xorshift32 con chiavi per evento e passaggio Song): l'ascolto ripetuto genera nuove variazioni senza registrarle negli step e senza dipendere dalle dimensioni dei blocchi audio. Gate/Velocity usano la distribuzione a più estrazioni di LJuno, il Repeat Random sceglie un nuovo valore per step. Lo stato casuale si rinnova avviando l'anteprima.
+- Dentro Alt+Q, Song (Alt+S): **Ctrl+freccia su/giù** modifica immediatamente P1–P16 del solo elemento corrente, come in Steps. Invio ora legge i dettagli della riga e non apre più il selettore. Ctrl+Shift+su/giù mantiene la selezione multipla discontinua.
+- Unico archivio consegnato: sorgente completo GitHub-ready, non patch. Compilazione prevista solo in GitHub Actions e test audio/NVDA in REAPER.
+
+---
+
+# LB-303 0.0.2 — TEST2.4.22 Song Performance and Random
 
 **Nuovo in TEST2.4.21:** Song Editor accessibile a due colonne indipendenti,
 con riproduzione concatenata P1–P16, selezione anche discontinua, appunti Song,
@@ -847,19 +857,17 @@ bassline**, grouped beside its Sequencer On/Off, Pattern and MIDI Channel:
   of 4 means four steps per quarter-note at REAPER's tempo.
 - **Shuffle**: 0–1; delays the alternate steps, preserving the BPM grid.
 - **Legato**: Off/On; length-100 notes may overlap for glide.
-- **Note Skip Probability**: 0–1 (deterministic at a given pattern/position).
+- **Note Skip Probability**: 0–1 (una nuova decisione a ogni occorrenza dello step).
 - **Note Random Depth**, **Velocity Random Depth**, **Length Random Depth**,
-  **Repeat Random Depth**: 0–1, deterministic per step (no random audio-thread
-  allocation and stable when REAPER loops).
+  **Repeat Random Depth**: 0–1, con variazioni a ogni passaggio musicalmente ripetuto
+  (nessuna allocazione audio durante il calcolo casuale).
 - **Global Octave Shift**: -4 to +4 octaves; **Global Semitone Shift**: -12 to +12.
 
-Unlike per-pattern **Start/End**, Launch Step and step values, these new
-performance controls apply **per bassline across its 16 patterns**. Each of
-the two tracks can run at its own BPM Division, Shuffle and transposition.
-That scope is intentional for now: it provides two independent automatible
-performance clocks without rewriting the per-pattern bank format or the
-already-saved Parameter Locks. The 32 patterns, per-pattern Start/End, MIDI
-channels, accessibility and preset browser are preserved.
+**Aggiornamento TEST2.4.22:** questi dieci controlli ora appartengono al
+**singolo pattern** della rispettiva bassline. Cambiando Pattern P1–P16 il
+Sequencer Grid ricarica i valori di quel pattern. Lo stato precedente condiviso
+e stato migrato in tutti i 16 pattern per non alterare i vecchi preset. La
+Song usa i BPM Division individuali per calcolare la durata degli elementi.
 
 ### Build and verification
 
@@ -954,8 +962,9 @@ singola timeline sincronizzata: i pattern possono avere Start/End differenti.
   playback e numero selezionato. Le frecce pronunciano soltanto, per esempio,
   `P3, 24 of 64`; `Selected` e pronunciato sulle righe selezionate soltanto
   se la selezione multipla contiene almeno due elementi.
-- **Invio** entra nella scelta del pattern (freccia su/giu P1–P16, Invio
-  conferma ed Esc annulla). **Alt+I** inserisce dopo il cursore un'altra
+- **Ctrl+Su/Giu** modifica immediatamente il riferimento P1–P16 della riga
+  corrente, proprio come la scelta pattern in Steps. **Invio** legge i dettagli,
+  senza aprire un selettore. **Alt+I** inserisce dopo il cursore un'altra
   occorrenza del pattern corrente; se la colonna e vuota inserisce P1.
 - **Alt+L** cambia il Loop solo della bassline corrente. Con Loop Off una
   colonna si ferma alla fine, mentre l'altra puo continuare. Con Loop On la

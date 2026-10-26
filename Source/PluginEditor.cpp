@@ -175,10 +175,11 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
     addAndMakeVisible (*presetBrowser);
     presetBrowser->setVisible (false);
     presetBrowser->onClose = [this] { focusBackFromPreset(); };
-    presetBrowser->onPresetLoaded = [this] { syncFxColumns(); refreshLabels (true); selectParameter(); };
+    presetBrowser->onPresetLoaded = [this] { processor.syncSelectedPatternPerformance (true); syncFxColumns(); refreshLabels (true); selectParameter(); };
     stepEditor = std::make_unique<SequencerStepEditor> (processor);
     addAndMakeVisible (*stepEditor);
     stepEditor->setVisible (false);
+    processor.syncSelectedPatternPerformance (true);
     populateContext();
     // Children exist before JUCE's resize notifications (TEST1.2 crash fix).
     setResizable (true, true);
@@ -570,6 +571,7 @@ void LB303AudioProcessorEditor::mouseDown (const juce::MouseEvent& event)
 }
 void LB303AudioProcessorEditor::timerCallback()
 {
+    processor.syncSelectedPatternPerformance();
     if (stepEditor != nullptr && stepEditor->isOpen()) stepEditor->refresh();
     else { syncFxColumns(); refreshLabels(); }
 }
@@ -602,6 +604,7 @@ void LB303AudioProcessorEditor::changeSelection (int index)
 }
 void LB303AudioProcessorEditor::selectParameter()
 {
+    processor.syncSelectedPatternPerformance();
     const int chosen = parameterGrid.getSelectedId() - 1;
     if (! juce::isPositiveAndBelow (chosen, currentParameterCount())) return;
     selected = chosen;

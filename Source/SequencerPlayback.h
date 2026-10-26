@@ -22,16 +22,22 @@ public:
     // The two lanes have independent patterns, lengths and timing configurations.
     // The host PPQ is the shared clock; changing a pattern never writes the other lane.
     void reset() noexcept;
+    void setRandomSeed (std::uint32_t seed) noexcept { randomSeed = seed ? seed : 0x51e90001u; }
     void generate (juce::MidiBuffer& output, const std::array<SequencerState, 2>& banks,
                    const std::array<int, 2>& patterns, const std::array<std::int64_t, 2>& songEntryIds,
                    const std::array<bool, 2>& enabled,
                    const std::array<double, 2>& triggerOrigins,
                    const std::array<int, 2>& keyboardTransposes,
-                   const std::array<SequencerConfig, 2>& performanceControls,
                    bool playing, double ppq, double bpm, double sampleRate, int samples,
                    std::array<StepEvent, maximumStepEvents>& stepEvents,
                    int& stepEventCount, int blockOffset);
 private:
+    // LJuno-inspired xorshift32, hashed by musical onset and Song occurrence.
+    // Never advance RNG based on audio buffer size: song loops change the
+    // occurrence key, while all pieces of a split note get identical choices.
+    float randomValue (int lane, int pattern, std::int64_t tick,
+                       std::int64_t songEntryId, std::uint32_t salt) const noexcept;
+    std::uint32_t randomSeed = 0x51e90001u;
     std::array<int, 2> oldPattern { -1, -1 };
     std::array<std::int64_t, 2> oldSongEntryIds {{ -3, -3 }};
     std::array<bool, 2> oldEnabled { false, false };

@@ -39,8 +39,7 @@ public:
     std::uint64_t getLoadEpoch() const noexcept { return loadEpoch.load (std::memory_order_relaxed); }
     juce::String serialise() const;
     bool restore (const juce::String&);
-    static Position locate (const Column&, bool loop, const SequencerState&, double beats,
-                            double bpmDivision) noexcept;
+    static Position locate (const Column&, bool loop, const SequencerState&, double beats) noexcept;
 private:
     std::array<Snapshot, 2> columns;
     std::array<std::atomic<bool>, 2> looping {};

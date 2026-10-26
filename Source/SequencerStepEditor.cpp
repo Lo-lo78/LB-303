@@ -61,7 +61,6 @@ void SequencerStepEditor::close()
 {
     if (! opened) return;
     processor.editorSession.sequencerPage = page;
-    songChoosingPattern = false;
     opened = false;
     pickerOpen = false;
     // Preview stays active when Alt+Q/Esc closes this editing overlay.
@@ -125,7 +124,7 @@ void SequencerStepEditor::refresh()
         {
             lastSongLoadEpoch = epoch;
             songUndo.clear(); songRedo.clear();
-            songChoosingPattern = songConfirmClear = false;
+            songConfirmClear = false;
             for (auto& set : songSelected) set.clear();
             songShiftAnchor = { -1, -1 };
             lastSongRevision = 0;
@@ -319,6 +318,7 @@ void SequencerStepEditor::changePattern (int direction)
         param->setValueNotifyingHost (param->convertTo0to1 (static_cast<float> (next)));
         param->endChangeGesture();
     }
+    processor.syncSelectedPatternPerformance();
     selectedSteps.fill (false);
     lastStepKey = -1;
     lastRevision = 0;
@@ -872,11 +872,9 @@ void SequencerStepEditor::renderSong()
          << "\nShift+Up/Down: select range | Ctrl+Space: toggle item | Ctrl+Shift+Up/Down: add range"
          << "\nCtrl+A: whole column | Ctrl+C/X/V: compact copy/cut/insert | Ctrl+Z/Shift+Z: undo/redo"
          << "\nAlt+I: insert | Delete: delete | Ctrl+Delete: clear with confirmation"
-         << "\nEnter: choose P1–P16 | Alt+L: lane loop | Alt+M: audition focused pattern"
+         << "\nCtrl+Up/Down: change P1–P16 | Alt+L: lane loop | Alt+M: audition focused pattern"
          << "\nAlt+R: Song/Pattern playback | Tab: full row details | Alt+S: Steps editor"
          << "\nAlt+P: Space target | Space: play/stop preview (when routed to Sequencer) | Esc: close";
-    if (songChoosingPattern) text << "\nChoose Pattern " << (songPatternChoice + 1)
-                                  << ": Up/Down changes, Enter confirms, Esc cancels";
     if (songConfirmClear) text << "\nConfirm clearing entire song column with Ctrl+Delete or Enter. Esc cancels.";
     setText (text, juce::dontSendNotification);
 }
@@ -988,22 +986,6 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
     auto data = *processor.songs.column (track);
     const auto lane = static_cast<size_t> (track);
     auto& cursor = songCursor[lane];
-    if (songChoosingPattern)
-    {
-        if (code == juce::KeyPress::escapeKey) { songChoosingPattern = false; renderSong(); announce ("Pattern change cancelled"); return true; }
-        if (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey)
-        {
-            songPatternChoice = juce::jlimit (0, 15, songPatternChoice + (code == juce::KeyPress::upKey ? 1 : -1));
-            renderSong(); announce ("Pattern " + juce::String (songPatternChoice + 1)); return true;
-        }
-        if (code == juce::KeyPress::returnKey)
-        {
-            songChoosingPattern = false;
-            if (! data.empty()) { data[static_cast<size_t> (cursor)] = songPatternChoice; applySongEdit (std::move (data)); }
-            renderSong(); announceSong (true); return true;
-        }
-        return true;
-    }
     if (songConfirmClear)
     {
         if (code == juce::KeyPress::escapeKey) { songConfirmClear = false; announce ("Clear cancelled"); renderSong(); return true; }
@@ -1060,6 +1042,20 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
     }
     if (mods.isCtrlDown())
     {
+        // Same Ctrl+Up/Down pattern selection as in Alt+Q Steps. Change only
+        // the current song ROW; all other occurrences of this pattern remain.
+        if (! mods.isShiftDown() && ! mods.isAltDown() && (code == juce::KeyPress::upKey
+                                      || code == juce::KeyPress::downKey))
+        {
+            if (data.empty()) return true;
+            const int old = data[static_cast<size_t> (cursor)];
+            const int next = juce::jlimit (0, 15, old + (code == juce::KeyPress::upKey ? 1 : -1));
+            if (next == old) return true; // silent boundary
+            data[static_cast<size_t> (cursor)] = next;
+            applySongEdit (std::move (data));
+            announceSong();
+            return true;
+        }
         if (code == juce::KeyPress::deleteKey)
         {
             if (data.empty()) return true;
@@ -1163,10 +1159,10 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
     }
     if (code == juce::KeyPress::returnKey)
     {
-        if (data.empty()) { announce ("Empty column. Alt I inserts the first pattern"); return true; }
-        songPatternChoice = data[static_cast<size_t> (cursor)];
-        songChoosingPattern = true;
-        renderSong(); announce ("Choose Pattern " + juce::String (songPatternChoice + 1) + " of 16"); return true;
+        // Enter no longer opens a second selector. Ctrl+Up/Down edits P1..P16
+        // directly; Enter reads details just like Tab.
+        announceSong (true);
+        return true;
     }
     if (code == juce::KeyPress::deleteKey)
     {
@@ -1225,7 +1221,6 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         && (character == 's' || code == 's' || code == 'S'))
     {
         songView = ! songView;
-        songChoosingPattern = false;
         songConfirmClear = false;
         pickerOpen = false;
         if (songView)

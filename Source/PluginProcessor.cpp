@@ -16,7 +16,74 @@ LB303AudioProcessor::LB303AudioProcessor()
 {
     for (size_t i = 0; i < rawParameters.size(); ++i)
         rawParameters[i] = parameters.getRawParameterValue (lb303::catalog()[i].id);
+    for (int lane = 0; lane < 2; ++lane)
+        for (size_t control = 0; control < lb303::sequencerPerformancePerLane; ++control)
+            parameters.addParameterListener (lb303::catalog()[lb303::seqPerformanceIndex (
+                static_cast<size_t> (lane), control)].id, this);
 }
+
+LB303AudioProcessor::~LB303AudioProcessor()
+{
+    for (int lane = 0; lane < 2; ++lane)
+        for (size_t control = 0; control < lb303::sequencerPerformancePerLane; ++control)
+            parameters.removeParameterListener (lb303::catalog()[lb303::seqPerformanceIndex (
+                static_cast<size_t> (lane), control)].id, this);
+}
+
+namespace
+{
+using CP = lb303::SequencerState::ConfigParameter;
+constexpr std::array<CP, lb303::sequencerPerformancePerLane> performanceConfigMap {{
+    CP::bpmDivision, CP::shuffle, CP::legato, CP::noteSkipProbability,
+    CP::noteRandomDepth, CP::velocityRandomDepth, CP::noteLengthRandomDepth,
+    CP::repeatRandomDepth, CP::octaveShift, CP::semitoneShift
+}};
+}
+
+void LB303AudioProcessor::parameterChanged (const juce::String& id, float newValue)
+{
+    if (mirroringPerformance.load (std::memory_order_acquire)
+        || restoringPerformance.load (std::memory_order_acquire)) return;
+    for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
+        for (size_t control = 0; control < performanceConfigMap.size(); ++control)
+            if (id == lb303::catalog()[lb303::seqPerformanceIndex (lane, control)].id)
+            {
+                sequenceBanks[lane].setConfigValue (
+                    currentPattern (lane), performanceConfigMap[control], newValue);
+                return;
+            }
+}
+
+void LB303AudioProcessor::invalidatePerformanceDisplay() noexcept
+{
+    mirroredPatterns = {{ -1, -1 }};
+}
+
+void LB303AudioProcessor::syncSelectedPatternPerformance (bool force)
+{
+    // Called on the message thread, not in processBlock. Neither the host
+    // automation nor the APVTS slider attachment may overwrite another pattern.
+    for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
+    {
+        const int patternIndex = currentPattern (lane);
+        if (! force && mirroredPatterns[lane] == patternIndex) continue;
+        const auto& bank = sequenceBanks[lane];
+        mirroringPerformance.store (true, std::memory_order_release);
+        for (size_t control = 0; control < performanceConfigMap.size(); ++control)
+        {
+            const auto global = lb303::seqPerformanceIndex (lane, control);
+            if (auto* param = parameter (global))
+            {
+                const float actual = bank.getConfigValue (patternIndex, performanceConfigMap[control]);
+                if (std::abs (value (global) - actual) > 1.0e-6f)
+                    param->setValueNotifyingHost (param->convertTo0to1 (actual));
+            }
+        }
+        mirroredPatterns[lane] = patternIndex;
+        mirroringPerformance.store (false, std::memory_order_release);
+    }
+}
+
 
 void LB303AudioProcessor::auditionSongPattern (int lane, int pattern) noexcept
 {
@@ -52,6 +119,8 @@ void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
     previousMidiChannel = { 1, 2 };
     previewEnabled.store (false, std::memory_order_relaxed);
     auditionLane.store (-1, std::memory_order_release);
+    sequencerPlayback.setRandomSeed (static_cast<std::uint32_t> (
+        juce::Random::getSystemRandom().nextInt()));
     sequencerPlayback.reset();
     activeLockStep = { -1, -1 };
     activeLockPattern = { -1, -1 };
@@ -224,23 +293,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             activePreview ? lastKeyboardNote[0] - 60 : keyboardTranspose[0],
             activePreview ? lastKeyboardNote[1] - 60 : keyboardTranspose[1]
         }};
-        std::array<lb303::SequencerConfig, lb303::basslineCount> performance {};
-        for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
-        {
-            const auto v = [&] (size_t which)
-                { return value (lb303::seqPerformanceIndex (lane, which)); };
-            auto& config = performance[lane];
-            config.bpmDivision = v (lb303::seqPerformance::bpmDivision);
-            config.shuffle = v (lb303::seqPerformance::shuffle);
-            config.legato = v (lb303::seqPerformance::legato) > 0.5f;
-            config.noteSkipProbability = v (lb303::seqPerformance::skipProbability);
-            config.noteRandomDepth = v (lb303::seqPerformance::noteRandom);
-            config.velocityRandomDepth = v (lb303::seqPerformance::velocityRandom);
-            config.noteLengthRandomDepth = v (lb303::seqPerformance::lengthRandom);
-            config.repeatRandomDepth = v (lb303::seqPerformance::repeatRandom);
-            config.octaveShift = juce::roundToInt (v (lb303::seqPerformance::octaveShift));
-            config.semitoneShift = juce::roundToInt (v (lb303::seqPerformance::semitoneShift));
-        }
+        // Audio always reads the performance controls belonging to the actual
+        // pattern being played, not the editing-knob values of another pattern.
         // Divide a host audio segment at each Song pattern boundary. This
         // prevents a buffer straddling the boundary from delaying the change
         // until the next callback. The two columns never wait for one another.
@@ -269,8 +323,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                     const double localBeat = nowPpq - origins[static_cast<size_t> (lane)];
                     const auto pos = lb303::SongArrangement::locate (
                         *songColumns[static_cast<size_t> (lane)], songs.loop (lane),
-                        sequenceBanks[static_cast<size_t> (lane)], localBeat,
-                        performance[static_cast<size_t> (lane)].bpmDivision);
+                        sequenceBanks[static_cast<size_t> (lane)], localBeat);
                     if (! pos.active)
                     {
                         audible[static_cast<size_t> (lane)] = false;
@@ -303,7 +356,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             const int segmentLength = segmentEnd - cursor;
             juce::MidiBuffer generated;
             sequencerPlayback.generate (generated, sequenceBanks,
-                patterns, entries, audible, laneOrigins, transposes, performance,
+                patterns, entries, audible, laneOrigins, transposes,
                 playing || activePreview || audible[0] || audible[1],
                 nowPpq, bpm, sampleRateHz, segmentLength,
                 stepEvents, stepEventCount, cursor);
@@ -656,6 +709,7 @@ void LB303AudioProcessor::resetToInitialState()
         }
     }
     for (auto& bank : sequenceBanks) bank.reset();
+    invalidatePerformanceDisplay();
     songs.reset();
     auditionLane.store (-1, std::memory_order_release);
     // Alt+I resets this instance's editing increment, without writing UI
@@ -694,6 +748,9 @@ void LB303AudioProcessor::getStateInformation (juce::MemoryBlock& data)
     if (auto xml = snapshot.createXml())
     {
         // Two independent banks, not 16 joint patterns. Save all 32 patterns.
+        // TEST2.4.22 marker: older builds treated the performance VST knobs
+        // as lane-wide. Their values must be migrated into EACH old pattern.
+        xml->createNewChildElement ("LB303PatternPerformancePerPattern")->setAttribute ("version", 1);
         auto* bank1 = xml->createNewChildElement ("LB303PatternBank1");
         bank1->setAttribute ("data", sequenceBanks[0].serialiseToBase64());
         auto* bank2 = xml->createNewChildElement ("LB303PatternBank2");
@@ -708,6 +765,11 @@ void LB303AudioProcessor::setStateInformation (const void* data, int size)
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (parameters.state.getType()))
         {
+            restoringPerformance.store (true, std::memory_order_release);
+            const bool oldLaneWidePerformance =
+                xml->getChildByName ("LB303PatternPerformancePerPattern") == nullptr;
+            if (auto* marker = xml->getChildByName ("LB303PatternPerformancePerPattern"))
+                xml->removeChildElement (marker, true);
             for (int lane = 0; lane < 2; ++lane)
             {
                 const auto tag = juce::String (lane == 0 ? "LB303PatternBank1" : "LB303PatternBank2");
@@ -728,6 +790,19 @@ void LB303AudioProcessor::setStateInformation (const void* data, int size)
             auto restored = juce::ValueTree::fromXml (*xml);
             removeLegacyEditorProperties (restored);
             parameters.replaceState (restored);
+            if (oldLaneWidePerformance)
+            {
+                // Exactly preserve the sound of pre-TEST2.4.22 presets: their
+                // global sequencer controls applied equally to every pattern.
+                for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
+                    for (int patternIndex = 0; patternIndex < 16; ++patternIndex)
+                        for (size_t control = 0; control < performanceConfigMap.size(); ++control)
+                            sequenceBanks[lane].setConfigValue (patternIndex,
+                                performanceConfigMap[control],
+                                value (lb303::seqPerformanceIndex (lane, control)));
+            }
+            invalidatePerformanceDisplay();
+            restoringPerformance.store (false, std::memory_order_release);
             sequencerPlayback.reset();
         }
 }

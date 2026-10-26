@@ -11,11 +11,12 @@
 #include <atomic>
 #include <cstdint>
 
-class LB303AudioProcessor final : public juce::AudioProcessor
+class LB303AudioProcessor final : public juce::AudioProcessor,
+                                 private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     LB303AudioProcessor();
-    ~LB303AudioProcessor() override = default;
+    ~LB303AudioProcessor() override;
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
@@ -65,6 +66,10 @@ public:
     juce::RangedAudioParameter* parameter (size_t index);
     // Independent patterns, independent MIDI input channels (Omni or 1..16).
     int currentPattern (size_t lane) const noexcept;
+    // Ten exposed sequencer knobs per lane edit the currently selected pattern,
+    // while the 32 independent SequencerConfig snapshots remain authoritative.
+    void syncSelectedPatternPerformance (bool force = false);
+    void invalidatePerformanceDisplay() noexcept;
     // One preview transport for BOTH basslines, regardless of edited track.
     void requestSequencerPreview (bool enabled) noexcept
     { previewEnabled.store (enabled, std::memory_order_release);
@@ -91,6 +96,10 @@ public:
     const lb303::SequencerState& patternBank (size_t lane) const noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
 
 private:
+    void parameterChanged (const juce::String& parameterID, float newValue) override;
+    std::atomic<bool> mirroringPerformance { false };
+    std::atomic<bool> restoringPerformance { false };
+    std::array<int, 2> mirroredPatterns {{ -1, -1 }}; // message/UI thread only
     std::array<lb303::BassEngine, lb303::basslineCount> engines;
     lb303::SharedEffects sharedFx;
     std::array<lb303::SequencerState, lb303::basslineCount> sequenceBanks;

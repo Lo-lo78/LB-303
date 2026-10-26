@@ -55,8 +55,6 @@ private:
     bool songView = false;
     std::uint64_t lastSongRevision = 0;
     std::uint64_t lastSongLoadEpoch = 0;
-    bool songChoosingPattern = false;
-    int songPatternChoice = 0;
     bool songConfirmClear = false;
     std::array<int, 2> songCursor {{ 0, 0 }};
     std::array<std::set<int>, 2> songSelected;
