@@ -221,6 +221,27 @@ void LB303AudioProcessorEditor::focusGained (FocusChangeType)
     scheduleInitialFocusTransfer();
 }
 
+// Root fallback for hosts that initially focus the editor itself instead of
+// the native ComboBox/Slider/Edit child. JUCE bubbles only UNHANDLED keys to
+// the parent; ordinary grid keys, NVDA focus and the Alt+Q overlay are intact.
+bool LB303AudioProcessorEditor::keyPressed (const juce::KeyPress& key)
+{
+    if ((stepEditor != nullptr && stepEditor->isOpen())
+        || (presetBrowser != nullptr && presetBrowser->active()))
+        return false;
+
+    const auto mods = key.getModifiers();
+    const auto code = key.getKeyCode();
+    if (! mods.isCtrlDown() || mods.isAltDown() || mods.isShiftDown()
+        || (code != juce::KeyPress::upKey && code != juce::KeyPress::downKey))
+        return false;
+
+    const auto control = numericEdit.hasKeyboardFocus (true) ? Control::edit
+                       : parameterValue.hasKeyboardFocus (true) ? Control::value
+                                                                : Control::grid;
+    return handleKey (key, control);
+}
+
 void LB303AudioProcessorEditor::scheduleInitialFocusTransfer()
 {
     if (initialFocusTransferPending) return;
@@ -1032,8 +1053,10 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
             song ? "Sequencer preview: Song" : "Sequencer preview: Pattern");
         return true;
     }
-    if (mods.isCtrlDown() && ! mods.isAltDown() && ! mods.isCommandDown()
-        && ! mods.isShiftDown()
+    // Windows JUCE maps commandModifier to ctrlModifier. Requiring Ctrl
+    // while forbidding Command makes this shortcut IMPOSSIBLE on Windows.
+    // Handle the actual Ctrl+Up/Down chord before the native ComboBox/Slider.
+    if (mods.isCtrlDown() && ! mods.isAltDown() && ! mods.isShiftDown()
         && (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey))
     {
         // If an Edit value is being typed, commit it before switching patterns

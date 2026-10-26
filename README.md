@@ -1,3 +1,10 @@
+# TEST2.4.25 — Ctrl+Freccia su/giù riparato nelle griglie Windows/NVDA
+
+- **Bug risolto:** nella TEST2.4.24 il controllo `mods.isCtrlDown() && !mods.isCommandDown()` non poteva funzionare su Windows: per JUCE il modificatore Command coincide con Ctrl. Ora Ctrl+Su/Giù cambia davvero il Pattern 1–16 da Grid, Value ed Edit nelle griglie Bassline 1, Bassline 2, Sequencer e FX.
+- **Focus:** introdotta una gestione di riserva nella finestra principale per gli eventi Ctrl+Su/Giù non consumati dai controlli figli; nessuna seconda finestra e nessuna modifica al ciclo di focus Grid/Value/Edit, NVDA, browser o Alt+Q.
+- **Invariati:** Alt+M Pattern/Song, Alt+P Space DAW/Preview, Song Editor, DSP, ID VST3, preset `.lb` e 8 canali audio. Alt+Q mantiene i propri Ctrl+Su/Giù.
+- **Verifica:** suite di controlli statici; test di compilazione effettivo su GitHub Actions, poi REAPER+NVDA.
+
 # TEST2.4.24 — Alt+M e Ctrl+Su/Giù anche nelle griglie
 
 - **Alt+M** funziona da Grid, Value ed Edit in tutte e quattro le griglie e alterna

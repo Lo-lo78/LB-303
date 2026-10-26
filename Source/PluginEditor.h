@@ -19,6 +19,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void focusGained (FocusChangeType) override;
+    bool keyPressed (const juce::KeyPress&) override;
     void mouseDown (const juce::MouseEvent&) override;
     std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
