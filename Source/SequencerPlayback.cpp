@@ -218,8 +218,6 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                                                           / beatsPerSample + 0.5)));
                         if (noteOn)
                         {
-                            output.addEvent (juce::MidiMessage::controllerEvent (
-                                lane + 1, 119, step.accent ? 127 : 0), sample);
                             output.addEvent (juce::MidiMessage::noteOn (
                                 lane + 1, note, static_cast<juce::uint8> (velocity)), sample);
                             lastNote[lane] = note;

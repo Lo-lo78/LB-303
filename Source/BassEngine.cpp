@@ -155,7 +155,6 @@ void BassEngine::reset()
     envelopeStage = 3;
     stage3 = stage4 = 0;
     lastNote = -1; noteActive = legato = accent = false;
-    pendingSequencerAccent = -1;
     smoothDelay = delayTargetSamples = delayPhase = 0;
     delayL.clear(); delayR.clear(); pitchShift.reset();
     for (auto* filter : { &airPeakL, &airPeakR, &outputLpfL, &outputLpfR,
@@ -193,11 +192,6 @@ void BassEngine::midi (const juce::MidiMessage& message)
         delayL.clear(); delayR.clear();
         return;
     }
-    if (message.isController() && message.getControllerNumber() == 119)
-    {
-        pendingSequencerAccent = message.getControllerValue() >= 64 ? 1 : 0;
-        return;
-    }
     if (message.isNoteOn())
     {
         if (lfoParameters[lb303::lfo::mode] >= .5f || lfoParameters[lb303::lfo::oneShot] >= .5f)
@@ -215,8 +209,7 @@ void BassEngine::midi (const juce::MidiMessage& message)
         targetFreq = 440.0 * std::pow (2.0, (message.getNoteNumber() - 69.0) / 12.0);
         const auto velocity = message.getVelocity();
         velNorm = std::pow (velocity / 127.0, 0.6);
-        accent = pendingSequencerAccent >= 0 ? pendingSequencerAccent != 0 : velocity >= p[15];
-        pendingSequencerAccent = -1;
+        accent = velocity >= p[15];
         accentEnvelope = accent ? 1.0 : 0.0;
         legato = noteActive;
         noteActive = true;

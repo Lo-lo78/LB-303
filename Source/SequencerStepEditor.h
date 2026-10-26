@@ -42,7 +42,7 @@ private:
     juce::Component::SafePointer<juce::Component> returnControl;
     bool opened = false;
     int track = 0;
-    int page = 0; // 0 Note, 1 Length, 2 Accent, 3 Velocity, 4 Repeat, 5 Shift, 6 Launch, 7 Parameters
+    int page = 0; // 0..4 steps; 5 Launch Step; 6 Parameter Locks (TEST2.3)
     int currentStep = 0;
     int valueStepIndex = 0;
     int lastStepKey = -1;
@@ -98,6 +98,7 @@ private:
     void modifyValue (int direction, int amount);
     void resetCurrent();
     void toggleCurrentNote();
+    void toggleCurrentLength();
     std::vector<int> editingSteps() const;
     void commitAction (Action&&);
     void applyAction (const Action&, bool backwards);

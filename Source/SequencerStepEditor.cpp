@@ -11,7 +11,7 @@ namespace
 constexpr std::array<int, 9> coarseSteps { 1, 5, 10, 15, 20, 25, 30, 35, 40 };
 constexpr std::array<char, 8> topKeys { 'q','w','e','r','t','y','u','i' };
 constexpr std::array<char, 8> lowerKeys { 'a','s','d','f','g','h','j','k' };
-const juce::String pageNames[] { "Note", "Length", "Accent", "Velocity", "Repeat", "Shift", "Launch Step", "Parameters" };
+const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift", "Launch Step", "Parameters" };
 constexpr int maxUndo = 50;
 // Versioned clipboard marker prevents pasting ordinary text as a sequencer.
 const juce::String patternClipboardHeader = "LB303-PATTERN-V1:";
@@ -28,7 +28,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 8 choose page. Enter toggles Pause and the remembered note on Note, 101 Legato and the remembered length on Length, or Accent on and off on Accent. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
+    setDescription ("Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -38,7 +38,7 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
     track = juce::jlimit (0, 1, selectedTrack);
     // Preserve the visited page only in this live processor instance.
     // Opening another instance or loading a project starts at Note.
-    page = juce::jlimit (0, 7, processor.editorSession.sequencerPage);
+    page = juce::jlimit (0, 6, processor.editorSession.sequencerPage);
     returnControl = focus;
     opened = true;
     lastStepKey = -1;
@@ -97,11 +97,10 @@ juce::String SequencerStepEditor::valueText (int index) const
     {
         case 0: return step.note >= 128 ? "Pause" : juce::String (step.note);
         case 1: return step.length == 101 ? "101 Legato" : juce::String (step.length);
-        case 2: return step.accent ? "On" : "Off";
-        case 3: return juce::String (step.velocity);
-        case 4: return juce::String (step.repeat);
-        case 5: return juce::String ((step.shift - 0.5f) * 2.0f, 2);
-        case 7: return index == currentStep ? currentLockText()
+        case 2: return juce::String (step.velocity);
+        case 3: return juce::String (step.repeat);
+        case 4: return juce::String ((step.shift - 0.5f) * 2.0f, 2);
+        case 6: return index == currentStep ? currentLockText()
                          : juce::String (step.parameterLockCount) + " parameter locks";
         default: return "";
     }
@@ -150,9 +149,9 @@ void SequencerStepEditor::refresh()
     text << "LB-303 SEQUENCER — BASSLINE " << (track + 1)
          << " — PATTERN " << (pat + 1) << "/16 — PAGE " << (page + 1)
          << " " << pageName() << "\n\n";
-    if (page == 6)
+    if (page == 5)
         text << "Launch Step " << config.launchStep << "\n"
-             << "Up/Down: change launch step. Pages 1–6 and 8: select page.\n";
+             << "Up/Down: change launch step. Page 1–5, 7: select page.\n";
     else
     {
         text << "STEPS " << juce::jmax (firstActive + 1, block * 16 + 1)
@@ -173,12 +172,10 @@ void SequencerStepEditor::refresh()
             text << "\n";
         }
         if (page == 0)
-            text << "\nEnter: toggle Pause / last note of this step.\n";
+            text << "\nEnter: Pause / last note of this step.\n";
         if (page == 1)
-            text << "\nEnter: toggle 101 Legato / last length of this step.\n";
-        if (page == 2)
-            text << "\nEnter: toggle Accent On / Off.\n";
-        if (page == 7)
+            text << "\nEnter: 101 Legato / last length of this step.\n";
+        if (page == 6)
             text << "\nEnter: select a synth parameter, Up/Down: edit current lock. "
                  << "Alt+Home/End: previous/next lock. Delete clears selected steps first; with no selected steps it removes the current lock. Alt+Delete: remove all."
                  << "\nPlayback of locks: enabled.\n";
@@ -197,7 +194,7 @@ void SequencerStepEditor::refresh()
 }
 void SequencerStepEditor::announceCurrent()
 {
-    if (page == 6)
+    if (page == 5)
     {
         announce ("Bassline " + juce::String (track + 1) + ", Pattern "
             + juce::String (pattern() + 1) + ", Launch Step "
@@ -384,11 +381,11 @@ void SequencerStepEditor::undo (bool redo)
 }
 void SequencerStepEditor::modifyValue (int direction, int amount)
 {
-    if (page == 6) { changeLaunch (direction, amount); return; }
-    if (page == 7) { editSelectedLock (direction, amount); return; }
+    if (page == 5) { changeLaunch (direction, amount); return; }
+    if (page == 6) { editSelectedLock (direction, amount); return; }
     Action action; action.track = track; action.pattern = pattern();
-    const auto layer = static_cast<lb303::SequencerLayer> (page == 2 ? 3 : page == 3 ? 2 : page >= 4 ? page - 1 : page);
-    const float delta = page == 5 ? 0.01f * direction * amount : static_cast<float> (direction * amount);
+    const auto layer = static_cast<lb303::SequencerLayer> (page);
+    const float delta = page == 4 ? 0.01f * direction * amount : static_cast<float> (direction * amount);
     const auto indices = editingSteps();
     const bool multiple = indices.size() > 1;
     for (auto index : indices)
@@ -430,20 +427,20 @@ void SequencerStepEditor::changeLaunch (int direction, int amount)
 }
 void SequencerStepEditor::resetCurrent()
 {
-    if (page == 6)
+    if (page == 5)
     {
         const int before = bank().getConfig (pattern()).launchStep;
         if (before != 1) changeLaunch (-1, before - 1);
         return;
     }
-    if (page == 7) { resetSelectedLock(); return; }
+    if (page == 6) { resetSelectedLock(); return; }
     Action action; action.track = track; action.pattern = pattern();
     for (int i : editingSteps())
     {
         StepChange change; change.index = i;
         change.before = bank().getStep (pattern(), i);
         lb303::SequencerStep reset = change.before;
-        reset.note = 128; reset.length = 50; reset.velocity = 100; reset.accent = 0;
+        reset.note = 128; reset.length = 50; reset.velocity = 100;
         reset.noteBeforePause = 60; reset.lengthBeforeLegato = 50;
         reset.repeat = 1; reset.shift = 0.5f;
         bank().replaceStep (pattern(), i, reset);
@@ -455,8 +452,7 @@ void SequencerStepEditor::resetCurrent()
 }
 void SequencerStepEditor::toggleCurrentNote()
 {
-    // Pause remembers the last playable note of EACH step. Only untouched
-    // empty steps fall back to the seeded C4 (60).
+    // Restore each step's own previous note; only never-edited rests use C4 (60).
     Action action; action.track = track; action.pattern = pattern();
     for (int index : editingSteps())
     {
@@ -472,6 +468,29 @@ void SequencerStepEditor::toggleCurrentNote()
     commitAction (std::move (action));
     if (changed > 1)
         announce (juce::String (changed) + " selected notes toggled");
+    else
+        announceCurrent();
+}
+void SequencerStepEditor::toggleCurrentLength()
+{
+    Action action; action.track = track; action.pattern = pattern();
+    for (int index : editingSteps())
+    {
+        StepChange change; change.index = index;
+        change.before = bank().getStep (pattern(), index);
+        // Enter alternates 101 and this individual step's last ordinary length.
+        const int target = change.before.length == 101
+            ? change.before.lengthBeforeLegato : 101;
+        bank().setStepValue (pattern(), index, lb303::SequencerLayer::length,
+                             static_cast<float> (target));
+        change.after = bank().getStep (pattern(), index);
+        action.changes.push_back (std::move (change));
+    }
+    const int changed = static_cast<int> (action.changes.size());
+    if (changed == 0) return;
+    commitAction (std::move (action));
+    if (changed > 1)
+        announce (juce::String (changed) + " selected lengths toggled");
     else
         announceCurrent();
 }
@@ -629,7 +648,7 @@ juce::String SequencerStepEditor::currentLockText() const
 }
 void SequencerStepEditor::openParameterPicker()
 {
-    if (page != 7 || pickerOpen) return;
+    if (page != 6 || pickerOpen) return;
     pickerOpen = true;
     // Restore the last cursor for THIS bassline, even across editor open/close.
     pickerIndex = lastPickerPosition[static_cast<size_t> (track)];
@@ -1316,19 +1335,19 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             announce ("All steps deselected");
             return true;
         }
-        if (page != 7) return true; // Nothing to deselect: no step data is deleted.
+        if (page != 6) return true; // Nothing to deselect: no step data is deleted.
     }
     const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
     const auto letter = [code, ch] (juce::juce_wchar c)
     { return ch == c || code == juce::CharacterFunctions::toUpperCase (c); };
     if (code == juce::KeyPress::escapeKey) { close(); return true; }
-    if (page == 7 && mods.isAltDown())
+    if (page == 6 && mods.isAltDown())
     {
         if (code == juce::KeyPress::homeKey) { changeSelectedLock (-1); return true; }
         if (code == juce::KeyPress::endKey) { changeSelectedLock (1); return true; }
         if (code == juce::KeyPress::deleteKey) { deleteSelectedLock (true); return true; }
     }
-    if (page == 7 && code == juce::KeyPress::deleteKey)
+    if (page == 6 && code == juce::KeyPress::deleteKey)
     { deleteSelectedLock (false); return true; }
     // In the step editor Ctrl+Tab is intentionally unassigned, as are other
     // unhandled Ctrl combinations; the Ctrl catch-all below consumes them
@@ -1372,28 +1391,8 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
     if (code == juce::KeyPress::returnKey)
     {
         if (page == 0) toggleCurrentNote();
-        else if (page == 1 || page == 2)
-        {
-            Action action; action.track = track; action.pattern = pattern();
-            for (int index : editingSteps())
-            {
-                StepChange change; change.index = index;
-                change.before = bank().getStep (pattern(), index);
-                auto after = change.before;
-                if (page == 1)
-                {
-                    // Retain the previous length per step while 101 is active.
-                    if (after.length == 101) after.length = after.lengthBeforeLegato;
-                    else { after.lengthBeforeLegato = after.length; after.length = 101; }
-                }
-                else after.accent = 1 - after.accent;
-                bank().replaceStep (pattern(), index, after);
-                change.after = bank().getStep (pattern(), index);
-                action.changes.push_back (std::move (change));
-            }
-            if (! action.changes.empty()) { commitAction (std::move (action)); announceCurrent(); }
-        }
-        else if (page == 7) openParameterPicker();
+        else if (page == 1) toggleCurrentLength();
+        else if (page == 6) openParameterPicker();
         return true;
     }
     if (code == juce::KeyPress::backspaceKey) { resetCurrent(); return true; }
@@ -1418,7 +1417,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         }
         return true;
     }
-    if (ch >= '1' && ch <= '8' && ! mods.isAltDown())
+    if (ch >= '1' && ch <= '7' && ! mods.isAltDown())
     {
         const int target = static_cast<int> (ch - '1');
         if (page != target)
@@ -1428,7 +1427,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             lastRevision = 0;
             refresh();
         }
-        announce ("Page " + pageName() + (page == 7 ? ". Enter opens parameter selection" : ""));
+        announce ("Page " + pageName() + (page == 6 ? ". Enter opens parameter selection" : ""));
         return true;
     }
     for (int i = 0; i < 8; ++i)

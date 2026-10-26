@@ -43,7 +43,6 @@ float SequencerState::clampLayerValue (SequencerLayer layer, float value) noexce
         case SequencerLayer::note:     return juce::jlimit (0.0f, 128.0f, value);
         case SequencerLayer::length:   return juce::jlimit (0.0f, 101.0f, value);
         case SequencerLayer::velocity: return juce::jlimit (0.0f, 127.0f, value);
-        case SequencerLayer::accent:   return juce::jlimit (0.0f, 1.0f, value);
         case SequencerLayer::repeat:   return juce::jlimit (1.0f, 16.0f, value);
         case SequencerLayer::shift:      return juce::jlimit (0.0f, 1.0f, value);
         case SequencerLayer::parameters: return value;
@@ -89,11 +88,10 @@ void SequencerState::reset()
         for (auto& step : sequence.steps)
         {
             storeRelaxed (step.note, 128);
-        storeRelaxed (step.noteBeforePause, 60);
-        storeRelaxed (step.lengthBeforeLegato, 50);
+            storeRelaxed (step.noteBeforePause, 60);
+            storeRelaxed (step.lengthBeforeLegato, 50);
             storeRelaxed (step.length, 50);
             storeRelaxed (step.velocity, 100);
-            storeRelaxed (step.accent, 0);
             storeRelaxed (step.repeat, 1);
             storeRelaxed (step.shift, 0.5f);
             storeRelaxed (step.parameterLockCount, 0);
@@ -116,7 +114,6 @@ void SequencerState::resetStep (int sequenceIndex, int stepIndex) noexcept
     storeRelaxed (step.lengthBeforeLegato, 50);
     storeRelaxed (step.length, 50);
     storeRelaxed (step.velocity, 100);
-    storeRelaxed (step.accent, 0);
     storeRelaxed (step.repeat, 1);
     storeRelaxed (step.shift, 0.5f);
     storeRelaxed (step.parameterLockCount, 0);
@@ -161,7 +158,6 @@ void SequencerState::resetSequence (int sequenceIndex) noexcept
         storeRelaxed (step.lengthBeforeLegato, 50);
         storeRelaxed (step.length, 50);
         storeRelaxed (step.velocity, 100);
-        storeRelaxed (step.accent, 0);
         storeRelaxed (step.repeat, 1);
         storeRelaxed (step.shift, 0.5f);
         storeRelaxed (step.parameterLockCount, 0);
@@ -427,7 +423,6 @@ SequencerStep SequencerState::getStep (int sequenceIndex, int stepIndex) const n
     result.noteBeforePause = loadRelaxed (step.noteBeforePause);
     result.lengthBeforeLegato = loadRelaxed (step.lengthBeforeLegato);
     result.velocity = loadRelaxed (step.velocity);
-    result.accent = loadRelaxed (step.accent);
     result.repeat = loadRelaxed (step.repeat);
     result.shift = loadRelaxed (step.shift);
     result.parameterLockCount = juce::jlimit (0, SequencerStep::maximumParameterLocks,
@@ -450,7 +445,6 @@ float SequencerState::getStepValue (int sequenceIndex, int stepIndex,
         case SequencerLayer::note:     return static_cast<float> (step.note);
         case SequencerLayer::length:   return static_cast<float> (step.length);
         case SequencerLayer::velocity: return static_cast<float> (step.velocity);
-        case SequencerLayer::accent:   return static_cast<float> (step.accent);
         case SequencerLayer::repeat:   return static_cast<float> (step.repeat);
         case SequencerLayer::shift:      return step.shift;
         case SequencerLayer::parameters: return static_cast<float> (step.parameterLockCount);
@@ -483,7 +477,6 @@ void SequencerState::setStepValue (int sequenceIndex, int stepIndex, SequencerLa
             break;
         }
         case SequencerLayer::velocity: step.velocity.store (juce::roundToInt (value), std::memory_order_relaxed); break;
-        case SequencerLayer::accent: step.accent.store (juce::roundToInt (value), std::memory_order_relaxed); break;
         case SequencerLayer::repeat:   step.repeat.store (juce::roundToInt (value), std::memory_order_relaxed); break;
         case SequencerLayer::shift:      step.shift.store (value, std::memory_order_relaxed); break;
         case SequencerLayer::parameters: break;
@@ -510,8 +503,8 @@ void SequencerState::replaceStep (int sequenceIndex, int stepIndex,
         SequencerLayer::note, static_cast<float> (source.note))), std::memory_order_relaxed);
     step.length.store (juce::roundToInt (clampLayerValue (
         SequencerLayer::length, static_cast<float> (source.length))), std::memory_order_relaxed);
-    // Normal note/length edits become the remembered values. When the special
-    // Pause/Legato state is active, preserve the step's separate return values.
+    // Copy the hidden values too: Undo/Redo, clipboard and pattern restores
+    // must preserve exactly what Enter restores on a paused/legato step.
     step.noteBeforePause.store (source.note < 128
         ? juce::jlimit (0, 127, source.note)
         : juce::jlimit (0, 127, source.noteBeforePause), std::memory_order_relaxed);
@@ -520,7 +513,6 @@ void SequencerState::replaceStep (int sequenceIndex, int stepIndex,
         : juce::jlimit (0, 100, source.lengthBeforeLegato), std::memory_order_relaxed);
     step.velocity.store (juce::roundToInt (clampLayerValue (
         SequencerLayer::velocity, static_cast<float> (source.velocity))), std::memory_order_relaxed);
-    step.accent.store (juce::roundToInt (clampLayerValue (SequencerLayer::accent, static_cast<float> (source.accent))), std::memory_order_relaxed);
     step.repeat.store (juce::roundToInt (clampLayerValue (
         SequencerLayer::repeat, static_cast<float> (source.repeat))), std::memory_order_relaxed);
     step.shift.store (clampLayerValue (SequencerLayer::shift, source.shift), std::memory_order_relaxed);
@@ -684,7 +676,6 @@ void SequencerState::copySequenceFrom (const SequencerState& source, int sourceS
         storeRelaxed (destinationStep.noteBeforePause, loadRelaxed (sourceStep.noteBeforePause));
         storeRelaxed (destinationStep.lengthBeforeLegato, loadRelaxed (sourceStep.lengthBeforeLegato));
         storeRelaxed (destinationStep.velocity, loadRelaxed (sourceStep.velocity));
-        storeRelaxed (destinationStep.accent, loadRelaxed (sourceStep.accent));
         storeRelaxed (destinationStep.repeat, loadRelaxed (sourceStep.repeat));
         storeRelaxed (destinationStep.shift, loadRelaxed (sourceStep.shift));
         const auto count = juce::jlimit (0, SequencerStep::maximumParameterLocks,
@@ -714,7 +705,9 @@ juce::String SequencerState::serialiseToBase64 (bool includeSelectedSequence) co
 {
     juce::MemoryOutputStream stream;
     stream.writeInt (0x4c535132); // LSQ2
-    stream.writeInt (5);
+    // v3 = original TEST2.4.29; v4/5 included a now-discarded Accent field.
+    // v6 stores ONLY the two remembered values, with no Accent per-step.
+    stream.writeInt (6);
     stream.writeInt (getRoutingMode());
     stream.writeInt (includeSelectedSequence ? getSelectedSequence() : 0);
 
@@ -752,7 +745,6 @@ juce::String SequencerState::serialiseToBase64 (bool includeSelectedSequence) co
             stream.writeByte (static_cast<char> (juce::jlimit (0, 255, step.velocity)));
             stream.writeByte (static_cast<char> (juce::jlimit (0, 255, step.repeat)));
             stream.writeFloat (step.shift);
-            stream.writeByte (static_cast<char> (step.accent));
             stream.writeByte (static_cast<char> (juce::jlimit (0, 127, step.noteBeforePause)));
             stream.writeByte (static_cast<char> (juce::jlimit (0, 100, step.lengthBeforeLegato)));
             stream.writeByte (static_cast<char> (juce::jlimit (0, SequencerStep::maximumParameterLocks,
@@ -785,7 +777,7 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
     if (stream.readInt() != 0x4c535132)
         return false;
     const auto formatVersion = stream.readInt();
-    if (formatVersion != 1 && formatVersion != 2 && formatVersion != 3 && formatVersion != 4 && formatVersion != 5)
+    if (formatVersion < 1 || formatVersion > 6)
         return false;
 
     // Silence the generator while its atomic fields are replaced.
@@ -834,16 +826,20 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
             step.velocity.store (juce::jlimit (0, 127, static_cast<int> (static_cast<unsigned char> (stream.readByte()))), std::memory_order_relaxed);
             step.repeat.store (juce::jlimit (1, 16, static_cast<int> (static_cast<unsigned char> (stream.readByte()))), std::memory_order_relaxed);
             step.shift.store (juce::jlimit (0.0f, 1.0f, stream.readFloat()), std::memory_order_relaxed);
-            step.accent.store (formatVersion >= 4 ? juce::jlimit (0, 1, static_cast<int> (static_cast<unsigned char> (stream.readByte()))) : 0, std::memory_order_relaxed);
-            // Older projects never saved these memories. Recover the current
-            // normal value when possible; on an already paused/legato step the
-            // former value is unknowable, so use a safe initial fallback.
+            // Read (then discard) the Accent byte from abandoned v4/v5 saves.
+            // The current synth uses only the original velocity-based Accent.
+            if (formatVersion == 4 || formatVersion == 5)
+                (void) stream.readByte();
+            const int loadedNote = loadRelaxed (step.note);
+            const int loadedLength = loadRelaxed (step.length);
+            // v1..v4 have no memory; an already paused/legato value cannot
+            // be recovered from the old save format.
             step.noteBeforePause.store (formatVersion >= 5
                 ? juce::jlimit (0, 127, static_cast<int> (static_cast<unsigned char> (stream.readByte())))
-                : (loadRelaxed (step.note) < 128 ? loadRelaxed (step.note) : 60), std::memory_order_relaxed);
+                : (loadedNote < 128 ? loadedNote : 60), std::memory_order_relaxed);
             step.lengthBeforeLegato.store (formatVersion >= 5
                 ? juce::jlimit (0, 100, static_cast<int> (static_cast<unsigned char> (stream.readByte())))
-                : (loadRelaxed (step.length) != 101 ? loadRelaxed (step.length) : 100), std::memory_order_relaxed);
+                : (loadedLength != 101 ? loadedLength : 100), std::memory_order_relaxed);
             step.parameterLockCount.store (0, std::memory_order_relaxed);
             for (auto& lock : step.parameterLocks)
             {

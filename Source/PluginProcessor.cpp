@@ -369,7 +369,6 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                 const int outputChannel = inputChannels[static_cast<size_t> (lane)] == 0
                     ? lane + 1 : inputChannels[static_cast<size_t> (lane)];
                 auto outputMessage = event.getMessage();
-                if (outputMessage.isController() && outputMessage.getControllerNumber() == 119) continue;
                 outputMessage.setChannel (outputChannel);
                 midi.addEvent (outputMessage, cursor + event.samplePosition);
             }

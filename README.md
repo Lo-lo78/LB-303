@@ -1,10 +1,13 @@
-# TEST2.4.31 — Invio conserva nota e lunghezza originali per step
+# TEST2.4.32 — Invio ricorda Note e Length (base TEST2.4.29, SENZA Accent per step)
 
-In Alt+Q, **pagina 1 (Note)**, Invio alterna la nota effettiva dello step e Pause (128): `72 → Pause → 72`, non più 60. La nota C4 (60) è solo il valore iniziale di uno step nuovo che non ha mai avuto una nota. **Pagina 2 (Length)**: Invio alterna la durata esatta dello step e `101 Legato`: `37 → 101 → 37`, non più 100. La memoria è **indipendente per ciascuno step**, inclusa selezione multipla; le frecce che modificano una nota o durata normale aggiornano il valore di ritorno. Il salvataggio del progetto, la copia dei singoli step o pattern e Undo/Redo conservano questi valori. Il formato del sequencer diventa **5**, compatibile in lettura con le versioni 1–4. Se un progetto legacy era *già* in Pause/101, la durata o nota precedente non era mai stata registrata: in quel caso si parte rispettivamente da 60 o 100 al primo ripristino. Nessun cambiamento a DSP, Pattern/Song, routing, Accent o al selettore Parameters (pagina 8).
+Questa versione riparte esclusivamente dal sorgente **TEST2.4.29**, senza le modifiche Accent della TEST2.4.30/31. L'Accent originale resta basato sulla velocity e sulla soglia Accent Threshold. Alt+Q mantiene **7 pagine** (Note, Length, Velocity, Repeat, Shift, Launch Step, Parameters); la pagina Parameters resta la 7.
 
-# TEST2.4.30 — Accent per step e otto pagine Alt+Q
-
-Pagine: 1 Note, 2 Length, 3 Accent, 4 Velocity, 5 Repeat, 6 Shift, 7 Launch Step, 8 Parameters. In pagina 3 Invio alterna Accent On/Off per ogni step selezionato, indipendentemente dalla velocity. Formato sequencer 4 con compatibilità per i pattern esistenti.
+- **Alt+Q > pagina 1 Note:** Invio alterna tra Pausa (128) e la nota MIDI precedentemente usata **in quello specifico step**, per esempio `72 -> Pausa -> 72`. Le pause di uno step mai modificato partono dall'inizializzazione 60.
+- **Alt+Q > pagina 2 Length:** Invio alterna tra la lunghezza ordinaria precedente e **101 Legato**, per esempio `37 -> 101 -> 37`. Uno step inizialmente Legato già caricato da un vecchio progetto, senza memoria precedente, usa 100.
+- Se più step sono selezionati, ciascuno conserva il **proprio** valore. La memoria si aggiorna quando si modifica normalmente Note o Length con le frecce e si mantiene in Undo/Redo, taglia/copia/incolla step e pattern, preset e progetto REAPER.
+- Invio nelle altre pagine rimane invariato: su Parameters (7) apre la scelta dei parametri.
+- Salvataggio sequencer formato **v6**: legge anche i precedenti formati v1–v5. Importando v4/v5 viene ignorato il precedente dato Accent per step; in v1–v4 i valori nascosti precedenti a Pausa/Legato non esistevano e non possono essere ricostruiti. Nessun nuovo parametro VST3, nessun cambiamento al DSP o alle Song.
+- Workflow GitHub Actions e test statici aggiornati per TEST2.4.32. Compilazione VST3/REAPER e verifica NVDA da eseguire.
 
 # TEST2.4.29 — Delete deseleziona tutti gli step
 In Alt+Q, nella vista Steps, **Delete** annulla tutta la selezione di step (anche discontinua), mantiene il focus sullo step corrente e annuncia "All steps deselected" con NVDA. Non modifica note, pause, valori o Undo. Nel Song Editor Delete continua a cancellare gli elementi della Song; nel selettore dei Parameter Locks mantiene le funzioni precedenti. Nella pagina Parameters, con una selezione attiva Delete la cancella; senza selezione Delete conserva la funzione di eliminare il lock corrente.
@@ -744,7 +747,7 @@ Within the editor:
 - **Ctrl+Up / Ctrl+Down**: next/previous pattern (1–16) for the **currently edited bassline only**; the other pattern stays unchanged. The new selection is announced to NVDA/OSARA and updates the corresponding host-automatable VST3 parameter.
 - **Up/Down**: edit step; **Left/Right**: increment width 1,5,10,...40;
   **PageUp/PageDown**: move by chosen increment.
-- **Enter on Note page**: toggle Pause / last real note of that step; a never-edited empty step starts with C4 (note 60).
+- **Enter on Note page**: toggle Pause / C4 (note 60); useful to program an initially empty pattern.
 - **Backspace**: reset musical properties of selected steps (rest = MIDI note 128).
 - **Ctrl+C, Ctrl+X, Ctrl+V**: copy/cut/paste one or selected steps;
   **Ctrl+Z / Ctrl+Shift+Z**: undo/redo (50 actions).

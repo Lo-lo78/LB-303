@@ -13,7 +13,6 @@ enum class SequencerLayer : int
     note = 0,
     length,
     velocity,
-    accent,
     repeat,
     shift,
     parameters,
@@ -30,11 +29,10 @@ struct SequencerStep
 {
     int note = 128;
     int length = 50;
-    // Remember the real value while Enter temporarily selects Pause/101.
+    // These per-step values survive Pause and Legato 101.
     int noteBeforePause = 60;
     int lengthBeforeLegato = 50;
     int velocity = 100;
-    int accent = 0;
     int repeat = 1;
     float shift = 0.5f;
     static constexpr int maximumParameterLocks = 32;
@@ -151,7 +149,6 @@ private:
         std::atomic<int> noteBeforePause { 60 };
         std::atomic<int> lengthBeforeLegato { 50 };
         std::atomic<int> velocity { 100 };
-        std::atomic<int> accent { 0 };
         std::atomic<int> repeat { 1 };
         std::atomic<float> shift { 0.5f };
         std::atomic<int> parameterLockCount { 0 };
