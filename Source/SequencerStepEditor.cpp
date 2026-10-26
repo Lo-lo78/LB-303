@@ -858,8 +858,7 @@ void SequencerStepEditor::renderSong()
             juce::String cell;
             if (i < static_cast<int> (v.size()))
             {
-                const bool selected = songSelected[static_cast<size_t> (lane)].size() > 1
-                    && songSelected[static_cast<size_t> (lane)].count (i) != 0;
+                const bool selected = songSelected[static_cast<size_t> (lane)].count (i) != 0;
                 cell << (songCursor[static_cast<size_t> (lane)] == i ? "> " : "  ")
                      << (selected ? "* " : "  ") << (i + 1) << ": P" << (v[static_cast<size_t> (i)] + 1);
             }
@@ -869,7 +868,7 @@ void SequencerStepEditor::renderSong()
         text << "\n";
     }
     text << "\nLeft/Right: remembered columns | Up/Down: item | PgUp/PgDn: five | Home/End: first/last"
-         << "\nShift+Up/Down: select range | Ctrl+Space: toggle item | Ctrl+Shift+Up/Down: add range"
+         << "\nShift+Up/Down: select range | Shift+Space: toggle item | Ctrl+Shift+Up/Down: add range"
          << "\nCtrl+A: whole column | Ctrl+C/X/V: compact copy/cut/insert | Ctrl+Z/Shift+Z: undo/redo"
          << "\nAlt+I: insert | Delete: delete | Ctrl+Delete: clear with confirmation"
          << "\nCtrl+Up/Down: change P1–P16 | Alt+L: lane loop | Alt+M: Song/Pattern preview | Alt+Shift+M: audition focused pattern"
@@ -892,7 +891,7 @@ void SequencerStepEditor::announceSong (bool details)
     songCursor[lane] = juce::jlimit (0, static_cast<int> (column->size()) - 1, songCursor[lane]);
     const int cursor = songCursor[lane];
     const auto count = songSelected[lane].size();
-    const bool marked = count > 1 && songSelected[lane].count (cursor) != 0;
+    const bool marked = songSelected[lane].count (cursor) != 0;
     juce::String message;
     if (details)
         message << "Song, Bassline " << (track + 1) << ", element " << (cursor + 1)
@@ -904,7 +903,7 @@ void SequencerStepEditor::announceSong (bool details)
         message << (marked ? "Selected " : "") << "P"
                 << (column->at (static_cast<size_t> (cursor)) + 1)
                 << ", " << (cursor + 1) << " of " << static_cast<int> (column->size());
-    if (details && count > 1) message << ", " << static_cast<int> (count) << " selected";
+    if (details && count > 0) message << ", " << static_cast<int> (count) << " selected";
     announce (message);
 }
 
@@ -1000,6 +999,23 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
     }
     if (code == juce::KeyPress::escapeKey) { close(); return true; }
     if (code == juce::KeyPress::tabKey) { announceSong (true); return true; }
+    // Shift+Space alone toggles explicit Song row selection, even one row.
+    // Ctrl+Space is deliberately not a selection shortcut; bare Space is transport.
+    const auto toggleSongRow = [&]()
+    {
+        if (data.empty()) return;
+        const bool select = songSelected[lane].count (cursor) == 0;
+        if (select) songSelected[lane].insert (cursor);
+        else songSelected[lane].erase (cursor);
+        songShiftAnchor[lane] = -1;
+        renderSong();
+        announce (juce::String (select ? "Selected P" : "Deselected P")
+                  + juce::String (data[static_cast<size_t> (cursor)] + 1)
+                  + ", " + juce::String (cursor + 1) + " of " + juce::String (data.size()));
+    };
+    if (code == juce::KeyPress::spaceKey && mods.isShiftDown()
+        && ! mods.isCtrlDown() && ! mods.isAltDown())
+    { toggleSongRow(); return true; }
     if (mods.isAltDown())
     {
         if (letter ('l'))
@@ -1073,13 +1089,6 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
             songShiftAnchor[lane] = -1; renderSong();
             announce (juce::String (data.size()) + " song elements selected"); return true;
         }
-        if (code == juce::KeyPress::spaceKey)
-        {
-            if (data.empty()) return true;
-            if (songSelected[lane].count (cursor) != 0) songSelected[lane].erase (cursor);
-            else songSelected[lane].insert (cursor);
-            songShiftAnchor[lane] = -1; renderSong(); announceSong(); return true;
-        }
         if ((code == juce::KeyPress::upKey || code == juce::KeyPress::downKey) && mods.isShiftDown())
         {
             changeSongCursor (code == juce::KeyPress::upKey ? -1 : 1, true, true);
@@ -1090,7 +1099,7 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
             songClipboard.clear();
             if (data.empty()) return true;
             const auto& selection = songSelected[lane];
-            if (selection.size() > 1)
+            if (! selection.empty())
                 for (int i : selection) if (i >= 0 && i < static_cast<int> (data.size()))
                     songClipboard.push_back (data[static_cast<size_t> (i)]);
             else songClipboard.push_back (data[static_cast<size_t> (cursor)]);
@@ -1100,7 +1109,7 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
             const int copied = static_cast<int> (songClipboard.size());
             if (letter ('x'))
             {
-                if (selection.size() > 1)
+                if (! selection.empty())
                 {
                     for (auto it = selection.rbegin(); it != selection.rend(); ++it)
                         if (*it >= 0 && *it < static_cast<int> (data.size())) data.erase (data.begin() + *it);
@@ -1174,8 +1183,8 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
             songConfirmClear = true;
             announce ("Delete all song elements? Enter confirms, Escape cancels"); return true;
         }
-        const int n = selection.size() > 1 ? static_cast<int> (selection.size()) : 1;
-        if (selection.size() > 1)
+        const int n = ! selection.empty() ? static_cast<int> (selection.size()) : 1;
+        if (! selection.empty())
         {
             for (auto it = selection.rbegin(); it != selection.rend(); ++it)
                 if (*it >= 0 && *it < static_cast<int> (data.size())) data.erase (data.begin() + *it);

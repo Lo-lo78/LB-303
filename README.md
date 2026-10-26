@@ -1,3 +1,11 @@
+# TEST2.4.27 — Shift+Spazio: selezione singola annunciata anche navigando
+
+Nel Song Editor (Alt+Q, Alt+S) **Shift+Spazio** è l'unica scorciatoia Spazio con modificatore che aggiunge o toglie l'elemento dalla selezione. **Ctrl+Spazio non seleziona più** nulla. Quando anche un solo elemento è selezionato esplicitamente, NVDA annuncia `Selected P2, 12 of 64` durante la normale navigazione su quella riga; l'elenco e la lettura dettagliata con Tab mostrano anch'essi la selezione singola (`1 selected`). Senza selezione esplicita, la riga focalizzata viene comunque usata normalmente da Ctrl+C/X e Delete, senza dire `Selected`. Spazio da solo mantiene il Play/Stop previsto da Alt+P. Tutta la selezione discontinua, le tre operazioni sugli appunti, i preset e l'audio restano invariati.
+
+# TEST2.4.26 — Shift+Spazio seleziona un singolo elemento Song
+
+Dentro **Alt+Q → Alt+S (Song)**, **Shift+Spazio** seleziona/deseleziona esplicitamente l'elemento corrente della colonna attiva. **Ctrl+Spazio** non è più una scorciatoia del Song Editor. Anche una selezione esplicita di **un solo elemento** viene rispettata da **Ctrl+C, Ctrl+X e Delete**, indipendentemente da dove si sposta poi il cursore con le normali frecce. Se non c'è selezione esplicita, tali comandi operano sull'elemento focalizzato come prima. Shift+Spazio annuncia immediatamente `Selected P...` o `Deselected P...`; la navigazione normale annuncia `Selected` anche per un solo elemento selezionato esplicitamente. **Spazio senza modificatori** continua a controllare l'anteprima se Alt+P è impostato su Preview. Nessuna modifica a sequencer, DSP, preset o routing.
+
 # TEST2.4.25 — Ctrl+Freccia su/giù riparato nelle griglie Windows/NVDA
 
 - **Bug risolto:** nella TEST2.4.24 il controllo `mods.isCtrlDown() && !mods.isCommandDown()` non poteva funzionare su Windows: per JUCE il modificatore Command coincide con Ctrl. Ora Ctrl+Su/Giù cambia davvero il Pattern 1–16 da Grid, Value ed Edit nelle griglie Bassline 1, Bassline 2, Sequencer e FX.
@@ -1011,7 +1019,7 @@ singola timeline sincronizzata: i pattern possono avere Start/End differenti.
   colonna ricomincia indipendentemente; entrambe condividono solo il BPM.
 - **Shift+su/giu** amplia o restringe un intervallo. Rilasciando Shift,
   frecce normali spostano il cursore senza cancellare la selezione.
-  **Ctrl+Spazio** seleziona/deseleziona la riga focalizzata; **Ctrl+Shift+su/giu**
+  **Shift+Spazio** oppure **Ctrl+Spazio** seleziona/deseleziona esplicitamente la riga focalizzata; **Ctrl+Shift+su/giu**
   consente di aggiungere un altro intervallo disgiunto; **Ctrl+A** seleziona
   tutte le righe della sola colonna corrente.
 - **Ctrl+C/X/V** copia/taglia e incolla le righe selezionate, in ordine,
