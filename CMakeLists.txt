@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(LB303 VERSION 0.0.2 LANGUAGES C CXX)
+project(LB303 VERSION 0.99.1 LANGUAGES C CXX)
 
 # Same JUCE 8 and static Windows CRT policy as LJuno-116 TEST95.
 if(MSVC)
@@ -15,6 +15,11 @@ FetchContent_Declare(JUCE
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(JUCE)
+
+juce_add_binary_data(LB303HelpData
+    SOURCES
+        "Help/LB303Help.html"
+)
 
 juce_add_plugin(LB303
     COMPANY_NAME "Lo-lo"
@@ -68,6 +73,7 @@ target_compile_definitions(LB303 PUBLIC
 )
 target_link_libraries(LB303 PRIVATE
     juce::juce_audio_utils
+    LB303HelpData
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags

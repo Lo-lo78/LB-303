@@ -7,11 +7,30 @@
 #include <memory>
 #include <array>
 #include <vector>
+#include <functional>
+#include <utility>
 
 class SequencerStepEditor;
 
+// Same read-only, keyboard-readable About text control as LJuno-116.
+class LB303AboutTextEditor final : public juce::TextEditor
+{
+public:
+    using KeyHandler = std::function<bool (const juce::KeyPress&)>;
+    explicit LB303AboutTextEditor (const juce::String& name) : juce::TextEditor (name) {}
+    void setKeyHandler (KeyHandler handler) { keyHandler = std::move (handler); }
+    bool keyPressed (const juce::KeyPress& key) override
+    {
+        if (keyHandler && keyHandler (key)) return true;
+        return juce::TextEditor::keyPressed (key);
+    }
+private:
+    KeyHandler keyHandler;
+};
+
 class LB303AudioProcessorEditor final : public juce::AudioProcessorEditor,
-                                         private juce::Timer
+                                         private juce::Timer,
+                                         private juce::KeyListener
 {
 public:
     explicit LB303AudioProcessorEditor (LB303AudioProcessor&);
@@ -66,6 +85,15 @@ private:
     juce::TextButton nextPreset { "Next" };
     juce::TextButton browserButton { "Browser" };
     juce::TextButton saveButton { "Save preset" };
+    juce::TextButton help { "Help" };
+    juce::TextButton aboutButton { "About" };
+    LB303AboutTextEditor aboutInfo { "About LB-303" };
+    juce::TextButton aboutProject { "Project" };
+    juce::TextButton aboutContact { "Contact" };
+    juce::TextButton aboutClose { "Close" };
+    std::unique_ptr<juce::LookAndFeel_V4> helpMenuLookAndFeel;
+    bool aboutOpen = false;
+    Control aboutReturnControl = Control::grid;
     Control presetReturnControl = Control::grid;
     int presetReturnContext = 0;
     int presetReturnParameter = 0;
@@ -123,6 +151,15 @@ private:
     void focusBackFromPreset();
     void changePreset (int direction);
     void initialisePlugin();
+    void showHelpLanguageMenu();
+    void openHelp (const juce::String& languageCode);
+    void openAbout();
+    void closeAbout();
+    bool handleAboutKey (const juce::KeyPress&, juce::Component* source);
+    bool navigateAboutText (const juce::KeyPress&);
+    void openProjectPage();
+    void openContactEmail();
+    bool keyPressed (const juce::KeyPress&, juce::Component*) override;
     juce::String labelFor (int index) const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LB303AudioProcessorEditor)

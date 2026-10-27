@@ -2,12 +2,39 @@
 #include "PluginEditor.h"
 #include "ScreenReaderAnnouncer.h"
 #include "SequencerStepEditor.h"
+#include <BinaryData.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
 namespace
 {
+constexpr auto lb303Version = "0.99.1";
+constexpr auto lb303ReleaseDate = "27 October 2026";
+constexpr auto lb303ProjectUrl = "https://github.com/Lo-lo78/LB-303";
+constexpr auto lb303ContactEmail = "vmanolo301@gmail.com";
+constexpr auto lb303License = "GNU Affero General Public License v3 or later (AGPL-3.0-or-later)";
+
+// LJuno's titled popup-window technique with LB-303's existing dark palette.
+class LBHelpLookAndFeel final : public juce::LookAndFeel_V4
+{
+public:
+    LBHelpLookAndFeel()
+    {
+        setColour (juce::PopupMenu::backgroundColourId, juce::Colour (0xff202630));
+        setColour (juce::PopupMenu::textColourId, juce::Colour (0xffd2ddeb));
+        setColour (juce::PopupMenu::headerTextColourId, juce::Colour (0xffd2ddeb));
+        setColour (juce::PopupMenu::highlightedBackgroundColourId, juce::Colour (0xff395775));
+        setColour (juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
+    }
+    void preparePopupMenuWindow (juce::Component& window) override
+    {
+        juce::LookAndFeel_V4::preparePopupMenuWindow (window);
+        window.setName ("Choose Help language");
+        window.setTitle ("Choose Help language");
+    }
+};
+
 constexpr int rowsPerColumn = 8;
 constexpr int columnsFor (int count) { return (count + rowsPerColumn - 1) / rowsPerColumn; }
 constexpr int gridGap = 7;
@@ -171,6 +198,76 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
         button->setWantsKeyboardFocus (false);
         addAndMakeVisible (*button);
     }
+    // Same Help/accessible About flow as LJuno-116. Do not add a fourth
+    // parameter Tab stop: Alt+H and Alt+A work in Grid, Value and Edit.
+    helpMenuLookAndFeel = std::make_unique<LBHelpLookAndFeel>();
+    help.setDescription ("Alt+H");
+    help.onClick = [this] { showHelpLanguageMenu(); };
+    aboutButton.setDescription ("Alt+A");
+    aboutButton.onClick = [this] { openAbout(); };
+    for (auto* button : { &help, &aboutButton })
+    {
+        button->setWantsKeyboardFocus (false);
+        addAndMakeVisible (*button);
+    }
+
+    const auto aboutText = juce::String ("LB-303\nVersion: ") + lb303Version
+        + "\nRelease date: " + lb303ReleaseDate
+        + "\nLicense: " + lb303License
+        + "\nProject: " + lb303ProjectUrl
+        + "\nContact: " + lb303ContactEmail;
+    aboutInfo.setTitle ("About LB-303");
+    aboutInfo.setMultiLine (true, true);
+    aboutInfo.setReturnKeyStartsNewLine (false);
+    aboutInfo.setReadOnly (true);
+    aboutInfo.setScrollbarsShown (true);
+    aboutInfo.setCaretVisible (true);
+    aboutInfo.setPopupMenuEnabled (false);
+    aboutInfo.setTabKeyUsedAsCharacter (false);
+    aboutInfo.setText (aboutText, false);
+    aboutInfo.setDescription (aboutText);
+    aboutInfo.setJustification (juce::Justification::centredLeft);
+    aboutInfo.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(),
+                                                   18.0f, juce::Font::plain)));
+    aboutInfo.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff182439));
+    aboutInfo.setColour (juce::TextEditor::textColourId, juce::Colours::white);
+    aboutInfo.setColour (juce::TextEditor::outlineColourId, juce::Colour (0xffb5c9e2));
+    aboutInfo.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colour (0xffb5c9e2));
+    aboutInfo.setBorder (juce::BorderSize<int> (12));
+    aboutInfo.setWantsKeyboardFocus (true);
+    aboutInfo.setExplicitFocusOrder (1);
+    aboutInfo.setKeyHandler ([this] (const juce::KeyPress& key)
+    { return handleAboutKey (key, &aboutInfo); });
+    aboutInfo.onEscapeKey = [this] { closeAbout(); };
+    addAndMakeVisible (aboutInfo);
+    aboutInfo.setVisible (false);
+
+    aboutProject.setButtonText (juce::String ("Project: ") + lb303ProjectUrl);
+    aboutProject.setDescription ("LB-303 GitHub project URL. Press Enter to open in the default browser.");
+    aboutProject.setWantsKeyboardFocus (true);
+    aboutProject.setExplicitFocusOrder (2);
+    aboutProject.onClick = [this] { openProjectPage(); };
+    aboutProject.addKeyListener (this);
+    addAndMakeVisible (aboutProject);
+    aboutProject.setVisible (false);
+
+    aboutContact.setButtonText (juce::String ("Contact: ") + lb303ContactEmail);
+    aboutContact.setDescription ("LB-303 contact email. Press Enter to open the default email application.");
+    aboutContact.setWantsKeyboardFocus (true);
+    aboutContact.setExplicitFocusOrder (3);
+    aboutContact.onClick = [this] { openContactEmail(); };
+    aboutContact.addKeyListener (this);
+    addAndMakeVisible (aboutContact);
+    aboutContact.setVisible (false);
+
+    aboutClose.setDescription ("Closes About. Shortcut Alt C");
+    aboutClose.setWantsKeyboardFocus (true);
+    aboutClose.setExplicitFocusOrder (4);
+    aboutClose.onClick = [this] { closeAbout(); };
+    aboutClose.addKeyListener (this);
+    addAndMakeVisible (aboutClose);
+    aboutClose.setVisible (false);
+
     presetBrowser = std::make_unique<lb303::PresetBrowser> (processor.presetManager);
     addAndMakeVisible (*presetBrowser);
     presetBrowser->setVisible (false);
@@ -197,6 +294,7 @@ LB303AudioProcessorEditor::~LB303AudioProcessorEditor()
     if (stepEditor != nullptr) stepEditor->close();
     if (presetBrowser != nullptr) { presetBrowser->onClose = {}; presetBrowser->onPresetLoaded = {}; presetBrowser->close(); }
     valueAttachment.reset();
+    helpMenuLookAndFeel.reset();
 }
 std::unique_ptr<juce::AccessibilityHandler> LB303AudioProcessorEditor::createAccessibilityHandler()
 {
@@ -226,6 +324,9 @@ void LB303AudioProcessorEditor::focusGained (FocusChangeType)
 // the parent; ordinary grid keys, NVDA focus and the Alt+Q overlay are intact.
 bool LB303AudioProcessorEditor::keyPressed (const juce::KeyPress& key)
 {
+    if (aboutOpen)
+        return handleAboutKey (key, juce::Component::getCurrentlyFocusedComponent());
+
     if ((stepEditor != nullptr && stepEditor->isOpen())
         || (presetBrowser != nullptr && presetBrowser->active()))
         return false;
@@ -257,6 +358,7 @@ void LB303AudioProcessorEditor::scheduleInitialFocusTransfer()
 
 void LB303AudioProcessorEditor::performInitialFocusTransfer()
 {
+    if (aboutOpen) return;
     if (! isShowing() || (presetBrowser != nullptr && presetBrowser->active())
         || (stepEditor != nullptr && stepEditor->isOpen())) return;
 
@@ -547,13 +649,17 @@ void LB303AudioProcessorEditor::resized()
     auto area = getLocalBounds().reduced (18);
     area.removeFromTop (41);
     auto presetRow = area.removeFromTop (32);
-    previousPreset.setBounds (presetRow.removeFromLeft (98));
+    previousPreset.setBounds (presetRow.removeFromLeft (94));
     presetRow.removeFromLeft (7);
-    nextPreset.setBounds (presetRow.removeFromLeft (98));
+    nextPreset.setBounds (presetRow.removeFromLeft (94));
     presetRow.removeFromLeft (7);
     browserButton.setBounds (presetRow.removeFromLeft (105));
     presetRow.removeFromLeft (7);
-    saveButton.setBounds (presetRow.removeFromLeft (135));
+    saveButton.setBounds (presetRow.removeFromLeft (129));
+    presetRow.removeFromLeft (7);
+    help.setBounds (presetRow.removeFromLeft (98));
+    presetRow.removeFromLeft (7);
+    aboutButton.setBounds (presetRow.removeFromLeft (98));
     area.removeFromTop (8);
     parameterGrid.setBounds (area.removeFromTop (36));
     area.removeFromTop (7);
@@ -567,6 +673,20 @@ void LB303AudioProcessorEditor::resized()
     drawnGrid = area;
     if (stepEditor != nullptr) stepEditor->setBounds (getLocalBounds().reduced (24));
     if (presetBrowser != nullptr) presetBrowser->setBounds (getLocalBounds().reduced (12));
+
+    // Mirror LJuno's modal About: text, project link, contact link, Close.
+    auto aboutArea = getLocalBounds().withSizeKeepingCentre (
+        juce::jmin (700, getWidth() - 32), juce::jmin (430, getHeight() - 32));
+    auto closeArea = aboutArea.removeFromBottom (42);
+    aboutArea.removeFromBottom (10);
+    auto contactArea = aboutArea.removeFromBottom (38);
+    aboutArea.removeFromBottom (8);
+    auto projectArea = aboutArea.removeFromBottom (38);
+    aboutArea.removeFromBottom (10);
+    aboutInfo.setBounds (aboutArea);
+    aboutProject.setBounds (projectArea);
+    aboutContact.setBounds (contactArea);
+    aboutClose.setBounds (closeArea.withSizeKeepingCentre (140, 36));
 }
 void LB303AudioProcessorEditor::mouseDown (const juce::MouseEvent& event)
 {
@@ -1070,6 +1190,8 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
     // the current parameter, context and the native three-control Tab cycle.
     if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown())
     {
+        if (letter ('h')) { showHelpLanguageMenu(); return true; }
+        if (letter ('a')) { openAbout(); return true; }
         if (letter ('b')) { openPresetBrowser (false); return true; }
         if (letter ('s')) { openPresetBrowser (true); return true; }
         if (letter ('i')) { initialisePlugin(); return true; }
@@ -1231,4 +1353,236 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         }
     }
     return false;
+}
+
+// Help and About use the same workflow as LJuno-116. The help is a bundled
+// HTML document opened by the OS; it is never downloaded at run time.
+void LB303AudioProcessorEditor::showHelpLanguageMenu()
+{
+    juce::PopupMenu menu;
+    menu.setLookAndFeel (helpMenuLookAndFeel.get());
+    menu.addSectionHeader ("Help language");
+    menu.addItem (1, "English");
+    menu.addItem (2, "Italiano");
+    menu.addItem (3, juce::String::fromUTF8 ("Español"));
+    menu.addItem (4, juce::String::fromUTF8 ("Français"));
+    menu.addItem (5, juce::String::fromUTF8 ("Русский"));
+    menu.addItem (6, juce::String::fromUTF8 ("中文"));
+    menu.addItem (7, juce::String::fromUTF8 ("日本語"));
+    const auto original = numericEdit.hasKeyboardFocus (true) ? Control::edit
+                        : parameterValue.hasKeyboardFocus (true) ? Control::value
+                        : Control::grid;
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&help),
+        [safe = juce::Component::SafePointer<LB303AudioProcessorEditor> (this), original] (int result)
+        {
+            if (safe == nullptr) return;
+            if (result == 0)
+            {
+                // Allow the native popup to close before returning UIA focus.
+                juce::Timer::callAfterDelay (50, [safe, original]
+                {
+                    if (safe != nullptr) safe->focusControl (original, true);
+                });
+                return;
+            }
+            static constexpr const char* codes[] { "en", "it", "es", "fr", "ru", "zh", "ja" };
+            if (juce::isPositiveAndBelow (result - 1, 7))
+                safe->openHelp (codes[result - 1]);
+        });
+}
+
+void LB303AudioProcessorEditor::openHelp (const juce::String& languageCode)
+{
+    int dataSize = 0;
+    const auto* data = BinaryData::getNamedResource ("LB303Help_html", dataSize);
+    if (data == nullptr || dataSize <= 0)
+    {
+        lb303::announceToActiveScreenReader (parameterGrid, "Help file unavailable");
+        return;
+    }
+    auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory)
+        .getChildFile ("LB-303 Help");
+    if (folder.createDirectory().failed())
+    {
+        lb303::announceToActiveScreenReader (parameterGrid, "Cannot create help folder");
+        return;
+    }
+    auto html = juce::String::fromUTF8 (data, dataSize);
+    const auto safeLanguage = juce::StringArray { "en", "it", "es", "fr", "ru", "zh", "ja" }
+        .contains (languageCode) ? languageCode : "en";
+    // Identical language-selection logic to LJuno: selected page is opened
+    // immediately, yet links in the HTML let users switch languages.
+    html = html.replace ("const supported=",
+                         "const requestedLanguage='" + safeLanguage + "';const supported=");
+    html = html.replace (":'en';document.querySelectorAll",
+                         ":requestedLanguage;document.querySelectorAll");
+    const auto file = folder.getChildFile ("LB-303 Help " + safeLanguage + ".html");
+    if (! file.replaceWithText (html, false, false, "\n"))
+    {
+        lb303::announceToActiveScreenReader (parameterGrid, "Cannot write help file");
+        return;
+    }
+    // Let Windows open the real HTML file in the default browser, as LJuno.
+    if (! file.startAsProcess())
+        lb303::announceToActiveScreenReader (parameterGrid, "Cannot open help in the default browser");
+}
+
+void LB303AudioProcessorEditor::openAbout()
+{
+    if (aboutOpen || (stepEditor != nullptr && stepEditor->isOpen())
+        || (presetBrowser != nullptr && presetBrowser->active()))
+        return;
+    aboutReturnControl = numericEdit.hasKeyboardFocus (true) ? Control::edit
+                         : parameterValue.hasKeyboardFocus (true) ? Control::value
+                         : Control::grid;
+    aboutOpen = true;
+    for (auto* control : { static_cast<juce::Component*> (&parameterGrid),
+                           static_cast<juce::Component*> (&parameterValue),
+                           static_cast<juce::Component*> (&numericEdit),
+                           static_cast<juce::Component*> (&previousPreset),
+                           static_cast<juce::Component*> (&nextPreset),
+                           static_cast<juce::Component*> (&browserButton),
+                           static_cast<juce::Component*> (&saveButton),
+                           static_cast<juce::Component*> (&help),
+                           static_cast<juce::Component*> (&aboutButton) })
+        control->setEnabled (false);
+    for (auto* control : { static_cast<juce::Component*> (&aboutInfo),
+                           static_cast<juce::Component*> (&aboutProject),
+                           static_cast<juce::Component*> (&aboutContact),
+                           static_cast<juce::Component*> (&aboutClose) })
+    {
+        control->setVisible (true);
+        control->toFront (false);
+    }
+    aboutInfo.setCaretPosition (0);
+    repaint();
+    juce::AccessibilityHandler::clearCurrentlyFocusedHandler();
+    aboutInfo.grabKeyboardFocus();
+    if (auto* handler = aboutInfo.getAccessibilityHandler()) handler->grabFocus();
+}
+
+void LB303AudioProcessorEditor::closeAbout()
+{
+    if (! aboutOpen) return;
+    aboutOpen = false;
+    for (auto* control : { static_cast<juce::Component*> (&aboutInfo),
+                           static_cast<juce::Component*> (&aboutProject),
+                           static_cast<juce::Component*> (&aboutContact),
+                           static_cast<juce::Component*> (&aboutClose) })
+        control->setVisible (false);
+    for (auto* control : { static_cast<juce::Component*> (&parameterGrid),
+                           static_cast<juce::Component*> (&parameterValue),
+                           static_cast<juce::Component*> (&numericEdit),
+                           static_cast<juce::Component*> (&previousPreset),
+                           static_cast<juce::Component*> (&nextPreset),
+                           static_cast<juce::Component*> (&browserButton),
+                           static_cast<juce::Component*> (&saveButton),
+                           static_cast<juce::Component*> (&help),
+                           static_cast<juce::Component*> (&aboutButton) })
+        control->setEnabled (true);
+    repaint();
+    focusControl (aboutReturnControl, true);
+}
+
+void LB303AudioProcessorEditor::openProjectPage()
+{
+    if (! juce::URL (lb303ProjectUrl).launchInDefaultBrowser())
+        lb303::announceToActiveScreenReader (aboutProject, "Cannot open LB-303 GitHub project page");
+}
+
+void LB303AudioProcessorEditor::openContactEmail()
+{
+    if (! juce::URL (juce::String ("mailto:") + lb303ContactEmail).launchInDefaultBrowser())
+        lb303::announceToActiveScreenReader (aboutContact, "Cannot open the email application");
+}
+
+bool LB303AudioProcessorEditor::navigateAboutText (const juce::KeyPress& key)
+{
+    const auto code = key.getKeyCode();
+    const bool select = key.getModifiers().isShiftDown();
+    const bool word = key.getModifiers().isCtrlDown() || key.getModifiers().isCommandDown();
+    // TextEditor emits native accessibility/caret events. Avoid duplicate speech.
+    if (code == juce::KeyPress::leftKey)  { aboutInfo.moveCaretLeft (word, select); return true; }
+    if (code == juce::KeyPress::rightKey) { aboutInfo.moveCaretRight (word, select); return true; }
+    if (code == juce::KeyPress::upKey)
+    {
+        if (word && select) aboutInfo.moveCaretToTop (true);
+        else aboutInfo.moveCaretUp (select);
+        return true;
+    }
+    if (code == juce::KeyPress::downKey)
+    {
+        if (word && select) aboutInfo.moveCaretToEnd (true);
+        else aboutInfo.moveCaretDown (select);
+        return true;
+    }
+    if (code == juce::KeyPress::homeKey)
+    {
+        if (word) aboutInfo.moveCaretToTop (select);
+        else aboutInfo.moveCaretToStartOfLine (select);
+        return true;
+    }
+    if (code == juce::KeyPress::endKey)
+    {
+        if (word) aboutInfo.moveCaretToEnd (select);
+        else aboutInfo.moveCaretToEndOfLine (select);
+        return true;
+    }
+    if (code == juce::KeyPress::pageUpKey) { aboutInfo.pageUp (select); return true; }
+    if (code == juce::KeyPress::pageDownKey) { aboutInfo.pageDown (select); return true; }
+    const auto ch = juce::CharacterFunctions::toLowerCase (static_cast<juce::juce_wchar> (code));
+    if (word && ch == 'a') { aboutInfo.selectAll(); return true; }
+    if (word && ch == 'c') { aboutInfo.copyToClipboard(); return true; }
+    return false;
+}
+
+// KeyListener receives About button events, including Esc/Tab from the links.
+bool LB303AudioProcessorEditor::keyPressed (const juce::KeyPress& key, juce::Component* source)
+{
+    return aboutOpen && handleAboutKey (key, source);
+}
+
+bool LB303AudioProcessorEditor::handleAboutKey (const juce::KeyPress& key, juce::Component* source)
+{
+    if (! aboutOpen) return false;
+    const int code = key.getKeyCode();
+    const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+    if (code == juce::KeyPress::escapeKey || (key.getModifiers().isAltDown() && ch == 'c'))
+    {
+        closeAbout();
+        return true;
+    }
+    if (code == juce::KeyPress::tabKey)
+    {
+        const bool forward = ! key.getModifiers().isShiftDown();
+        juce::Component* target = nullptr;
+        if (forward)
+        {
+            if (source == &aboutInfo) target = &aboutProject;
+            else if (source == &aboutProject) target = &aboutContact;
+            else if (source == &aboutContact) target = &aboutClose;
+            else target = &aboutInfo;
+        }
+        else
+        {
+            if (source == &aboutInfo) target = &aboutClose;
+            else if (source == &aboutClose) target = &aboutContact;
+            else if (source == &aboutContact) target = &aboutProject;
+            else target = &aboutInfo;
+        }
+        target->grabKeyboardFocus();
+        if (auto* handler = target->getAccessibilityHandler()) handler->grabFocus();
+        return true;
+    }
+    if (source == &aboutInfo && navigateAboutText (key)) return true;
+    if (code == juce::KeyPress::returnKey)
+    {
+        if (source == &aboutProject) openProjectPage();
+        else if (source == &aboutContact) openContactEmail();
+        else closeAbout();
+        return true;
+    }
+    // About is modal; keys must not modify underlying synth parameters.
+    return true;
 }
