@@ -97,8 +97,7 @@ void PresetBrowser::resized()
 
 juce::File PresetBrowser::rememberedDirectory() const
 {
-    // Settings are held in the processor ValueTree when the browser is open;
-    // use a local file for the session and persist the folder on close.
+    // Save As still honours the directory navigated to in this editor session.
     return directory.isDirectory() && manager.inside (directory)
         ? directory : manager.savedBrowserDirectory();
 }
@@ -113,12 +112,26 @@ void PresetBrowser::browse()
 {
     if (active()) { close(); return; }
     if (auto result = manager.ensureLibrary(); result.failed()) { announce (result.getErrorMessage()); return; }
-    directory = rememberedDirectory();
+    // Only the last CONFIRMED load chooses the browser's start position.
+    // Save-As folder history and uncommitted navigation never affect Browse.
+    const auto target = manager.lastLoadedPresetAcrossSessions();
+    directory = manager.validPreset (target) ? target.getParentDirectory() : manager.root();
     original = manager.capture();
     previewFile = {};
     hasPreview = false;
     showMode (Mode::browse);
-    refresh (manager.savedBrowserRow());
+    int selected = 0;
+    if (manager.validPreset (target) && target.getParentDirectory() == directory)
+    {
+        const auto matchingEntries = manager.list (directory);
+        for (int row = 0; row < static_cast<int> (matchingEntries.size()); ++row)
+            if (matchingEntries[static_cast<size_t> (row)].file == target)
+            {
+                selected = row;
+                break;
+            }
+    }
+    refresh (selected);
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<PresetBrowser> (this)]
     {
         if (safe != nullptr && safe->mode == Mode::browse) safe->focusList();
@@ -138,11 +151,6 @@ void PresetBrowser::close (bool revertPreview)
 {
     if (! active()) return;
     if (revertPreview && original.valid() && hasPreview) manager.restore (original);
-    if (mode == Mode::browse)
-    {
-        rememberedRow = std::max (0, entries.getSelectedRow());
-        manager.saveBrowserRow (rememberedRow);
-    }
     original = {};
     hasPreview = false;
     previewFile = {};

@@ -1,3 +1,9 @@
+## TEST2.4.37 — Preset browser: selezione persistente tra sessioni
+
+Il browser (Alt+B) apre la cartella e seleziona l'ultimo preset **effettivamente caricato e confermato**, anche nella stessa istanza dopo aver navigato altrove senza premere Invio. La posizione è una preferenza permanente indipendente dai progetti REAPER e dalle altre istanze. Le anteprime, lo scorrimento senza conferma e il semplice salvataggio di un preset non cambiano tale preferenza. Rinomina e cancellazione del preset ricordato ne aggiornano o invalidano il percorso. In assenza di un preset precedentemente confermato e ancora valido, il browser parte dall'inizio della libreria. Non viene caricato alcun suono automaticamente all'apertura del VST.
+
+Nessuna modifica all'audio, all'oversampling, ai preset, alla versione di serializzazione o alle 7 pagine del sequencer.
+
 # TEST2.4.35 — Idle DSP a riposo (base TEST2.4.34)
 
 Ottimizzazioni senza nuovi parametri: i blocchi sonori che non contribuiscono al risultato sono **bypassati**, soprattutto in oversampling 2x/4x. Questa è selezione dinamica del percorso DSP, **non** eliminazione fisica di codice dal VST: la decisione di quale percorso usare richiede comunque un controllo minimo.
@@ -1108,3 +1114,11 @@ oversampling quality still refreshes the coefficients.
 MIDI CC123 All Notes Off (and CC120 All Sound Off) now release the gate
 without abruptly truncating the voice filter decay. This prevents a stuck
 voice from keeping the oversampled engine awake after transport-stop MIDI.
+
+
+### TEST2.4.37 - Browser: ricorda soltanto un caricamento confermato
+- Alt+B si posiziona esclusivamente sull'ultimo preset realmente caricato con Invio o con i comandi di caricamento.
+- Scorrere/anteprima e uscire con Escape non cambia la posizione ricordata, anche riaprendo subito il browser nella stessa istanza.
+- Salvare un preset non cambia il riferimento all'ultimo preset caricato.
+- La preferenza rimane persistente anche tra istanze, progetti e riavvii.
+- L'eventuale cartella scelta per Salva con nome è distinta e non influenza il browser di caricamento.

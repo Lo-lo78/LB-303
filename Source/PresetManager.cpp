@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PresetManager.h"
+#include "PresetBrowserMemory.h"
 #include "PluginProcessor.h"
 #include <algorithm>
 
@@ -11,6 +12,7 @@ constexpr auto header = "LB-303 Patch Snapshot";
 const juce::Identifier currentKey { "currentPresetRelativePath" };
 const juce::Identifier folderKey { "presetBrowserDirectory" };
 const juce::Identifier rowKey { "presetBrowserRow" };
+constexpr auto browserSettingsName = "LB-303 Preset Browser";
 // JUCE XML state is already used by REAPER; preserving its binary blob also
 // keeps the two independent 16-pattern banks, every step, and every lock.
 }
@@ -126,13 +128,18 @@ juce::Result PresetManager::commit (const juce::File& file)
 {
     if (! validPreset (file)) return juce::Result::fail ("Preset is not available");
     remember (file);
+    preset_browser_memory::remember (library, file, browserSettingsName);
     return juce::Result::ok();
 }
 
 juce::Result PresetManager::load (const juce::File& file)
 {
     auto result = preview (file);
-    if (result.wasOk()) remember (file);
+    if (result.wasOk())
+    {
+        remember (file);
+        preset_browser_memory::remember (library, file, browserSettingsName);
+    }
     return result;
 }
 
@@ -161,6 +168,8 @@ juce::Result PresetManager::save (const juce::File& folder, const juce::String& 
         + "\nState: " + juce::Base64::toBase64 (snapshot.data.getData(), snapshot.data.getSize()) + "\n";
     if (! destination.replaceWithText (text))
         return juce::Result::fail ("Cannot write preset file");
+    // Saving a patch is not confirming a preset load in the browser.
+    // The persistent browse pointer only advances on commit() or load().
     remember (destination);
     return juce::Result::ok();
 }
@@ -169,6 +178,7 @@ juce::Result PresetManager::remove (const juce::File& file)
 {
     if (! validPreset (file)) return juce::Result::fail ("Select a preset to delete");
     if (! file.deleteFile()) return juce::Result::fail ("Cannot delete preset");
+    preset_browser_memory::remove (library, file, browserSettingsName);
     if (currentFile() == file) forgetCurrent();
     return juce::Result::ok();
 }
@@ -190,6 +200,7 @@ juce::Result PresetManager::rename (const juce::File& file, const juce::String& 
     const auto childSuffix = currentInsideRenamedFolder ? current.getRelativePathFrom (file)
                                                          : juce::String();
     if (! file.moveFileTo (result)) return juce::Result::fail ("Cannot rename item");
+    preset_browser_memory::renamed (library, file, result, browserSettingsName);
     if (wasCurrent) remember (result);
     else if (currentInsideRenamedFolder) remember (result.getChildFile (childSuffix));
     return juce::Result::ok();
@@ -215,6 +226,12 @@ juce::File PresetManager::currentFile() const
     if (name.isEmpty()) return {};
     const auto file = library.getChildFile (name);
     return inside (file) ? file : juce::File();
+}
+
+juce::File PresetManager::lastLoadedPresetAcrossSessions() const
+{
+    const auto file = preset_browser_memory::recalled (library, browserSettingsName);
+    return validPreset (file) ? file : juce::File {};
 }
 
 juce::File PresetManager::savedBrowserDirectory() const

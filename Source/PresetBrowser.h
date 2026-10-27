@@ -52,7 +52,6 @@ private:
     bool suppressSelection = false;
     bool hasPreview = false;
     bool isPreviewing = false;
-    int rememberedRow = 0;
 
     int getNumRows() override;
     void paintListBoxItem (int, juce::Graphics&, int, int, bool) override;

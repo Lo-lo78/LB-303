@@ -46,6 +46,8 @@ public:
     juce::Result newFolder (const juce::File&, const juce::String&, juce::File&);
     juce::Result relative (int direction, juce::String& name);
     juce::File currentFile() const;
+    // Last explicitly loaded/saved preset across REAPER sessions and instances.
+    juce::File lastLoadedPresetAcrossSessions() const;
     juce::File savedBrowserDirectory() const;
     void saveBrowserDirectory (const juce::File&);
     int savedBrowserRow() const;
