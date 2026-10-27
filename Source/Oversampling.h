@@ -56,6 +56,17 @@ public:
         return { channel (l, channels[0]), channel (r, channels[1]) };
     }
     int getFactor() const noexcept { return factor; }
+    bool isQuiescent() const noexcept
+    {
+        // The downsampler also stores ringing after the synth reaches zero.
+        if (factor == 1) return true;
+        constexpr double threshold = 1.0e-10;
+        for (const auto& channel : channels)
+            for (const auto& stage : channel)
+                if (std::abs (stage.z1) >= threshold
+                    || std::abs (stage.z2) >= threshold) return false;
+        return true;
+    }
 private:
     struct Biquad
     {

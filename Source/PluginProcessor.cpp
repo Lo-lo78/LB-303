@@ -128,6 +128,7 @@ void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
     for (auto& engine : engines) engine.prepare (sampleRate);
     sharedFx.prepare (sampleRate);
     currentOversamplingFactor = 1;
+    wetTailGuardSamples = 0;
     for (auto& decimator : voiceDecimators) decimator.setFactor (1);
 }
 void LB303AudioProcessor::releaseResources() {}
@@ -172,6 +173,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         for (auto& engine : engines) engine.reset();
         sharedFx.clearTails();
         for (auto& decimator : voiceDecimators) decimator.clear();
+        wetTailGuardSamples = 0;
         sequencerPlayback.reset();
         fallbackPpq = previewPpq = previewOriginPpq = 0.0;
         previousPreview = false;
@@ -639,6 +641,30 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     int nextStepEvent = 0;
     const auto renderSamplesTo = [&] (int end)
     {
+        if (end <= nextSample) return;
+        // The graph is chosen once per MIDI/lock-bounded segment. Parameter
+        // updates, transport/preview and sequencer events still run each block.
+        // Notes arriving at an offset wake their own lane BEFORE rendering it.
+        const std::array<bool, lb303::basslineCount> voiceWorking {{
+            !engines[0].isQuiescent() || !voiceDecimators[0].isQuiescent()
+                || !sharedFx.distortionQuiescent (0),
+            !engines[1].isQuiescent() || !voiceDecimators[1].isQuiescent()
+                || !sharedFx.distortionQuiescent (1)
+        }};
+        const bool anyVoiceWorking = voiceWorking[0] || voiceWorking[1];
+        const bool wetEnabled = sharedFx.wetEffectsEnabled();
+        if (!wetEnabled) wetTailGuardSamples = 0;
+        // A completely cold graph never enters any 1x/2x/4x synthesis,
+        // distortion, oversampling or wet FX code. All output buses were
+        // already cleared. Remaining MIDI/step scheduling is untouched.
+        if (!anyVoiceWorking && wetTailGuardSamples == 0)
+        {
+            nextSample = end;
+            return;
+        }
+        const int wetGuardLimit = static_cast<int> (
+            std::min (sampleRateHz * sharedFx.wetTailGuardSeconds(),
+                      static_cast<double> (0x7fffffff)));
         // Decisions about active distortion graphs are made once per segment
         // (including a segment split by a parameter lock), not per sub-sample.
         const std::array<bool, lb303::basslineCount> distortionOn {{
@@ -649,6 +675,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             std::array<std::pair<float, float>, lb303::basslineCount> stems {};
             for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
             {
+                if (!voiceWorking[voice]) continue;
                 if (oversamplingFactor == 1)
                 {
                     // Identical original synth + insert routing at 1x.
@@ -680,6 +707,14 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                                     stems[1].first, stems[1].second)
                 : sharedFx.processPostDistortion (stems[0].first, stems[0].second,
                                                    stems[1].first, stems[1].second);
+            if (wetEnabled)
+            {
+                if (anyVoiceWorking || std::abs (fx.wet.first) > 1.0e-8f
+                                    || std::abs (fx.wet.second) > 1.0e-8f)
+                    wetTailGuardSamples = std::max (wetTailGuardSamples, wetGuardLimit);
+                else if (wetTailGuardSamples > 0)
+                    --wetTailGuardSamples;
+            }
             // Shared FX are independent of stem routing and are never mixed
             // into the individual voice buses. The master output contains
             // one direct contribution per bassline and one shared wet return.

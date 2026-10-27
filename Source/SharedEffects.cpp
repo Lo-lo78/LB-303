@@ -36,6 +36,8 @@ void SharedEffects::prepare (double sampleRate)
 {
     fs = std::max (8000.0, sampleRate);
     classic.prepare (fs);
+    settingsPrepared = false;
+    wetGuardSeconds = 0.5;
     insertOversamplingFactor = 1;
     for (size_t i = 0; i < basslineCount; ++i)
     {
@@ -96,11 +98,65 @@ void SharedEffects::clearTails() noexcept
     chorusPhase = 0.0;
     for (auto& distortion : distortions) distortion = {};
     lastDelayMode = 0;
+    settingsPrepared = false;
 }
 void SharedEffects::setParameters (const Controls& settings,
                                    const ClassicParameters& original, double tempo)
 {
+    const double nextBpm = std::max (1.0, std::isfinite (tempo) ? tempo : 120.0);
+    if (settingsPrepared && c == settings && lastClassicParameters == original
+        && bpm == nextBpm) return;
+    settingsPrepared = true;
+    lastClassicParameters = original;
+    bpm = nextBpm;
     c = settings;
+    // Bound a delay's *silent gaps* by its actual time and feedback, rather
+    // than paying a fixed 30 seconds of DSP after every short echo.
+    // Continuous measurable wet output keeps the graph awake regardless.
+    const auto echoGuard = [] (double delay, double feedback) noexcept
+    {
+        delay = std::clamp (delay, .001, 12.5);
+        feedback = std::clamp (std::abs (feedback), 0.0, 1.0);
+        if (feedback >= 0.999) return std::max (30.0, delay * 4.0);
+        const double echoes = feedback <= 1.0e-5 ? 1.0
+            : std::ceil (std::log (1.0e-8) / std::log (feedback)) + 2.0;
+        return delay * std::clamp (echoes, 1.0, 200.0) + 0.5;
+    };
+    wetGuardSeconds = 0.5; // chorus headroom and stereo HP memories
+    if (juce::roundToInt (c[fx::delayType]) == 1)
+    {
+        double delay = static_cast<double> (original[19]) * .00125;
+        const int sync = juce::roundToInt (original[20]);
+        constexpr int divisions[] = { 1, 16, 12, 8, 6, 4, 3, 2, 1 };
+        if (sync >= 1 && sync <= 8)
+            delay = (60.0 / bpm) * 4.0 / divisions[sync];
+        delay = std::min (10.0, delay);
+        wetGuardSeconds = std::max (wetGuardSeconds,
+            echoGuard (delay + std::abs (original[23]) * .01, original[21] * .01));
+    }
+    else if (juce::roundToInt (c[fx::delayType]) == 2)
+    {
+        const int sync = juce::jlimit (0, 10, juce::roundToInt (c[fx::dualSync]));
+        constexpr int divisions[] = { 1, 32, 24, 16, 12, 8, 6, 4, 3, 2, 1 };
+        const double delay = sync > 0 ? (60.0 / bpm) * 4.0 / divisions[sync]
+                                      : c[fx::dualTime] * .001;
+        wetGuardSeconds = std::max (wetGuardSeconds,
+            echoGuard (std::min (11.9, delay * c[fx::dualSpeed1]),
+                       c[fx::dualFeedback1] * .004999));
+        wetGuardSeconds = std::max (wetGuardSeconds,
+            echoGuard (std::min (11.9, delay * c[fx::dualSpeed2]),
+                       c[fx::dualFeedback2] * .004999));
+    }
+    if (c[fx::reverbType] > 0.5f)
+    {
+        const int mode = juce::jlimit (1, 4, juce::roundToInt (c[fx::reverbType]));
+        const double tailFactor = mode == 1 ? .55 : mode == 2 ? .8
+                                : mode == 3 ? 1.0 : 1.55;
+        wetGuardSeconds = std::max (wetGuardSeconds,
+            2.0 * static_cast<double> (c[fx::reverbDecay]) * tailFactor
+            + .001 * static_cast<double> (c[fx::reverbPredelay]) + .5);
+    }
+    wetGuardSeconds = std::clamp (wetGuardSeconds, .5, 120.0);
     for (size_t voice = 0; voice < basslineCount; ++voice)
     {
         const auto type = voice == 0 ? fx::distortionType : fx::distortion2Type;
@@ -181,6 +237,21 @@ float SharedEffects::fxShape (int mode, float x) noexcept
         default: return v;
     }
 }
+bool SharedEffects::distortionQuiescent (size_t voice) const noexcept
+{
+    if (!enabledDistortion[voice]) return true;
+    const auto& state = distortions[voice];
+    constexpr float threshold = 1.0e-9f;
+    const auto quiet = [] (const DistSide& side)
+    {
+        return std::abs (side.previous) < 1.0e-9f
+            && std::abs (side.prevEven) < 1.0e-9f
+            && std::abs (side.evenDc) < 1.0e-9f;
+    };
+    return quiet (state.left) && quiet (state.right)
+        && state.dryPower < threshold && state.processedPower < threshold;
+}
+
 std::pair<float, float> SharedEffects::distort (float l, float r, size_t voice) noexcept
 {
     auto& state = distortions[voice];

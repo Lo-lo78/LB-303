@@ -18,7 +18,11 @@ public:
     void clearTails() noexcept; // no allocation: reset FX after Alt+I
     void setParameters (const Controls&, const ClassicParameters&, double newTempo);
     float dryLevel() const noexcept { return classicDryLevel; }
+    bool wetEffectsEnabled() const noexcept { return enabledSharedWetFx; }
+    double wetTailGuardSeconds() const noexcept { return wetGuardSeconds; }
     bool distortionActive (size_t voice) const noexcept { return enabledDistortion[voice]; }
+    bool distortionQuiescent (size_t voice) const noexcept;
+
     struct Output
     {
         std::pair<float, float> wet; // Shared chorus, delay, reverb: Master 1/2 + isolated FX bus 7/8
@@ -54,6 +58,9 @@ private:
 
     BassEngine classic; // the original JSFX delay engine, instantiated ONCE
     Controls c {};
+    ClassicParameters lastClassicParameters {};
+    bool settingsPrepared = false;
+    double wetGuardSeconds = 0.5;
     double fs = 44100.0, bpm = 120.0;
     // Smoothed fractional read position for the shared reverb pre-delay.
     // Parameter changes must not jump directly to another point in the ring.

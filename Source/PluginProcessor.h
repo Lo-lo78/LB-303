@@ -107,6 +107,10 @@ private:
     lb303::SharedEffects sharedFx;
     std::array<lb303::VoiceDecimator, lb303::basslineCount> voiceDecimators;
     int currentOversamplingFactor = 1; // audio thread only
+    // Once a voice is released, continue the wet graph until delayed repeats
+    // and reverberation have had ample time to decay. Never sleep while a
+    // live voice or measurable wet output exists.
+    int wetTailGuardSamples = 0; // audio thread only, no allocation
     std::array<lb303::SequencerState, lb303::basslineCount> sequenceBanks;
     lb303::SequencerPlayback sequencerPlayback;
     // Last running step per lane. -1 means the raw, host-automated baseline.

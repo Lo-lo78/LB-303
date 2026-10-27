@@ -1,4 +1,4 @@
-# TEST2.4.34 — DSP a percorsi attivi (base TEST2.4.33)
+# TEST2.4.35 — Idle DSP a riposo (base TEST2.4.34)
 
 Ottimizzazioni senza nuovi parametri: i blocchi sonori che non contribuiscono al risultato sono **bypassati**, soprattutto in oversampling 2x/4x. Questa è selezione dinamica del percorso DSP, **non** eliminazione fisica di codice dal VST: la decisione di quale percorso usare richiede comunque un controllo minimo.
 
@@ -1083,3 +1083,28 @@ I test inclusi sono statici e non dimostrano che audio, routing, lock e screen
 reader funzionino correttamente a runtime. In particolare verificare i cambi
 fra pattern di lunghezza diversa, i loop indipendenti e Alt+M mentre l'anteprima
 Song e gia in riproduzione.
+
+
+## TEST2.4.35 – True idle sleep for silent voices
+
+With no held notes or audible tails, neither synth oscillator/filter nor the
+2x/4x distortion/downsampling graph is called. The sequencer/MIDI/timing
+code remains active and wakes the voice on the exact incoming note offset.
+A voice enters sleep only after its gate, release envelope, resonant filter
+state, output biquads and oversampling filters have decayed below a
+conservative numerical threshold. Effects still process wet tails, with a
+delay-time/feedback and reverb-decay-aware safety guard extended while
+the wet return is measurable;
+the plugin does **not** assume that silence between long delay repeats means
+that the delay can be turned off. No new controls or plugin parameters.
+
+REAPER idle CPU includes host overhead and can vary by audio buffer size,
+sample rate, FX settings, and transport mode; no fixed percentage is promised.
+
+Unchanged parameter arrays and tempo no longer rebuild filters and nonlinear
+DSP coefficients every processBlock call; changing an actual parameter or
+oversampling quality still refreshes the coefficients.
+
+MIDI CC123 All Notes Off (and CC120 All Sound Off) now release the gate
+without abruptly truncating the voice filter decay. This prevents a stuck
+voice from keeping the oversampled engine awake after transport-stop MIDI.

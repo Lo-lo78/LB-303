@@ -12,6 +12,12 @@ double clamp (double v, double lo, double hi) { return std::clamp (v, lo, hi); }
 }
 
 void BassEngine::Biquad::clear() { x1 = x2 = y1 = y2 = 0; }
+bool BassEngine::Biquad::isQuiescent() const noexcept
+{
+    constexpr double threshold = 1.0e-10; // far below audible output
+    return std::abs (x1) < threshold && std::abs (x2) < threshold
+        && std::abs (y1) < threshold && std::abs (y2) < threshold;
+}
 void BassEngine::Biquad::lowpass (double hz, double q, double fs)
 {
     const auto w = 2.0 * pi * std::min (hz / fs, 0.49);
@@ -137,6 +143,7 @@ void BassEngine::prepare (double sampleRate)
 {
     hostFs = fs = std::max (sampleRate, 8000.0);
     oversamplingFactor = 1;
+    parametersPrepared = false;
     delayL.resize (static_cast<size_t> (fs * 12.0) + 64);
     delayR.resize (static_cast<size_t> (fs * 12.0) + 64);
     pitchShift.prepare();
@@ -149,6 +156,7 @@ void BassEngine::prepare (double sampleRate)
 
 void BassEngine::setOsc2Parameters (const Osc2Values& values) noexcept
 {
+    if (osc2Parameters == values) return;
     // The layer was not running at zero volume; on a later reactivation
     // re-align its phase before the 5 ms gain ramp starts.
     if (osc2Parameters[osc2::volume] <= 0.0f && values[osc2::volume] > 0.0f
@@ -159,6 +167,7 @@ void BassEngine::setOsc2Parameters (const Osc2Values& values) noexcept
 
 void BassEngine::setLfoParameters (const LfoValues& values) noexcept
 {
+    if (lfoParameters == values) return;
     lfoParameters = values;
     lfoHasDestination = values[lfo::pitchDepth] != 0.0f
         || values[lfo::volumeDepth] != 0.0f
@@ -196,6 +205,7 @@ void BassEngine::setOversamplingFactor (int factor) noexcept
     factor = factor == 2 || factor == 4 ? factor : 1;
     if (factor == oversamplingFactor) return;
     oversamplingFactor = factor;
+    parametersPrepared = false; // delay filter coefficients must follow fs
     fs = hostFs * factor;
     // No allocations, voice state/phase/envelopes are preserved. Keep the
     // audible biquad cutoffs in Hz while running the entire voice at fs*N.
@@ -225,8 +235,11 @@ void BassEngine::reset()
 
 void BassEngine::setParameters (const Values& values, double newBpm)
 {
+    const double nextTempo = std::max (1.0, std::isfinite (newBpm) ? newBpm : 120.0);
+    if (parametersPrepared && p == values && tempo == nextTempo) return;
+    parametersPrepared = true;
     p = values;
-    tempo = std::max (1.0, std::isfinite (newBpm) ? newBpm : 120.0);
+    tempo = nextTempo;
     delayLpL.lowpass (p[24], p[25], fs); delayLpR.lowpass (p[24], p[25], fs);
     delayHpL.highpass (p[26], p[27], fs); delayHpR.highpass (p[26], p[27], fs);
     double delayMs = p[19] * 1.25; // intentional 1.25x free-time scaling in JSFX
@@ -249,8 +262,13 @@ void BassEngine::releaseNote() noexcept
 
 void BassEngine::midi (const juce::MidiMessage& message)
 {
-    if (message.isController() && message.getControllerNumber() == 123)
+    if (message.isController()
+        && (message.getControllerNumber() == 123 || message.getControllerNumber() == 120))
     {
+        // DAW transport stop / panic must close the gate as well as clearing
+        // the historical delay. Otherwise a held voice can render forever at
+        // 4x after playback stops, even if no new notes are incoming.
+        releaseNote();
         delayL.clear(); delayR.clear();
         return;
     }
@@ -352,6 +370,19 @@ double BassEngine::nextLfoSample() noexcept
     }
     else lfo.delayEnvelope = 1.0;
     return output;
+}
+
+bool BassEngine::isQuiescent() const noexcept
+{
+    // A held note is NEVER put to sleep, even if its current amplitude is
+    // zero: a parameter or legato change may make it sound immediately.
+    if (noteActive) return false;
+    constexpr double threshold = 1.0e-10;
+    // Do not discard release or residual resonant/LP-filter ringing.
+    return envelope < threshold && lpgMemory < threshold
+        && std::abs (stage3) < threshold && std::abs (stage4) < threshold
+        && airPeakL.isQuiescent() && airPeakR.isQuiescent()
+        && outputLpfL.isQuiescent() && outputLpfR.isQuiescent();
 }
 
 std::pair<float, float> BassEngine::tick (float inputL, float inputR)

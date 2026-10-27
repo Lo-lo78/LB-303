@@ -24,6 +24,10 @@ public:
     void midi (const juce::MidiMessage& event);
     void releaseNote() noexcept; // stop a direct note when switching to sequencer mode
     std::pair<float, float> tick (float inputL, float inputR);
+    // True only after the gate, envelope and all audible filter memory
+    // have decayed to numerical silence. No oscillator or filter work is
+    // necessary until the next MIDI Note On. Does NOT clear oscillator phase.
+    bool isQuiescent() const noexcept;
     // Shared FX instance only: the original JSFX classic delay on an external stereo bus.
     std::pair<float, float> processClassicDelay (float synthL, float synthR);
 
@@ -37,6 +41,7 @@ private:
         void peak (double freq, double q, double dB, double sampleRate);
         float process (float input);
         void clear();
+        bool isQuiescent() const noexcept;
     };
     struct DelayLine
     {
@@ -67,6 +72,7 @@ private:
     void updateRateCoefficients() noexcept;
     void updateLpgCoefficient() noexcept;
     Values p {};
+    bool parametersPrepared = false;
     LfoValues lfoParameters {};
     Osc2Values osc2Parameters {};
     struct LfoState
