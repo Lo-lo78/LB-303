@@ -93,6 +93,8 @@ private:
     juce::TextButton aboutClose { "Close" };
     std::unique_ptr<juce::LookAndFeel_V4> helpMenuLookAndFeel;
     bool aboutOpen = false;
+    bool helpLanguageMenuOpen = false;
+    int helpFocusRestoreGeneration = 0;
     Control aboutReturnControl = Control::grid;
     Control presetReturnControl = Control::grid;
     int presetReturnContext = 0;
@@ -152,6 +154,7 @@ private:
     void changePreset (int direction);
     void initialisePlugin();
     void showHelpLanguageMenu();
+    void restoreFocusAfterHelpMenu (Control);
     void openHelp (const juce::String& languageCode);
     void openAbout();
     void closeAbout();

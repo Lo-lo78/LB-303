@@ -40,6 +40,19 @@ for term in ['0.99.1','27 October 2026','Alt+H','Alt+A','Alt+Q','Alt+B','101','O
  assert help.count(term)>=7,term
 wf=(root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
 assert 'python Tests/check_help_about.py' in wf
-assert 'LB-303-0.99.1-TEST2.4.39-Windows-x64' in wf
+assert 'LB-303-0.99.1-TEST2.4.40-Windows-x64' in wf
 assert (root/'.gitignore').exists()
+# Regression: Esc returns native keyboard *and* UIA focus to all three controls.
+assert 'void LB303AudioProcessorEditor::restoreFocusAfterHelpMenu (Control original)' in editor
+assert 'safe->restoreFocusAfterHelpMenu (original);' in editor
+assert 'helpLanguageMenuOpen = true;' in editor
+assert 'safe->helpLanguageMenuOpen = false;' in editor
+assert 'juce::Timer::callAfterDelay (75, restore);' in editor
+assert 'juce::Timer::callAfterDelay (210, restore);' in editor
+assert 'target->grabKeyboardFocus();' in editor
+assert 'handler->grabFocus();' in editor
+assert 'safe->parameterGrid.setEntryAccessibility();' in editor
+assert 'safe->parameterValue.setEntryAccessibility();' in editor
+assert 'safe->numericEdit.setDescription ("Alt+E")' in editor
+assert 'restoreFocusAfterHelpMenu (Control)' in h
 print('PASS: Help HTML embedded, seven real translations, popup menu, Alt+H, About, Alt+A, version/date, NVDA navigation, CI and dotfiles')

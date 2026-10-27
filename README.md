@@ -1,3 +1,9 @@
+# LB-303 0.99.1 — TEST2.4.40: correzione focus dopo Esc da Alt+H
+
+La selezione della lingua di Help mantiene lo stesso menu a sette lingue. Quando si annulla con Esc, il focus viene restituito al controllo da cui si è aperto il menu: **Grid, Value oppure Edit manuale**. Il ripristino viene eseguito dopo la chiusura effettiva del popup e aggiorna **sia la tastiera sia il focus accessibile Windows UIA/NVDA**, con una seconda verifica differita per prevenire il blocco delle frecce nella Grid e dell'editing. Non serve premere Tab/Shift+Tab per riprendere la navigazione. Non modifica l'operazione di selezione di una lingua e apertura della guida nel browser. Non aggiunge nuovi elementi nel ciclo Tab.
+
+Tutti i parametri VST3, motore audio, preset, Accent, Pattern/Song, oversampling, CPU idle, About e le sette lingue sono invariati. Versione pubblica e data di rilascio rimangono 0.99.1 / 27 October 2026. I controlli statici sono eseguiti localmente; **va ancora collaudato l'effettivo focus Windows UIA/NVDA in REAPER**, oltre alla compilazione VST3 su GitHub Actions.
+
 # LB-303 0.99.1 — TEST2.4.39: correzione lettura UTF-8 nei test GitHub Actions
 
 La TEST2.4.38 si bloccava alla fase `Check source regressions` prima di compilare il VST3: su Windows Python utilizzava la codifica locale cp1252 e falliva nel leggere il sorgente Unicode `Source/PluginEditor.cpp`. In `Tests/check_help_about.py` ora tutte le letture di testo specificano `encoding="utf-8"`. Il workflow e il nome dell’artifact riportano TEST2.4.39. Nessun codice audio o di interfaccia è stato modificato rispetto alla TEST2.4.38; la versione pubblica rimane 0.99.1, release date 27 October 2026.

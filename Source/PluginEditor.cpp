@@ -1359,6 +1359,16 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
 // HTML document opened by the OS; it is never downloaded at run time.
 void LB303AudioProcessorEditor::showHelpLanguageMenu()
 {
+    if (helpLanguageMenuOpen || aboutOpen
+        || (presetBrowser != nullptr && presetBrowser->active())
+        || (stepEditor != nullptr && stepEditor->isOpen()))
+        return;
+
+    // The Help button is deliberately outside Grid/Value/Edit's Tab cycle.
+    // An Esc from a native popup therefore cannot rely on the button to
+    // restore keyboard and Windows UI Automation focus to the original field.
+    helpLanguageMenuOpen = true;
+    ++helpFocusRestoreGeneration; // cancel any return from an earlier popup
     juce::PopupMenu menu;
     menu.setLookAndFeel (helpMenuLookAndFeel.get());
     menu.addSectionHeader ("Help language");
@@ -1377,18 +1387,97 @@ void LB303AudioProcessorEditor::showHelpLanguageMenu()
         [safe = juce::Component::SafePointer<LB303AudioProcessorEditor> (this), original] (int result)
         {
             if (safe == nullptr) return;
+            safe->helpLanguageMenuOpen = false;
             if (result == 0)
             {
-                // Allow the native popup to close before returning UIA focus.
-                juce::Timer::callAfterDelay (50, [safe, original]
-                {
-                    if (safe != nullptr) safe->focusControl (original, true);
-                });
+                // Esc must return to the same *working* Grid, Value or Edit,
+                // including the native UIA focus event used by NVDA.
+                safe->restoreFocusAfterHelpMenu (original);
                 return;
             }
             static constexpr const char* codes[] { "en", "it", "es", "fr", "ru", "zh", "ja" };
             if (juce::isPositiveAndBelow (result - 1, 7))
                 safe->openHelp (codes[result - 1]);
+        });
+}
+
+// A JUCE PopupMenu briefly owns both the native Windows keyboard focus and
+// the accessibility focus. A single grabKeyboardFocus() during its close can
+// leave the Grid ComboBox and numeric Edit logically focused, but unable to
+// receive arrow keys until the user cycles Tab. Restore both focus layers
+// *after* the native popup has gone, as for the preset browser.
+void LB303AudioProcessorEditor::restoreFocusAfterHelpMenu (Control original)
+{
+    const auto expectedContext = context;
+    const auto expectedParameter = selected;
+    const auto generation = ++helpFocusRestoreGeneration;
+    const auto safe = juce::Component::SafePointer<LB303AudioProcessorEditor> (this);
+
+    const auto restore = [safe, original, expectedContext, expectedParameter, generation]
+    {
+        if (safe == nullptr || safe->helpFocusRestoreGeneration != generation
+            || safe->helpLanguageMenuOpen || safe->aboutOpen || ! safe->isShowing()
+            || (safe->presetBrowser != nullptr && safe->presetBrowser->active())
+            || (safe->stepEditor != nullptr && safe->stepEditor->isOpen())
+            || safe->context != expectedContext || safe->selected != expectedParameter)
+            return;
+
+        // Do not take focus back from a deliberate Tab or shortcut into one
+        // of the *other* two editing controls while the timer was waiting.
+        if ((original != Control::grid && safe->parameterGrid.hasKeyboardFocus (true))
+            || (original != Control::value && safe->parameterValue.hasKeyboardFocus (true))
+            || (original != Control::edit && safe->numericEdit.hasKeyboardFocus (true)))
+            return;
+
+        juce::Component* target = nullptr;
+        if (original == Control::grid)
+        {
+            safe->parameterGrid.hidePopup();
+            safe->parameterGrid.setSelectedId (expectedParameter + 1,
+                                                juce::dontSendNotification);
+            safe->parameterGrid.setEntryAccessibility();
+            target = &safe->parameterGrid;
+        }
+        else if (original == Control::value)
+        {
+            safe->parameterValue.setEntryAccessibility();
+            target = &safe->parameterValue;
+        }
+        else
+        {
+            safe->numericEdit.setTitle (
+                "Edit. " + juce::String (lb303::catalog()[safe->globalIndex()].name));
+            safe->numericEdit.setDescription ("Alt+E");
+            target = &safe->numericEdit;
+        }
+
+        // Unlike the old focusControl() call, this ALWAYS refreshes UIA focus
+        // (also for Grid and Edit) even if JUCE thinks the same child still
+        // owns keyboard focus after the modal popup closed.
+        juce::AccessibilityHandler::clearCurrentlyFocusedHandler();
+        target->grabKeyboardFocus();
+        if (auto* handler = target->getAccessibilityHandler())
+            handler->grabFocus();
+    };
+
+    // Both handoffs take place outside PopupMenu's Escape/callback stack.
+    // A second handoff covers the native close notification arriving after
+    // the first one, without overriding later navigation or another overlay.
+    juce::Timer::callAfterDelay (75, restore);
+    juce::Timer::callAfterDelay (210, restore);
+
+    juce::Timer::callAfterDelay (450,
+        [safe, original, expectedContext, expectedParameter, generation]
+        {
+            if (safe == nullptr || safe->helpFocusRestoreGeneration != generation
+                || safe->context != expectedContext || safe->selected != expectedParameter)
+                return;
+            if (original == Control::grid && safe->parameterGrid.hasKeyboardFocus (true))
+                safe->parameterGrid.setLineReadingMode();
+            else if (original == Control::value && safe->parameterValue.hasKeyboardFocus (true))
+                safe->parameterValue.setLineReadingMode();
+            else if (original == Control::edit && safe->numericEdit.hasKeyboardFocus (true))
+                safe->numericEdit.setDescription (juce::String());
         });
 }
 
