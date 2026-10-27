@@ -3,10 +3,10 @@
 from pathlib import Path
 import re
 root=Path(__file__).resolve().parents[1]
-cm=(root/'CMakeLists.txt').read_text()
-h=(root/'Source/PluginEditor.h').read_text()
-editor=(root/'Source/PluginEditor.cpp').read_text()
-help=(root/'Help/LB303Help.html').read_text(encoding='utf8')
+cm=(root/'CMakeLists.txt').read_text(encoding='utf-8')
+h=(root/'Source/PluginEditor.h').read_text(encoding='utf-8')
+editor=(root/'Source/PluginEditor.cpp').read_text(encoding='utf-8')
+help=(root/'Help/LB303Help.html').read_text(encoding='utf-8')
 assert 'project(LB303 VERSION 0.99.1' in cm
 assert 'juce_add_binary_data(LB303HelpData' in cm
 assert 'Help/LB303Help.html' in cm and 'LB303HelpData' in cm
@@ -38,8 +38,8 @@ for code in codes:
 assert "const supported=['en','it','es','fr','ru','zh','ja'];" in help
 for term in ['0.99.1','27 October 2026','Alt+H','Alt+A','Alt+Q','Alt+B','101','Oversampling']:
  assert help.count(term)>=7,term
-wf=(root/'.github/workflows/build-windows.yml').read_text()
+wf=(root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
 assert 'python Tests/check_help_about.py' in wf
-assert 'LB-303-0.99.1-TEST2.4.38-Windows-x64' in wf
+assert 'LB-303-0.99.1-TEST2.4.39-Windows-x64' in wf
 assert (root/'.gitignore').exists()
 print('PASS: Help HTML embedded, seven real translations, popup menu, Alt+H, About, Alt+A, version/date, NVDA navigation, CI and dotfiles')
