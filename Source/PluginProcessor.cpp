@@ -127,6 +127,8 @@ void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
     previousLockSongEntry = { -9, -9 };
     for (auto& engine : engines) engine.prepare (sampleRate);
     sharedFx.prepare (sampleRate);
+    currentOversamplingFactor = 1;
+    for (auto& decimator : voiceDecimators) decimator.setFactor (1);
 }
 void LB303AudioProcessor::releaseResources() {}
 
@@ -169,6 +171,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         // concurrent writes into the synthesizer's non-atomic DSP state.
         for (auto& engine : engines) engine.reset();
         sharedFx.clearTails();
+        for (auto& decimator : voiceDecimators) decimator.clear();
         sequencerPlayback.reset();
         fallbackPpq = previewPpq = previewOriginPpq = 0.0;
         previousPreview = false;
@@ -573,6 +576,21 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         applyVoiceParameters (voice);
     applyFxParameters();
 
+    const int quality = juce::jlimit (0, 2,
+        juce::roundToInt (value (lb303::oversamplingIndex)));
+    const int oversamplingFactor = quality == 0 ? 1 : (quality == 1 ? 2 : 4);
+    if (oversamplingFactor != currentOversamplingFactor)
+    {
+        // No allocations or DSP preparation on the audio thread.
+        currentOversamplingFactor = oversamplingFactor;
+        for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
+        {
+            engines[voice].setOversamplingFactor (oversamplingFactor);
+            voiceDecimators[voice].setFactor (oversamplingFactor);
+        }
+        sharedFx.setInsertOversamplingFactor (oversamplingFactor);
+    }
+
     // Independently scheduled lock boundaries may be emitted for paused steps,
     // too. Sort them for exact sample order between the two MIDI channels.
     std::sort (stepEvents.begin(), stepEvents.begin() + stepEventCount,
@@ -626,12 +644,33 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             std::array<std::pair<float, float>, lb303::basslineCount> stems {};
             for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
             {
-                const auto generated = engines[voice].tick (0.0f, 0.0f);
-                stems[voice] = { generated.first * leftGain[voice],
-                                 generated.second * rightGain[voice] };
+                if (oversamplingFactor == 1)
+                {
+                    // Identical original synth + insert routing at 1x.
+                    const auto generated = engines[voice].tick (0.0f, 0.0f);
+                    stems[voice] = { generated.first * leftGain[voice],
+                                     generated.second * rightGain[voice] };
+                }
+                else
+                {
+                    // Each bassline runs its own oscillator, filter, Drive AND
+                    // distortion insert at 2x/4x. Decimate only after shaping.
+                    for (int sub = 0; sub < oversamplingFactor; ++sub)
+                    {
+                        const auto generated = engines[voice].tick (0.0f, 0.0f);
+                        const auto distorted = sharedFx.processDistortionInsert (
+                            generated.first * leftGain[voice],
+                            generated.second * rightGain[voice], voice);
+                        stems[voice] = voiceDecimators[voice].process (
+                            distorted.first, distorted.second);
+                    }
+                }
             }
-            const auto fx = sharedFx.process (stems[0].first, stems[0].second,
-                                              stems[1].first, stems[1].second);
+            const auto fx = oversamplingFactor == 1
+                ? sharedFx.process (stems[0].first, stems[0].second,
+                                    stems[1].first, stems[1].second)
+                : sharedFx.processPostDistortion (stems[0].first, stems[0].second,
+                                                   stems[1].first, stems[1].second);
             // Shared FX are independent of stem routing and are never mixed
             // into the individual voice buses. The master output contains
             // one direct contribution per bassline and one shared wet return.

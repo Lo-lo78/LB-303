@@ -20,6 +20,7 @@ constexpr const char* fxDelayChoices[] = { "Off", "LB-303 Classic", "LJuno Dual 
 constexpr const char* fxSyncChoices[] = { "Off", "1/32", "1/24T", "1/16", "1/12T", "1/8", "1/6T", "1/4", "1/3T", "1/2", "1/1" };
 constexpr const char* fxDistChoices[] = { "Off", "Soft Clip", "Warm Tube", "Tape Drive", "Classic Overdrive", "Hard Clip", "Diode Crunch", "Thick Fuzz", "Wave Fold", "Rectifier", "Bit Crush", "Sine Warp", "Broken Radio" };
 constexpr const char* fxOrderChoices[] = { "Delay then Reverb", "Reverb then Delay" };
+constexpr const char* oversamplingChoices[] = { "1x", "2x", "4x" };
 constexpr const char* fxReverbChoices[] = { "Off", "Room", "Plate", "Hall", "Cathedral" };
 constexpr const char* lfoModeChoices[] = { "Free", "Triggered" };
 constexpr const char* lfoWaveChoices[] = { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Sample Hold" };
@@ -41,6 +42,7 @@ constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder {{
 // Historic B2 delay params remain in the state for legacy loading, not in either grid.
 constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     31, // Dry Level for both basslines, never a delay parameter.
+    oversamplingIndex, // New global FX parameter: do not shift existing VST IDs.
     // Physical insert order: distortion -> chorus -> delay/reverb.
     fxParameterIndex (fx::distortionType), fxParameterIndex (fx::distortionAmount),
     fxParameterIndex (fx::distortionHarmonics), fxParameterIndex (fx::distortion2Type),
@@ -264,6 +266,9 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             result[osc2ParameterIndex (lane, osc2::detune)] = {
                 juce::String (prefix) + "detune", "Osc 2 Detune", -100, 100, 1, 10, "cents" };
         }
+        // Append-only: older REAPER projects do not contain this ID => 1x default.
+        result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
+            0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
     }();
     return values;
@@ -308,7 +313,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         const auto& p = catalog()[index];
         // Distinguish automated parameters in REAPER's global FX parameter list,
         // without adding redundant prefixes to the accessible per-bassline grids.
-        const auto hostName = index >= osc2ParameterBase
+        const auto hostName = index == oversamplingIndex
+            ? ("FX - " + p.name)
+            : index >= osc2ParameterBase
             ? ("Bassline " + juce::String (1 + (index - osc2ParameterBase) / osc2ParameterCount)
                + " - " + p.name)
             : index >= separateOutputBase

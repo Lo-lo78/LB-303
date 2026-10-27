@@ -14,6 +14,7 @@ class BassEngine
 public:
     using Values = std::array<float, synthParameterCount>;
     void prepare (double sampleRate);
+    void setOversamplingFactor (int factor) noexcept; // 1/2/4, no allocation
     void reset();
     void setParameters (const Values& values, double bpm);
     using LfoValues = std::array<float, lfoParameterCount>;
@@ -54,7 +55,8 @@ private:
         void reset();
         std::pair<float, float> process (float l, float r, int semitones);
     };
-    double fs = 44100.0, tempo = 120.0;
+    double fs = 44100.0, hostFs = 44100.0, tempo = 120.0;
+    int oversamplingFactor = 1;
     Values p {};
     LfoValues lfoParameters {};
     Osc2Values osc2Parameters {};

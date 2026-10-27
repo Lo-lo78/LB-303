@@ -25,6 +25,9 @@ public:
         // Post-distortion voice, no FX tails, BEFORE global FX Dry Level.
     };
     Output process (float b1l, float b1r, float b2l, float b2r) noexcept;
+    void setInsertOversamplingFactor (int factor) noexcept;
+    std::pair<float, float> processDistortionInsert (float l, float r, size_t voice) noexcept;
+    Output processPostDistortion (float b1l, float b1r, float b2l, float b2r) noexcept;
 private:
     struct Ring
     {
@@ -76,6 +79,7 @@ private:
     };
     // Dedicated state per bassline: no shared DC filters, envelopes or gain smoothing.
     std::array<DistortionState, basslineCount> distortions {};
+    int insertOversamplingFactor = 1;
     float distDcCoeff = 0, distPowerCoeff = 0, distGainCoeff = 0, distMixCoeff = 0;
     std::array<float, 2> tapeTime {}, tapeLow {}, tapeHighX {}, tapeHighY {};
     std::array<float, 2> tapeWetX {}, tapeWetY {};

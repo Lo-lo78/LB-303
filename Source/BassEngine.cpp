@@ -135,7 +135,8 @@ double BassEngine::polyblep (double t, double dt)
 
 void BassEngine::prepare (double sampleRate)
 {
-    fs = std::max (sampleRate, 8000.0);
+    hostFs = fs = std::max (sampleRate, 8000.0);
+    oversamplingFactor = 1;
     delayL.resize (static_cast<size_t> (fs * 12.0) + 64);
     delayR.resize (static_cast<size_t> (fs * 12.0) + 64);
     pitchShift.prepare();
@@ -144,6 +145,20 @@ void BassEngine::prepare (double sampleRate)
     outputLpfL.lowpass (std::min (7000.0, fs*0.49), 0.70710678118655, fs);
     outputLpfR.lowpass (std::min (7000.0, fs*0.49), 0.70710678118655, fs);
     reset();
+}
+
+void BassEngine::setOversamplingFactor (int factor) noexcept
+{
+    factor = factor == 2 || factor == 4 ? factor : 1;
+    if (factor == oversamplingFactor) return;
+    oversamplingFactor = factor;
+    fs = hostFs * factor;
+    // No allocations, voice state/phase/envelopes are preserved. Keep the
+    // audible biquad cutoffs in Hz while running the entire voice at fs*N.
+    airPeakL.peak (8000, 0.7, 4.0, fs);
+    airPeakR.peak (8000, 0.7, 4.0, fs);
+    outputLpfL.lowpass (std::min (7000.0, fs*0.49), 0.70710678118655, fs);
+    outputLpfR.lowpass (std::min (7000.0, fs*0.49), 0.70710678118655, fs);
 }
 
 void BassEngine::reset()
@@ -295,7 +310,10 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
 {
     // Oscillator, amplitude/LP envelopes and nonlinear filter track the JSFX.
     const bool glide = p[5] > 0 && (p[6] < 0.5f || legato);
-    const auto glideCoeff = glide ? std::max (1.0 / (1.0 + p[5]*150.0), 0.0002) : 1.0;
+    const auto originalGlideCoeff = glide ? std::max (1.0 / (1.0 + p[5]*150.0), 0.0002) : 1.0;
+    // The original coefficient was per host sample, not per second.
+    const auto glideCoeff = oversamplingFactor == 1 ? originalGlideCoeff
+        : 1.0 - std::pow (1.0 - originalGlideCoeff, 1.0 / oversamplingFactor);
     freq += (targetFreq - freq) * glideCoeff;
     const auto modulation = nextLfoSample();
     const auto tuned = freq * std::pow (2.0,
@@ -364,7 +382,9 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     const auto ampEnv = envelopeStage < 2 ? envelope : (envelopeStage == 2 ? 0.25 : envelope);
     const auto velEnergy = 0.35 + velNorm*0.65;
     const auto lpgSpeed = 0.03 + velNorm*0.12;
-    lpgMemory += (ampEnv*velEnergy - lpgMemory)*lpgSpeed;
+    const auto scaledLpgSpeed = oversamplingFactor == 1 ? lpgSpeed
+        : 1.0 - std::pow (1.0 - lpgSpeed, 1.0 / oversamplingFactor);
+    lpgMemory += (ampEnv*velEnergy - lpgMemory)*scaledLpgSpeed;
     const auto lpgEnv = std::max (0.0, lpgMemory);
     const auto inLpg = p[33] > 0.5f;
     const auto ampFinal = inLpg ? std::pow (lpgEnv, 1.6) : ampEnv;

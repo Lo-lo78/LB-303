@@ -1,3 +1,12 @@
+# TEST2.4.33 — Oversampling 1x, 2x, 4x (base TEST2.4.32)
+
+- **FX > Oversampling Basslines and Distortions**: 1x (originale, predefinito), 2x, 4x. Parametro globale VST3 append-only `fx_oversampling`, leggibile da NVDA e automatizzabile.
+- Entrambe le bassline eseguono oscillatori, inviluppi, filtro risonante, Soft Clip Drive e **il proprio distorsore** alla frequenza selezionata. Antialiasing 8-poli Butterworth IIR prima di ritornare al sample rate del progetto. Nessuna allocazione nel callback audio.
+- Chorus, Classic/Dual Delay e Reverb restano a frequenza originale. Le uscite separate e il master prelevano il medesimo segnale post-distorsione/antialias; i send rimangono isolati.
+- 1x usa il percorso DSP originale della TEST2.4.32; tutti i parametri storici, le sette pagine Alt+Q, Accent originale, Song e Pattern/Undo restano invariati.
+- L'oversampling IIR a fase non lineare cambia leggermente risposta e fase; **Bit Crush e gli altri distorsori possono cambiare carattere in 2x/4x**. Evitare di cambiare la qualità durante una nota: lo switch può produrre una discontinuità. La latenza non ha un offset di campioni fisso (filtri IIR causali), perciò non viene annunciata una latenza fissa all'host.
+- Il test statico e il test standalone del filtro verificano bypass 1x, stabilità e attenuazione fuori banda. **Non ancora ascoltato né collaudato come VST3 in REAPER.**
+
 # TEST2.4.32 — Invio ricorda Note e Length (base TEST2.4.29, SENZA Accent per step)
 
 Questa versione riparte esclusivamente dal sorgente **TEST2.4.29**, senza le modifiche Accent della TEST2.4.30/31. L'Accent originale resta basato sulla velocity e sulla soglia Accent Threshold. Alt+Q mantiene **7 pagine** (Note, Length, Velocity, Repeat, Shift, Launch Step, Parameters); la pagina Parameters resta la 7.

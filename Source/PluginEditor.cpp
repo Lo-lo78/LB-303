@@ -334,6 +334,7 @@ void LB303AudioProcessorEditor::updateFxColumns()
 
     // Column 0: the output dry return is always available.
     add (0, lb303::parameterIndex (0, 31)); // historical slider032, Dry Level
+    add (0, lb303::oversamplingIndex); // 1x/2x/4x, visible to NVDA as a choice
     // Columns 1 and 2: independent distortion inserts.
     addFx (1, lb303::fx::distortionType);
     if (enabled (lb303::fx::distortionType))

@@ -3,6 +3,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "BassEngine.h"
 #include "SharedEffects.h"
+#include "Oversampling.h"
 #include "SequencerState.h"
 #include "SequencerPlayback.h"
 #include "SongArrangement.h"
@@ -104,6 +105,8 @@ private:
     std::array<int, 2> mirroredPatterns {{ -1, -1 }}; // message/UI thread only
     std::array<lb303::BassEngine, lb303::basslineCount> engines;
     lb303::SharedEffects sharedFx;
+    std::array<lb303::VoiceDecimator, lb303::basslineCount> voiceDecimators;
+    int currentOversamplingFactor = 1; // audio thread only
     std::array<lb303::SequencerState, lb303::basslineCount> sequenceBanks;
     lb303::SequencerPlayback sequencerPlayback;
     // Last running step per lane. -1 means the raw, host-automated baseline.

@@ -36,6 +36,7 @@ void SharedEffects::prepare (double sampleRate)
 {
     fs = std::max (8000.0, sampleRate);
     classic.prepare (fs);
+    insertOversamplingFactor = 1;
     for (size_t i = 0; i < basslineCount; ++i)
     {
         chorusL[i].initialise (static_cast<int> (fs * 0.05) + 8);
@@ -111,6 +112,26 @@ void SharedEffects::setParameters (const Controls& settings,
         lastDelayMode = newMode;
     }
 }
+void SharedEffects::setInsertOversamplingFactor (int factor) noexcept
+{
+    factor = factor == 2 || factor == 4 ? factor : 1;
+    if (factor == insertOversamplingFactor) return;
+    insertOversamplingFactor = factor;
+    // Only the two insert distortion envelopes/DC filters run faster.
+    // The shared chorus, dual delay, reverb and classic delay retain fs.
+    const auto rate = fs * factor;
+    distDcCoeff = static_cast<float> (std::exp (-2 * pi * 9.0 / (rate * 2.0)));
+    distPowerCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.025 * rate)));
+    distGainCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.035 * rate)));
+    distMixCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.004 * rate)));
+}
+
+std::pair<float, float> SharedEffects::processDistortionInsert (float l, float r,
+                                                                size_t voice) noexcept
+{
+    return distort (l, r, voice);
+}
+
 float SharedEffects::fxShape (int mode, float x) noexcept
 {
     const float v = clampf (x, -24.0f, 24.0f), a = std::abs (v);
@@ -338,7 +359,11 @@ SharedEffects::Output SharedEffects::process (float aL, float aR, float bL, floa
     // INSERT: two distortion processors act independently, before chorus.
     const auto [axL, axR] = distort (aL, aR, 0);
     const auto [bxL, bxR] = distort (bL, bR, 1);
-
+    return processPostDistortion (axL, axR, bxL, bxR);
+}
+SharedEffects::Output SharedEffects::processPostDistortion (float axL, float axR,
+                                                             float bxL, float bxR) noexcept
+{
     // AUX CHORUS: one global phase/rate, separate voice wet lines. This allows
     // Delay/Reverb send 1 and 2 to remain genuinely isolated even on tails.
     float ch1L = 0.0f, ch1R = 0.0f, ch2L = 0.0f, ch2R = 0.0f;
