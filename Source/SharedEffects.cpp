@@ -61,6 +61,8 @@ void SharedEffects::prepare (double sampleRate)
     chorusRateSmoothed = chorusTail = 0;
     chorusPhase = 0;
     for (auto& distortion : distortions) distortion = {};
+    enabledDistortion = {{ false, false }};
+    enabledSharedWetFx = false;
     lastDelayMode = 0;
     chorusHpCoefficient = static_cast<float> (std::exp (-2 * pi * 120.0 / fs));
     distDcCoeff = static_cast<float> (std::exp (-2 * pi * 9.0 / (fs * 2.0)));
@@ -99,6 +101,32 @@ void SharedEffects::setParameters (const Controls& settings,
                                    const ClassicParameters& original, double tempo)
 {
     c = settings;
+    for (size_t voice = 0; voice < basslineCount; ++voice)
+    {
+        const auto type = voice == 0 ? fx::distortionType : fx::distortion2Type;
+        const auto amount = voice == 0 ? fx::distortionAmount : fx::distortion2Amount;
+        const bool on = juce::roundToInt (c[type]) != 0 && c[amount] > 0.0f;
+        if (!on && enabledDistortion[voice]) distortions[voice] = {};
+        enabledDistortion[voice] = on;
+        if (on)
+        {
+            // Drive, curve centre and harmonic mix are fixed until an FX
+            // control changes. At 4x they must NOT be recomputed per sample.
+            auto& config = distortionConfigs[voice];
+            config.mode = juce::roundToInt (c[type]);
+            config.amount = c[amount] * .01f;
+            const auto harmonics = voice == 0 ? fx::distortionHarmonics : fx::distortion2Harmonics;
+            const float balance = c[harmonics] * .01f;
+            config.oddGain = 1.0f + .85f*balance;
+            config.evenGain = 1.0f - balance;
+            config.drive = 1.0f + 19.0f*std::pow (config.amount, 1.35f);
+            config.bias = config.mode == 9 ? 0.0f : 0.28f;
+            config.centre = fxShape (config.mode, config.bias);
+        }
+    }
+    enabledSharedWetFx = c[fx::chorusOn] > 0.5f
+        || juce::roundToInt (c[fx::delayType]) != 0
+        || c[fx::reverbType] > 0.5f;
     bpm = std::max (1.0, tempo);
     classic.setParameters (original, bpm);
     classicDryLevel = original[31]*.01f;
@@ -156,22 +184,12 @@ float SharedEffects::fxShape (int mode, float x) noexcept
 std::pair<float, float> SharedEffects::distort (float l, float r, size_t voice) noexcept
 {
     auto& state = distortions[voice];
-    const size_t typeIndex = voice == 0 ? fx::distortionType : fx::distortion2Type;
-    const size_t amountIndex = voice == 0 ? fx::distortionAmount : fx::distortion2Amount;
-    const size_t harmonicsIndex = voice == 0 ? fx::distortionHarmonics : fx::distortion2Harmonics;
-    const int mode = juce::roundToInt (c[typeIndex]);
-    const float amount = c[amountIndex] * .01f;
-    if (mode == 0 || amount <= 0)
-    {
-        state = {}; // Clean restart when this bassline's distortion is turned on.
-        return { l, r };
-    }
-    state.mix += (amount - state.mix) * distMixCoeff;
-    const float balance = c[harmonicsIndex] * .01f;
-    const float oddGain = 1.0f + .85f*balance, evenGain = 1.0f-balance;
-    const float drive = 1.0f+19.0f*std::pow (amount, 1.35f);
-    const float bias = mode == 9 ? 0.0f : 0.28f;
-    const float centre = fxShape (mode, bias);
+    if (!enabledDistortion[voice]) return { l, r };
+    const auto& config = distortionConfigs[voice];
+    state.mix += (config.amount - state.mix) * distMixCoeff;
+    const int mode = config.mode;
+    const float oddGain = config.oddGain, evenGain = config.evenGain;
+    const float drive = config.drive, bias = config.bias, centre = config.centre;
     const auto side = [&] (float v, DistSide& channel)
     {
         const float midpoint = .5f*(v+channel.previous);
@@ -357,13 +375,25 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
 SharedEffects::Output SharedEffects::process (float aL, float aR, float bL, float bR) noexcept
 {
     // INSERT: two distortion processors act independently, before chorus.
-    const auto [axL, axR] = distort (aL, aR, 0);
-    const auto [bxL, bxR] = distort (bL, bR, 1);
+    const auto [axL, axR] = enabledDistortion[0] ? distort (aL, aR, 0)
+                                                      : std::pair<float,float> { aL, aR };
+    const auto [bxL, bxR] = enabledDistortion[1] ? distort (bL, bR, 1)
+                                                      : std::pair<float,float> { bL, bR };
     return processPostDistortion (axL, axR, bxL, bxR);
 }
 SharedEffects::Output SharedEffects::processPostDistortion (float axL, float axR,
                                                              float bxL, float bxR) noexcept
 {
+    // Whole wet graph is nonexistent when chorus, delay and reverb are off.
+    // This leaves the original stereo stems and 1x rendering untouched.
+    if (!enabledSharedWetFx)
+    {
+        Output out;
+        out.wet = { 0.0f, 0.0f };
+        out.dry[0] = { bounded (axL), bounded (axR) };
+        out.dry[1] = { bounded (bxL), bounded (bxR) };
+        return out;
+    }
     // AUX CHORUS: one global phase/rate, separate voice wet lines. This allows
     // Delay/Reverb send 1 and 2 to remain genuinely isolated even on tails.
     float ch1L = 0.0f, ch1R = 0.0f, ch2L = 0.0f, ch2R = 0.0f;

@@ -639,6 +639,11 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     int nextStepEvent = 0;
     const auto renderSamplesTo = [&] (int end)
     {
+        // Decisions about active distortion graphs are made once per segment
+        // (including a segment split by a parameter lock), not per sub-sample.
+        const std::array<bool, lb303::basslineCount> distortionOn {{
+            sharedFx.distortionActive (0), sharedFx.distortionActive (1)
+        }};
         for (; nextSample < end; ++nextSample)
         {
             std::array<std::pair<float, float>, lb303::basslineCount> stems {};
@@ -658,9 +663,13 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                     for (int sub = 0; sub < oversamplingFactor; ++sub)
                     {
                         const auto generated = engines[voice].tick (0.0f, 0.0f);
-                        const auto distorted = sharedFx.processDistortionInsert (
+                        const auto scaled = std::pair<float,float> {
                             generated.first * leftGain[voice],
-                            generated.second * rightGain[voice], voice);
+                            generated.second * rightGain[voice] };
+                        const auto distorted = distortionOn[voice]
+                            ? sharedFx.processDistortionInsert (
+                                scaled.first, scaled.second, voice)
+                            : scaled;
                         stems[voice] = voiceDecimators[voice].process (
                             distorted.first, distorted.second);
                     }

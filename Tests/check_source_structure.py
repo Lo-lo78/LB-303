@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.0.2-TEST2.4.33-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.34-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -476,12 +476,12 @@ assert 'changeSelection ((selected / rowsPerColumn) * rowsPerColumn)' in editor
 assert 'changeSelection (juce::jmin (currentParameterCount() - 1' in editor
 assert 'if (code == juce::KeyPress::homeKey)' in step
 assert 'if (code == juce::KeyPress::endKey)' in step
-assert 'const size_t typeIndex = voice == 0 ? fx::distortionType : fx::distortion2Type;' in fxcpp
-assert 'const size_t amountIndex = voice == 0 ? fx::distortionAmount : fx::distortion2Amount;' in fxcpp
-assert 'const size_t harmonicsIndex = voice == 0 ? fx::distortionHarmonics : fx::distortion2Harmonics;' in fxcpp
+assert 'const auto type = voice == 0 ? fx::distortionType : fx::distortion2Type;' in fxcpp
+assert 'const auto amount = voice == 0 ? fx::distortionAmount : fx::distortion2Amount;' in fxcpp
+assert 'const auto harmonics = voice == 0 ? fx::distortionHarmonics : fx::distortion2Harmonics;' in fxcpp
 assert 'std::array<DistortionState, basslineCount> distortions {};' in fxheader
-assert 'const auto [axL, axR] = distort (aL, aR, 0);' in fxcpp
-assert 'const auto [bxL, bxR] = distort (bL, bR, 1);' in fxcpp
+assert 'const auto [axL, axR] = enabledDistortion[0] ? distort (aL, aR, 0)' in fxcpp
+assert 'const auto [bxL, bxR] = enabledDistortion[1] ? distort (bL, bR, 1)' in fxcpp
 assert 'distort (dryL,dryR)' not in fxcpp
 assert 'distribute(aL,bL' not in fxcpp
 assert 'distortion2Type, distortion2Amount, distortion2Harmonics' in param_h
@@ -635,8 +635,8 @@ assert fxitems.count('31') == 1
 assert len(fxitems) == 50 and len(set(fxitems)) == 50
 assert 'out.dry[0] = { bounded (axL)' in fxcpp and 'sharedFx.dryLevel()' in processor
 assert 'const float dryGain = delayMode == 1 ? classicDryLevel : 1.0f;' not in fxcpp
-assert 'const auto [axL, axR] = distort (aL, aR, 0);' in fxcpp
-assert 'const auto [bxL, bxR] = distort (bL, bR, 1);' in fxcpp
+assert 'const auto [axL, axR] = enabledDistortion[0] ? distort (aL, aR, 0)' in fxcpp
+assert 'const auto [bxL, bxR] = enabledDistortion[1] ? distort (bL, bR, 1)' in fxcpp
 assert 'result.first - l * classicDryGain' in fxcpp
 print('PASS: TEST2.4.8 Dry Level first in FX; globally active; existing ID and delay wet-only routing retained.')
 
@@ -650,7 +650,7 @@ assert 'fx_delay_reverb_order' in param_cpp
 assert 'fxOrderChoices' in param_cpp
 assert 'fx::effectOrder' in param_cpp
 assert 'const bool delayFirst = c[fx::effectOrder] < .5f;' not in fxcpp
-assert fxcpp.index('const auto [axL, axR] = distort') < fxcpp.index('const auto first = chorus (')
+assert fxcpp.index('const auto [axL, axR] = enabledDistortion[0] ? distort') < fxcpp.index('const auto first = chorus (')
 assert fxcpp.index('const auto first = chorus (') < fxcpp.index('const auto delayStem = send')
 assert 'reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink' in fxcpp
 assert 'const auto delayWet = runDelay (delayStem.first, delayStem.second);' in fxcpp
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n                playing' not in processor
-assert 'LB-303-0.0.2-TEST2.4.33-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.34-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -728,7 +728,7 @@ assert 'lfoParameters[lb303::lfo::filterDepth]' in engine
 assert 'lfoParameters[lb303::lfo::panDepth]' in engine
 assert 'pwmIncrement' in engine and 'p[11]' in engine  # original PWM Rate independent
 assert 'if (lfoParameters[lb303::lfo::mode] >= .5f' in engine
-assert 'const auto modulation = nextLfoSample();' in engine
+assert 'const auto modulation = lfoHasDestination ? nextLfoSample() : 0.0;' in engine
 assert 'double BassEngine::nextLfoSample() noexcept' in engine
 assert 'return { static_cast<float> (synthL *' in engine
 print('PASS: TEST2.4.12 Volume-first, 2 independent LFOs, bipolar targets, PWM wave, step locks and all existing IDs.')
@@ -825,7 +825,7 @@ assert 'b2L[nextSample] += fx.dry[1].first;' in processor
 assert 'const float mainDry = sharedFx.dryLevel();' in processor
 assert 'mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first' in processor
 assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
-assert 'LB-303-0.0.2-TEST2.4.33-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.34-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.16 browser NVDA names + existing preview + 4 stereo buses + separate distortion stems + stable IDs (static).')
 
 # TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
@@ -878,11 +878,11 @@ assert 'using Osc2Values = std::array<float, osc2ParameterCount>;' in engine_h
 assert 'double osc2Phase = 0' in engine_h
 assert 'if (! noteActive) osc2Phase = phase;' in engine
 assert 'const double secondaryDt = clamp (dt * std::pow (2.0, osc2DetuneSmooth / 1200.0)' in engine
-assert 'const double osc = primary + osc2GainSmooth * waveform (osc2Phase, secondaryDt);' in engine
+assert 'osc += osc2GainSmooth * waveform (osc2Phase, secondaryDt);' in engine
 assert 'setOsc2Parameters (layerValues)' in processor
 assert 'lock.sliderNumber - 1 - static_cast<int> (lb303::osc2LocalBase)' in processor
 assert 'voiceParameterGlobalIndex' in step
-assert 'LB-303-0.0.2-TEST2.4.33-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.0.2-TEST2.4.34-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.19 two independent second oscillators, shared waveform/voice envelopes, cents detune, stable APVTS and lock slots.')
 
 # TEST2.4.20 — Ctrl+A selects only focused and active keyboard steps.
@@ -1017,7 +1017,7 @@ assert 'processor.syncSelectedPatternPerformance();' in shortcuts
 assert 'selectParameter();' in shortcuts
 assert 'lb303::announceToActiveScreenReader (active,' in shortcuts
 assert 'lb303::editTrackIndex' in editor.split('int LB303AudioProcessorEditor::shortcutPatternLane()', 1)[1].split('void LB303AudioProcessorEditor::changePatternFromGrid', 1)[0]
-assert 'TEST2.4.33' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.34' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.24 Alt+M and Ctrl+Up/Down accessible across all four parameter grids.')
 
 # TEST2.4.25: Ctrl+Up/Down cannot require !Command on Windows because JUCE
@@ -1039,7 +1039,7 @@ assert 'presetBrowser->active()' in root_fallback_2425
 assert 'mods.isCtrlDown()' in root_fallback_2425
 assert 'return handleKey (key, control);' in root_fallback_2425
 assert '! mods.isCommandDown()' not in root_fallback_2425
-assert 'TEST2.4.33' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.34' in (root / '.github/workflows/build-windows.yml').read_text()
 # Explicitly model JUCE's Windows flags: both isCtrlDown and isCommandDown
 # are TRUE for the ctrlModifier bit. The fixed predicate must accept it.
 ctrl_pressed_windows = True
@@ -1061,7 +1061,7 @@ song_code_2426 = step.split('bool SequencerStepEditor::handleSongKey (', 1)[1].s
 assert song_code_2426.count('if (! selection.empty())') >= 3
 assert 'if (selection.size() > 1)' not in song_code_2426
 assert song_code_2426.index('code == juce::KeyPress::spaceKey && mods.isShiftDown()') < song_code_2426.index('if (mods.isCtrlDown())')
-assert 'TEST2.4.33' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.34' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.26 Shift+Space explicitly selects even one Song row; clipboard/delete honor singleton.')
 
 # TEST2.4.27 — explicit singleton selection is visible to NVDA everywhere.

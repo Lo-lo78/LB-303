@@ -147,6 +147,50 @@ void BassEngine::prepare (double sampleRate)
     reset();
 }
 
+void BassEngine::setOsc2Parameters (const Osc2Values& values) noexcept
+{
+    // The layer was not running at zero volume; on a later reactivation
+    // re-align its phase before the 5 ms gain ramp starts.
+    if (osc2Parameters[osc2::volume] <= 0.0f && values[osc2::volume] > 0.0f
+        && osc2GainSmooth == 0.0 && noteActive)
+        osc2Phase = phase;
+    osc2Parameters = values;
+}
+
+void BassEngine::setLfoParameters (const LfoValues& values) noexcept
+{
+    lfoParameters = values;
+    lfoHasDestination = values[lfo::pitchDepth] != 0.0f
+        || values[lfo::volumeDepth] != 0.0f
+        || values[lfo::filterDepth] != 0.0f
+        || values[lfo::panDepth] != 0.0f;
+    // When unconnected the LFO's phase is frozen. Reconnecting it resumes
+    // that phase; its oscillator is not evaluated in the meantime.
+}
+
+void BassEngine::updateLpgCoefficient() noexcept
+{
+    const auto original = 0.03 + velNorm * 0.12;
+    lpgSpeedCoeff = oversamplingFactor == 1 ? original
+        : 1.0 - std::pow (1.0 - original, 1.0 / oversamplingFactor);
+}
+
+void BassEngine::updateRateCoefficients() noexcept
+{
+    const auto coefficient = [this] (bool legatoOnly) noexcept
+    {
+        const bool glide = p[5] > 0.0f && (!legatoOnly || p[6] < 0.5f);
+        const auto original = glide ? std::max (1.0 / (1.0 + p[5]*150.0), 0.0002) : 1.0;
+        return oversamplingFactor == 1 ? original
+            : 1.0 - std::pow (1.0 - original, 1.0 / oversamplingFactor);
+    };
+    glideFreeCoeff = coefficient (true); // Portamento may run without legato.
+    glideLegatoCoeff = coefficient (false); // Legato always permits portamento.
+    staticPitchRatio = std::pow (2.0, p[14] / 12.0);
+    accentDecayCoeff = 1.0 - std::exp (-1.0 / (0.01*fs));
+    updateLpgCoefficient();
+}
+
 void BassEngine::setOversamplingFactor (int factor) noexcept
 {
     factor = factor == 2 || factor == 4 ? factor : 1;
@@ -159,6 +203,7 @@ void BassEngine::setOversamplingFactor (int factor) noexcept
     airPeakR.peak (8000, 0.7, 4.0, fs);
     outputLpfL.lowpass (std::min (7000.0, fs*0.49), 0.70710678118655, fs);
     outputLpfR.lowpass (std::min (7000.0, fs*0.49), 0.70710678118655, fs);
+    updateRateCoefficients();
 }
 
 void BassEngine::reset()
@@ -172,6 +217,7 @@ void BassEngine::reset()
     lastNote = -1; noteActive = legato = accent = false;
     smoothDelay = delayTargetSamples = delayPhase = 0;
     delayL.clear(); delayR.clear(); pitchShift.reset();
+    updateLpgCoefficient();
     for (auto* filter : { &airPeakL, &airPeakR, &outputLpfL, &outputLpfR,
                           &delayLpL, &delayLpR, &delayHpL, &delayHpR })
         filter->clear();
@@ -189,6 +235,7 @@ void BassEngine::setParameters (const Values& values, double newBpm)
     if (sync >= 1 && sync <= 8)
         delayMs = (60000.0 / tempo) * 4.0 / divisions[sync];
     delayTargetSamples = std::min (10000.0, delayMs) * 0.001 * fs;
+    updateRateCoefficients();
 }
 
 void BassEngine::releaseNote() noexcept
@@ -224,6 +271,7 @@ void BassEngine::midi (const juce::MidiMessage& message)
         targetFreq = 440.0 * std::pow (2.0, (message.getNoteNumber() - 69.0) / 12.0);
         const auto velocity = message.getVelocity();
         velNorm = std::pow (velocity / 127.0, 0.6);
+        updateLpgCoefficient();
         accent = velocity >= p[15];
         accentEnvelope = accent ? 1.0 : 0.0;
         legato = noteActive;
@@ -309,15 +357,13 @@ double BassEngine::nextLfoSample() noexcept
 std::pair<float, float> BassEngine::tick (float inputL, float inputR)
 {
     // Oscillator, amplitude/LP envelopes and nonlinear filter track the JSFX.
-    const bool glide = p[5] > 0 && (p[6] < 0.5f || legato);
-    const auto originalGlideCoeff = glide ? std::max (1.0 / (1.0 + p[5]*150.0), 0.0002) : 1.0;
-    // The original coefficient was per host sample, not per second.
-    const auto glideCoeff = oversamplingFactor == 1 ? originalGlideCoeff
-        : 1.0 - std::pow (1.0 - originalGlideCoeff, 1.0 / oversamplingFactor);
-    freq += (targetFreq - freq) * glideCoeff;
-    const auto modulation = nextLfoSample();
-    const auto tuned = freq * std::pow (2.0,
-        (p[14] + modulation * lfoParameters[lb303::lfo::pitchDepth]) / 12.0);
+    // Precomputed once per parameter block/quality change; no pow() per sample.
+    freq += (targetFreq - freq) * (legato ? glideLegatoCoeff : glideFreeCoeff);
+    const auto modulation = lfoHasDestination ? nextLfoSample() : 0.0;
+    const auto pitchDepth = lfoParameters[lb303::lfo::pitchDepth];
+    const auto tuned = freq * (pitchDepth != 0.0f
+        ? std::pow (2.0, (p[14] + modulation * pitchDepth) / 12.0)
+        : staticPitchRatio);
     const auto dt = clamp ((tuned * 0.5) / fs, 0.000001, 0.49);
     phase += dt; if (phase >= 1.0) phase -= 1.0;
 
@@ -343,21 +389,27 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
         return 0.4 * (saw - otherSaw);
     };
     const double primary = waveform (phase, dt);
-    // 5 ms gain ramp and 10 ms pitch ramp avoid abrupt automation/lock steps.
-    const auto gainCoeff = std::min (1.0, 1.0 / (0.005 * fs));
-    const auto tuneCoeff = std::min (1.0, 1.0 / (0.010 * fs));
-    osc2GainSmooth += (clamp (osc2Parameters[osc2::volume], 0.0, 100.0) * .01
-                       - osc2GainSmooth) * gainCoeff;
-    osc2DetuneSmooth += (clamp (osc2Parameters[osc2::detune], -100.0, 100.0)
-                         - osc2DetuneSmooth) * tuneCoeff;
-    // +/-100 cents = +/-1 semitone; do NOT quantize to MIDI semitones.
-    const double secondaryDt = clamp (dt * std::pow (2.0, osc2DetuneSmooth / 1200.0),
-                                      0.000001, 0.49);
-    osc2Phase += secondaryDt;
-    if (osc2Phase >= 1.0) osc2Phase -= 1.0;
-    // Both oscillators feed the SAME filter/envelope. Volume=0 reproduces the
-    // original single-oscillator DSP exactly, including its original gain.
-    const double osc = primary + osc2GainSmooth * waveform (osc2Phase, secondaryDt);
+    // The second oscillator is actually absent when its volume and smoothed
+    // gain are zero: no detune pow(), no second BLEP, no phase update.
+    // Its 5 ms fade is preserved when the volume is turned on or off.
+    const auto osc2Target = clamp (osc2Parameters[osc2::volume], 0.0, 100.0) * .01;
+    const bool osc2Needed = osc2Target > 0.0 || osc2GainSmooth > 1.0e-7;
+    double osc = primary;
+    if (osc2Needed)
+    {
+        const auto gainCoeff = std::min (1.0, 1.0 / (0.005 * fs));
+        const auto tuneCoeff = std::min (1.0, 1.0 / (0.010 * fs));
+        osc2GainSmooth += (osc2Target - osc2GainSmooth) * gainCoeff;
+        osc2DetuneSmooth += (clamp (osc2Parameters[osc2::detune], -100.0, 100.0)
+                             - osc2DetuneSmooth) * tuneCoeff;
+        const double secondaryDt = clamp (dt * std::pow (2.0, osc2DetuneSmooth / 1200.0),
+                                          0.000001, 0.49);
+        osc2Phase += secondaryDt;
+        if (osc2Phase >= 1.0) osc2Phase -= 1.0;
+        osc += osc2GainSmooth * waveform (osc2Phase, secondaryDt);
+        if (osc2Target == 0.0 && osc2GainSmooth <= 1.0e-7)
+            osc2GainSmooth = 0.0; // avoid a subnormal/eternal inaudible tail
+    }
 
     const double transient = p[18] < 0.5f ? 0.7 : p[18] > 1.5f ? 1.6 : 1.0;
     const double decayMult = accent ? 1.8 : 1.0;
@@ -381,10 +433,7 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     }
     const auto ampEnv = envelopeStage < 2 ? envelope : (envelopeStage == 2 ? 0.25 : envelope);
     const auto velEnergy = 0.35 + velNorm*0.65;
-    const auto lpgSpeed = 0.03 + velNorm*0.12;
-    const auto scaledLpgSpeed = oversamplingFactor == 1 ? lpgSpeed
-        : 1.0 - std::pow (1.0 - lpgSpeed, 1.0 / oversamplingFactor);
-    lpgMemory += (ampEnv*velEnergy - lpgMemory)*scaledLpgSpeed;
+    lpgMemory += (ampEnv*velEnergy - lpgMemory)*lpgSpeedCoeff;
     const auto lpgEnv = std::max (0.0, lpgMemory);
     const auto inLpg = p[33] > 0.5f;
     const auto ampFinal = inLpg ? std::pow (lpgEnv, 1.6) : ampEnv;
@@ -401,7 +450,7 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     accentEnvelope -= accentEnvelope*0.25;
     if (accentEnvelope < 0.0001) accentEnvelope = 0;
     if (accent) accentEnvelope = 1.0;
-    accentEnvelope -= accentEnvelope * (1.0 - std::exp (-1.0 / (0.01*fs)));
+    accentEnvelope -= accentEnvelope * accentDecayCoeff;
     if (accentEnvelope < 0.0001) accentEnvelope = 0;
     const auto classicCut = p[8] + cutEnv*p[10] + accentEnvelope*(p[16]*0.18)
                             + modulation * lfoParameters[lb303::lfo::filterDepth];

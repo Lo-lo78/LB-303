@@ -18,6 +18,7 @@ public:
     void clearTails() noexcept; // no allocation: reset FX after Alt+I
     void setParameters (const Controls&, const ClassicParameters&, double newTempo);
     float dryLevel() const noexcept { return classicDryLevel; }
+    bool distortionActive (size_t voice) const noexcept { return enabledDistortion[voice]; }
     struct Output
     {
         std::pair<float, float> wet; // Shared chorus, delay, reverb: Master 1/2 + isolated FX bus 7/8
@@ -79,6 +80,15 @@ private:
     };
     // Dedicated state per bassline: no shared DC filters, envelopes or gain smoothing.
     std::array<DistortionState, basslineCount> distortions {};
+    struct DistortionConfig
+    {
+        int mode = 0;
+        float amount = 0, oddGain = 1, evenGain = 1;
+        float drive = 1, bias = 0, centre = 0;
+    };
+    std::array<DistortionConfig, basslineCount> distortionConfigs {};
+    std::array<bool, basslineCount> enabledDistortion {{ false, false }};
+    bool enabledSharedWetFx = false;
     int insertOversamplingFactor = 1;
     float distDcCoeff = 0, distPowerCoeff = 0, distGainCoeff = 0, distMixCoeff = 0;
     std::array<float, 2> tapeTime {}, tapeLow {}, tapeHighX {}, tapeHighY {};

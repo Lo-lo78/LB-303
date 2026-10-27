@@ -1,3 +1,18 @@
+# TEST2.4.34 — DSP a percorsi attivi (base TEST2.4.33)
+
+Ottimizzazioni senza nuovi parametri: i blocchi sonori che non contribuiscono al risultato sono **bypassati**, soprattutto in oversampling 2x/4x. Questa è selezione dinamica del percorso DSP, **non** eliminazione fisica di codice dal VST: la decisione di quale percorso usare richiede comunque un controllo minimo.
+
+- **LFO Bassline 1 e 2:** se Pitch, Volume, Filter e Pan Depth sono *tutte* 0, la forma d'onda LFO non viene generata. Quando una Depth ridiventa diversa da zero, l'LFO riprende dalla fase congelata, quindi non simula retroattivamente i cicli trascorsi mentre era inutilizzato.
+- **Osc 2:** con Volume zero e gain già sceso a zero, niente forma d'onda PolyBLEP secondaria, calcolo di detune o avanzamento della fase. Quando viene riattivato il suo gain riparte con il precedente fade-in di 5 ms e si allinea all'oscillatore principale. Lo spegnimento completa la dissolvenza prima del bypass.
+- **Distortion 1 e 2:** con Type Off o Amount 0 non viene eseguita la distorsione della bassline interessata. In 2x/4x la scelta avviene prima del ciclo di rendering del segmento (anche dopo uno step lock). Gli stati del distorsore sono ripuliti quando viene spento.
+- **Distorsori attivi:** le costanti di Drive, armoniche pari/dispari e centro della curva vengono precalcolate al cambio del parametro, non a ogni sotto-campione.
+- **Effetti condivisi:** quando Chorus, Delay e Reverb sono tutti Off, la rete wet viene bypassata in blocco. **Le code rimangono intatte** se gli effetti sono abilitati, anche con send a zero: non si interrompono artificialmente.
+- **Sintesi:** glide, velocità LPG, coefficienti accent e accordatura statica vengono precalcolati quando mutano parametri, velocity o oversampling.
+
+**Compatibilità:** nessuna variazione a parametri, Accent, sette pagine Alt+Q, sequencer, Song, stato/preset e workflow di automazione. 1x/2x/4x continuano a funzionare. La TEST2.4.34 ha prodotto lo stesso hash audio della TEST2.4.33, campione per campione, in 24 casi di test (LFO/OSC2 on/off, FX on/off, cambio di stato FX, 1x/2x/4x). Un'accensione dopo una lunga disattivazione può legittimamente partire con fase LFO/OSC2 diversa, perché il generatore non ha girato durante il periodo senza contributo audio.
+
+**CPU:** nelle prove DSP locali con gcc -O3, il caso senza modulazioni né effetti ha mostrato un risparmio indicativo intorno al 30-35% nel percorso di prova 1x/2x/4x; questo **non** rappresenta la CPU totale della traccia REAPER e varia in base a macchina, patch e compilatore. Va misurato nel VST3 finale con scenari comparabili. Compilazione completa VST3, NVDA e ascolto restano da verificare su GitHub/REAPER.
+
 # TEST2.4.33 — Oversampling 1x, 2x, 4x (base TEST2.4.32)
 
 - **FX > Oversampling Basslines and Distortions**: 1x (originale, predefinito), 2x, 4x. Parametro globale VST3 append-only `fx_oversampling`, leggibile da NVDA e automatizzabile.

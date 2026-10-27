@@ -18,9 +18,9 @@ public:
     void reset();
     void setParameters (const Values& values, double bpm);
     using LfoValues = std::array<float, lfoParameterCount>;
-    void setLfoParameters (const LfoValues& values) noexcept { lfoParameters = values; }
+    void setLfoParameters (const LfoValues& values) noexcept;
     using Osc2Values = std::array<float, osc2ParameterCount>;
-    void setOsc2Parameters (const Osc2Values& values) noexcept { osc2Parameters = values; }
+    void setOsc2Parameters (const Osc2Values& values) noexcept;
     void midi (const juce::MidiMessage& event);
     void releaseNote() noexcept; // stop a direct note when switching to sequencer mode
     std::pair<float, float> tick (float inputL, float inputR);
@@ -57,6 +57,15 @@ private:
     };
     double fs = 44100.0, hostFs = 44100.0, tempo = 120.0;
     int oversamplingFactor = 1;
+    // Routing is selected when the host/step-lock values arrive, not while
+    // synthesising every 2x/4x sub-sample. No LFO waveform is evaluated when
+    // no destination has depth. Existing saved parameter IDs are unchanged.
+    bool lfoHasDestination = false;
+    double glideFreeCoeff = 1.0, glideLegatoCoeff = 1.0;
+    double lpgSpeedCoeff = 0.03, accentDecayCoeff = 0.0;
+    double staticPitchRatio = 1.0;
+    void updateRateCoefficients() noexcept;
+    void updateLpgCoefficient() noexcept;
     Values p {};
     LfoValues lfoParameters {};
     Osc2Values osc2Parameters {};

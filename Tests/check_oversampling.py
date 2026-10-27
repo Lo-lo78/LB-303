@@ -1,4 +1,4 @@
-"""TEST2.4.33: static regression plus optional native DSP smoke tests.
+"""TEST2.4.34: static regression plus optional native DSP smoke tests.
 
 No JUCE download is needed to compile the DSP tests: Tests/Shim only
 implements the small JUCE types used by BassEngine and SharedEffects.
@@ -31,7 +31,7 @@ assert 'engines[voice].setOversamplingFactor (oversamplingFactor)' in processor
 assert 'sharedFx.setInsertOversamplingFactor (oversamplingFactor)' in processor
 assert 'voiceDecimators[voice].setFactor (oversamplingFactor)' in processor
 assert 'for (int sub = 0; sub < oversamplingFactor; ++sub)' in processor
-assert 'const auto distorted = sharedFx.processDistortionInsert (' in processor
+assert 'sharedFx.processDistortionInsert (' in processor
 assert 'stems[voice] = voiceDecimators[voice].process (' in processor
 assert 'sharedFx.processPostDistortion (' in processor
 assert 'sharedFx.process (stems[0].first, stems[0].second' in processor
@@ -43,7 +43,7 @@ assert 'voiceDecimators[voice].setFactor (oversamplingFactor)' in processor
 assert 'setOversamplingFactor (int factor) noexcept' in voice
 assert 'BassEngine::tick' in voice and 'osc2Phase' in voice
 assert 'setParameters (fxControls, legacy, bpm)' in processor
-assert '  push:' in workflow and 'TEST2.4.33-Windows-x64' in workflow
+assert '  push:' in workflow and 'TEST2.4.34-Windows-x64' in workflow
 assert 'python Tests/check_oversampling.py' in workflow
 assert 'VoiceDecimator' in get('Source/Oversampling.h')
 print('PASS: append-only 1x/2x/4x accessible parameter; both native-rate synths and distortion inserts; shared FX stay at host rate.')
@@ -67,4 +67,4 @@ else:
         build_and_run('filter', ['Tests/test_oversampling_dsp.cpp'], False)
         build_and_run('voice', ['Source/BassEngine.cpp', 'Source/SharedEffects.cpp',
                                'Tests/test_oversampling_voice.cpp'], True)
-print('PASS: TEST2.4.33 oversampling regression checks.')
+print('PASS: TEST2.4.34 oversampling regression checks.')
