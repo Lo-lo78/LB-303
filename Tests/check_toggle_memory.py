@@ -1,4 +1,4 @@
-"""TEST2.4.41: guards for the Note/Length/Velocity toggles.
+"""TEST2.4.42: guards for the Note/Length/Velocity toggles.
 
 The JUCE-free SequencerState executable smoke test was run during development;
 GitHub Actions separately compiles the full JUCE plugin after this regression.
@@ -62,7 +62,7 @@ assert "stream.writeByte (static_cast<char> (juce::jlimit (0, 100, step.lengthBe
 assert "reset.noteBeforePause = 60; reset.lengthBeforeLegato = 50; reset.velocityBeforeMax = 100;" in e
 
 # Version number and original GitHub Actions build trigger both intact.
-assert "TEST2.4.41-Windows-x64" in workflow
+assert "TEST2.4.42-Windows-x64" in workflow
 assert "  push:" in workflow
 assert "python Tests/check_toggle_memory.py" in workflow
-print("PASS: TEST2.4.41 Note/Length/Velocity Enter remembers per-step values; no separate Accent or page changes.")
+print("PASS: TEST2.4.42 Note/Length/Velocity Enter remembers per-step values; no separate Accent or page changes.")

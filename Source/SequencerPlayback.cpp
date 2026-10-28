@@ -25,6 +25,7 @@ void SequencerPlayback::reset() noexcept
     oldEnabled = { false, false };
     lastNote = { -1, -1 };
     lastSourceNote = { -1, -1 };
+    pendingNoteOffPpq = { -1.0, -1.0 };
     previousPpq = -1.0;
     previousPlaying = false;
 }
@@ -69,6 +70,7 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
             output.addEvent (juce::MidiMessage::noteOff (lane + 1, lastNote[lane]), 0);
             lastNote[lane] = -1;
             lastSourceNote[lane] = -1;
+            pendingNoteOffPpq[lane] = -1.0;
         }
         oldPattern[lane] = patterns[lane];
         oldSongEntryIds[lane] = songEntryIds[lane];
@@ -102,6 +104,40 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         {
             return eventBeat >= lanePpq - entryGrace && eventBeat < laneEndPpq;
         };
+        const auto emitNote = [&] (bool on, int note, int velocity, double eventBeat)
+        {
+            const int sample = juce::jlimit (0, samples - 1,
+                static_cast<int> (std::floor ((eventBeat - lanePpq)
+                                               / beatsPerSample + 0.5)));
+            if (on)
+                output.addEvent (juce::MidiMessage::noteOn (
+                    lane + 1, note, static_cast<juce::uint8> (velocity)), sample);
+            else
+                output.addEvent (juce::MidiMessage::noteOff (lane + 1, note), sample);
+        };
+        // Handle the pending gate deadline before the next onset. Unlike a
+        // 102%-long note, Length 101 has NO deadline: it stays held until
+        // an actual new note/pause or a normal-length step ends the phrase.
+        const auto flushNoteOff = [&] (double untilBeat)
+        {
+            const auto deadline = pendingNoteOffPpq[lane];
+            if (lastNote[lane] < 0 || deadline < 0.0 || deadline > untilBeat
+                || deadline >= laneEndPpq) return;
+            emitNote (false, lastNote[lane], 0,
+                      juce::jmax (lanePpq, deadline));
+            lastNote[lane] = -1;
+            lastSourceNote[lane] = -1;
+            pendingNoteOffPpq[lane] = -1.0;
+        };
+        const auto releaseAt = [&] (double eventBeat)
+        {
+            if (lastNote[lane] >= 0)
+                emitNote (false, lastNote[lane], 0, eventBeat);
+            lastNote[lane] = -1;
+            lastSourceNote[lane] = -1;
+            pendingNoteOffPpq[lane] = -1.0;
+        };
+        flushNoteOff (lanePpq);
         // A pattern in the Song plays once; a freely selected pattern repeats.
         // The SONG locator uses this exact same clock/repeat-count law.
         const double baseTime = launchDelay;
@@ -177,10 +213,21 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                     const double onPpq = songEntry && index == 0 && repeat == 0
                         ? juce::jmax (cycleBeat, pulseBeat + shift) : pulseBeat + shift;
                     pulseBeat += intervalBeats;
-                    if (step.note >= 128 || step.velocity <= 0) continue;
+                    if (! inBlock (onPpq)) continue;
+                    flushNoteOff (onPpq);
+                    // A pause, Velocity 0 or a skipped step ends a held tie.
+                    if (step.note >= 128 || step.velocity <= 0)
+                    {
+                        releaseAt (onPpq);
+                        continue;
+                    }
                     const auto repeatSalt = static_cast<std::uint32_t> (repeat) * 0x85ebca6bu;
                     if (random (0x9e3779b9u ^ repeatSalt)
-                        < juce::jlimit (0.0f, 1.0f, config.noteSkipProbability)) continue;
+                        < juce::jlimit (0.0f, 1.0f, config.noteSkipProbability))
+                    {
+                        releaseAt (onPpq);
+                        continue;
+                    }
                     const int randomSemitones = juce::roundToInt (
                         (random (0x3972bc53u ^ repeatSalt) * 2 - 1) * 12.0f
                         * juce::jlimit (0.0f, 1.0f, config.noteRandomDepth));
@@ -193,10 +240,14 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                     const int velocity = juce::jlimit (1, 127, juce::roundToInt (
                         step.velocity + gaussian * 48.0f
                         * juce::jlimit (0.0f, 1.0f, config.velocityRandomDepth)));
-                    double lengthFactor = (step.length > 100 || (config.legato && step.length >= 100))
-                        ? 1.02 : juce::jmax (0.01, static_cast<double> (step.length) / 100.0);
-                    const float lengthDepth = juce::jlimit (0.0f, 1.0f, config.noteLengthRandomDepth);
-                    if (lengthDepth > 0.0f && random (0x4f3b9e12u ^ repeatSalt) < lengthDepth)
+                    const bool tie = step.length == 101
+                        || (config.legato && step.length >= 100);
+                    double lengthFactor = tie ? 1.0
+                        : juce::jmax (0.01, static_cast<double> (step.length) / 100.0);
+                    const float lengthDepth = juce::jlimit (0.0f, 1.0f,
+                        config.noteLengthRandomDepth);
+                    if (! tie && lengthDepth > 0.0f
+                        && random (0x4f3b9e12u ^ repeatSalt) < lengthDepth)
                     {
                         float r = 0.0f;
                         for (int n = 0; n < 6; ++n)
@@ -205,40 +256,36 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                         lengthFactor = juce::jlimit (0.01, 2.5,
                             lengthFactor * static_cast<double> ((r / 3.0f + 0.5f) * 3.0f));
                     }
-                    const double offPpq = onPpq + intervalBeats * lengthFactor;
-                    const auto emit = [&] (bool noteOn, double eventPpq)
+                    // An identical pitch across consecutive tied steps is ONE
+                    // sustained note, including step 16 -> step 1. A changed
+                    // pitch uses an overlap hand-off (new On before old Off)
+                    // to keep the bass engine's envelope and portamento alive.
+                    if (lastNote[lane] >= 0 && lastNote[lane] != note
+                        && pendingNoteOffPpq[lane] < 0.0)
                     {
-                        // Grace is intentionally limited to Note Ons at the
-                        // new-row boundary. A late Note Off must never cancel
-                        // the first note of the next row.
-                        if (noteOn ? ! inBlock (eventPpq)
-                                   : (eventPpq < lanePpq || eventPpq >= laneEndPpq)) return;
-                        const int sample = juce::jlimit (0, samples - 1,
-                            static_cast<int> (std::floor ((eventPpq - lanePpq)
-                                                          / beatsPerSample + 0.5)));
-                        if (noteOn)
-                        {
-                            output.addEvent (juce::MidiMessage::noteOn (
-                                lane + 1, note, static_cast<juce::uint8> (velocity)), sample);
-                            lastNote[lane] = note;
-                            lastSourceNote[lane] = step.note;
-                        }
-                        else if (lastNote[lane] >= 0 && lastSourceNote[lane] == step.note)
-                        {
-                            output.addEvent (juce::MidiMessage::noteOff (
-                                lane + 1, lastNote[lane]), sample);
-                            lastNote[lane] = -1;
-                            lastSourceNote[lane] = -1;
-                        }
-                    };
-                    emit (true, onPpq);
-                    emit (false, offPpq);
+                        emitNote (true, note, velocity, onPpq);
+                        emitNote (false, lastNote[lane], 0, onPpq);
+                    }
+                    else if (lastNote[lane] != note
+                             || pendingNoteOffPpq[lane] >= 0.0)
+                    {
+                        releaseAt (onPpq);
+                        emitNote (true, note, velocity, onPpq);
+                    }
+                    // If the pitch is unchanged and no gate is pending, the
+                    // previous Length 101 is still open: never retrigger it.
+                    lastNote[lane] = note;
+                    lastSourceNote[lane] = step.note;
+                    pendingNoteOffPpq[lane] = tie ? -1.0
+                        : onPpq + intervalBeats * lengthFactor;
                 }
             }
             cycleBeat += cycleLength;
             if (songEntry || cycleBeat > laneEndPpq + stepBeats * 3.0) break;
         }
-
+        // A normal note may finish in this buffer even when its onset was in
+        // an earlier callback. Tied notes deliberately have no deadline.
+        flushNoteOff (laneEndPpq);
     }
 }
 }

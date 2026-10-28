@@ -1,3 +1,9 @@
+# LB-303 0.99.1 — TEST2.4.42: legato 101 continuo su più step
+
+**Alt+Q → Length 101** è ora un vero legame di gate, non una nota di durata 102%. Quattro step consecutivi a 101 mantengono un unico gate per quattro step; 16 step a 101 proseguono senza interruzione anche dall'ultimo al primo. Se l'altezza cambia, il sequencer esegue un passaggio legato senza vuoti; se resta uguale non emette nuovi Note On. Il primo step con Length ordinario stabilisce la fine dell'intera frase. Pause, stop, reset e disabilitazione rilasciano la nota. Velocity 127, invio con memoria, synth, FX, pattern e Song invariati.
+
+Test C++ eseguibile senza JUCE completo: `g++ -std=c++17 -O2 -ITests/Shim -ISource Tests/test_legato_chain.cpp Source/SequencerPlayback.cpp Source/SequencerState.cpp -o test_legato && ./test_legato`. Compilazione e prova VST3 con NVDA necessarie.
+
 # LB-303 0.99.1 — TEST2.4.41: Alt+Q Velocity 127 con memoria per step
 
 - In **Alt+Q**, pagina 3 **Velocity**, **Invio** alterna tra **127** e l'ultima velocity ordinaria scelta sullo step. Esempio: `84 → 127 → 84`. Se lo step non è mai stato modificato, il valore ordinario iniziale è 100.

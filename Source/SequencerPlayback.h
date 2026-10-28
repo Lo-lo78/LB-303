@@ -46,6 +46,10 @@ private:
     // Remember source-note identity so Note Off still matches the original
     // output pitch if the physical keyboard transpose changes mid-step.
     std::array<int, 2> lastSourceNote { -1, -1 };
+    // A tied step (Length 101) has no scheduled Note Off.  Ordinary steps
+    // keep their exact gate deadline here, so callbacks and pattern wraps
+    // do not determine how long a note sounds.
+    std::array<double, 2> pendingNoteOffPpq {{ -1.0, -1.0 }};
     double previousPpq = -1.0;
     bool previousPlaying = false;
 };
