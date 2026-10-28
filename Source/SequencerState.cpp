@@ -92,6 +92,7 @@ void SequencerState::reset()
             storeRelaxed (step.lengthBeforeLegato, 50);
             storeRelaxed (step.length, 50);
             storeRelaxed (step.velocity, 100);
+            storeRelaxed (step.velocityBeforeMax, 100);
             storeRelaxed (step.repeat, 1);
             storeRelaxed (step.shift, 0.5f);
             storeRelaxed (step.parameterLockCount, 0);
@@ -114,6 +115,7 @@ void SequencerState::resetStep (int sequenceIndex, int stepIndex) noexcept
     storeRelaxed (step.lengthBeforeLegato, 50);
     storeRelaxed (step.length, 50);
     storeRelaxed (step.velocity, 100);
+    storeRelaxed (step.velocityBeforeMax, 100);
     storeRelaxed (step.repeat, 1);
     storeRelaxed (step.shift, 0.5f);
     storeRelaxed (step.parameterLockCount, 0);
@@ -158,6 +160,7 @@ void SequencerState::resetSequence (int sequenceIndex) noexcept
         storeRelaxed (step.lengthBeforeLegato, 50);
         storeRelaxed (step.length, 50);
         storeRelaxed (step.velocity, 100);
+        storeRelaxed (step.velocityBeforeMax, 100);
         storeRelaxed (step.repeat, 1);
         storeRelaxed (step.shift, 0.5f);
         storeRelaxed (step.parameterLockCount, 0);
@@ -275,9 +278,13 @@ void SequencerState::applyGlobalDelta (AtomicSequence& sequence, ConfigParameter
     {
         const auto delta = (newValue - oldValue) * 127.0f;
         for (auto& step : sequence.steps)
-            step.velocity.store (juce::roundToInt (clampLayerValue (
-                SequencerLayer::velocity, static_cast<float> (loadRelaxed (step.velocity)) + delta)),
-                std::memory_order_relaxed);
+        {
+            const int requestedVelocity = juce::roundToInt (clampLayerValue (
+                SequencerLayer::velocity, static_cast<float> (loadRelaxed (step.velocity)) + delta));
+            if (requestedVelocity < 127)
+                step.velocityBeforeMax.store (requestedVelocity, std::memory_order_relaxed);
+            step.velocity.store (requestedVelocity, std::memory_order_relaxed);
+        }
     }
     else if (parameter == ConfigParameter::globalStepRepeat)
     {
@@ -423,6 +430,7 @@ SequencerStep SequencerState::getStep (int sequenceIndex, int stepIndex) const n
     result.noteBeforePause = loadRelaxed (step.noteBeforePause);
     result.lengthBeforeLegato = loadRelaxed (step.lengthBeforeLegato);
     result.velocity = loadRelaxed (step.velocity);
+    result.velocityBeforeMax = loadRelaxed (step.velocityBeforeMax);
     result.repeat = loadRelaxed (step.repeat);
     result.shift = loadRelaxed (step.shift);
     result.parameterLockCount = juce::jlimit (0, SequencerStep::maximumParameterLocks,
@@ -476,7 +484,14 @@ void SequencerState::setStepValue (int sequenceIndex, int stepIndex, SequencerLa
             step.length.store (requestedLength, std::memory_order_relaxed);
             break;
         }
-        case SequencerLayer::velocity: step.velocity.store (juce::roundToInt (value), std::memory_order_relaxed); break;
+        case SequencerLayer::velocity:
+        {
+            const int requestedVelocity = juce::roundToInt (value);
+            if (requestedVelocity < 127)
+                step.velocityBeforeMax.store (requestedVelocity, std::memory_order_relaxed);
+            step.velocity.store (requestedVelocity, std::memory_order_relaxed);
+            break;
+        }
         case SequencerLayer::repeat:   step.repeat.store (juce::roundToInt (value), std::memory_order_relaxed); break;
         case SequencerLayer::shift:      step.shift.store (value, std::memory_order_relaxed); break;
         case SequencerLayer::parameters: break;
@@ -513,6 +528,9 @@ void SequencerState::replaceStep (int sequenceIndex, int stepIndex,
         : juce::jlimit (0, 100, source.lengthBeforeLegato), std::memory_order_relaxed);
     step.velocity.store (juce::roundToInt (clampLayerValue (
         SequencerLayer::velocity, static_cast<float> (source.velocity))), std::memory_order_relaxed);
+    step.velocityBeforeMax.store (source.velocity < 127
+        ? juce::jlimit (0, 126, source.velocity)
+        : juce::jlimit (0, 126, source.velocityBeforeMax), std::memory_order_relaxed);
     step.repeat.store (juce::roundToInt (clampLayerValue (
         SequencerLayer::repeat, static_cast<float> (source.repeat))), std::memory_order_relaxed);
     step.shift.store (clampLayerValue (SequencerLayer::shift, source.shift), std::memory_order_relaxed);
@@ -676,6 +694,7 @@ void SequencerState::copySequenceFrom (const SequencerState& source, int sourceS
         storeRelaxed (destinationStep.noteBeforePause, loadRelaxed (sourceStep.noteBeforePause));
         storeRelaxed (destinationStep.lengthBeforeLegato, loadRelaxed (sourceStep.lengthBeforeLegato));
         storeRelaxed (destinationStep.velocity, loadRelaxed (sourceStep.velocity));
+        storeRelaxed (destinationStep.velocityBeforeMax, loadRelaxed (sourceStep.velocityBeforeMax));
         storeRelaxed (destinationStep.repeat, loadRelaxed (sourceStep.repeat));
         storeRelaxed (destinationStep.shift, loadRelaxed (sourceStep.shift));
         const auto count = juce::jlimit (0, SequencerStep::maximumParameterLocks,
@@ -706,8 +725,9 @@ juce::String SequencerState::serialiseToBase64 (bool includeSelectedSequence) co
     juce::MemoryOutputStream stream;
     stream.writeInt (0x4c535132); // LSQ2
     // v3 = original TEST2.4.29; v4/5 included a now-discarded Accent field.
-    // v6 stores ONLY the two remembered values, with no Accent per-step.
-    stream.writeInt (6);
+    // v6 stores Note and Length memories; v7 adds the Velocity-before-127 memory.
+    // No separate Accent per-step is introduced.
+    stream.writeInt (7);
     stream.writeInt (getRoutingMode());
     stream.writeInt (includeSelectedSequence ? getSelectedSequence() : 0);
 
@@ -747,6 +767,7 @@ juce::String SequencerState::serialiseToBase64 (bool includeSelectedSequence) co
             stream.writeFloat (step.shift);
             stream.writeByte (static_cast<char> (juce::jlimit (0, 127, step.noteBeforePause)));
             stream.writeByte (static_cast<char> (juce::jlimit (0, 100, step.lengthBeforeLegato)));
+            stream.writeByte (static_cast<char> (juce::jlimit (0, 126, step.velocityBeforeMax)));
             stream.writeByte (static_cast<char> (juce::jlimit (0, SequencerStep::maximumParameterLocks,
                                                                step.parameterLockCount)));
             for (int lockIndex = 0; lockIndex < step.parameterLockCount; ++lockIndex)
@@ -777,7 +798,7 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
     if (stream.readInt() != 0x4c535132)
         return false;
     const auto formatVersion = stream.readInt();
-    if (formatVersion < 1 || formatVersion > 6)
+    if (formatVersion < 1 || formatVersion > 7)
         return false;
 
     // Silence the generator while its atomic fields are replaced.
@@ -840,6 +861,12 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
             step.lengthBeforeLegato.store (formatVersion >= 5
                 ? juce::jlimit (0, 100, static_cast<int> (static_cast<unsigned char> (stream.readByte())))
                 : (loadedLength != 101 ? loadedLength : 100), std::memory_order_relaxed);
+            const int loadedVelocity = loadRelaxed (step.velocity);
+            // Older saves do not have a velocity memory: use their visible value
+            // or 100 when the previous non-127 velocity cannot be recovered.
+            step.velocityBeforeMax.store (formatVersion >= 7
+                ? juce::jlimit (0, 126, static_cast<int> (static_cast<unsigned char> (stream.readByte())))
+                : (loadedVelocity < 127 ? loadedVelocity : 100), std::memory_order_relaxed);
             step.parameterLockCount.store (0, std::memory_order_relaxed);
             for (auto& lock : step.parameterLocks)
             {

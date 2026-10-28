@@ -28,7 +28,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
+    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -175,6 +175,8 @@ void SequencerStepEditor::refresh()
             text << "\nEnter: Pause / last note of this step.\n";
         if (page == 1)
             text << "\nEnter: 101 Legato / last length of this step.\n";
+        if (page == 2)
+            text << "\nEnter: 127 maximum velocity / last velocity of this step.\n";
         if (page == 6)
             text << "\nEnter: select a synth parameter, Up/Down: edit current lock. "
                  << "Alt+Home/End: previous/next lock. Delete clears selected steps first; with no selected steps it removes the current lock. Alt+Delete: remove all."
@@ -441,7 +443,7 @@ void SequencerStepEditor::resetCurrent()
         change.before = bank().getStep (pattern(), i);
         lb303::SequencerStep reset = change.before;
         reset.note = 128; reset.length = 50; reset.velocity = 100;
-        reset.noteBeforePause = 60; reset.lengthBeforeLegato = 50;
+        reset.noteBeforePause = 60; reset.lengthBeforeLegato = 50; reset.velocityBeforeMax = 100;
         reset.repeat = 1; reset.shift = 0.5f;
         bank().replaceStep (pattern(), i, reset);
         change.after = bank().getStep (pattern(), i);
@@ -491,6 +493,30 @@ void SequencerStepEditor::toggleCurrentLength()
     commitAction (std::move (action));
     if (changed > 1)
         announce (juce::String (changed) + " selected lengths toggled");
+    else
+        announceCurrent();
+}
+void SequencerStepEditor::toggleCurrentVelocity()
+{
+    Action action; action.track = track; action.pattern = pattern();
+    for (int index : editingSteps())
+    {
+        StepChange change; change.index = index;
+        change.before = bank().getStep (pattern(), index);
+        // A maximum-velocity accent is temporary: restore this step's own
+        // most recent ordinary velocity rather than a hard-coded default.
+        const int target = change.before.velocity == 127
+            ? change.before.velocityBeforeMax : 127;
+        bank().setStepValue (pattern(), index, lb303::SequencerLayer::velocity,
+                             static_cast<float> (target));
+        change.after = bank().getStep (pattern(), index);
+        action.changes.push_back (std::move (change));
+    }
+    const int changed = static_cast<int> (action.changes.size());
+    if (changed == 0) return;
+    commitAction (std::move (action));
+    if (changed > 1)
+        announce (juce::String (changed) + " selected velocities toggled");
     else
         announceCurrent();
 }
@@ -1392,6 +1418,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
     {
         if (page == 0) toggleCurrentNote();
         else if (page == 1) toggleCurrentLength();
+        else if (page == 2) toggleCurrentVelocity();
         else if (page == 6) openParameterPicker();
         return true;
     }

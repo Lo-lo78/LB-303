@@ -29,10 +29,11 @@ struct SequencerStep
 {
     int note = 128;
     int length = 50;
-    // These per-step values survive Pause and Legato 101.
+    // These per-step values survive Pause, Legato 101 and Velocity 127.
     int noteBeforePause = 60;
     int lengthBeforeLegato = 50;
     int velocity = 100;
+    int velocityBeforeMax = 100;
     int repeat = 1;
     float shift = 0.5f;
     static constexpr int maximumParameterLocks = 32;
@@ -149,6 +150,7 @@ private:
         std::atomic<int> noteBeforePause { 60 };
         std::atomic<int> lengthBeforeLegato { 50 };
         std::atomic<int> velocity { 100 };
+        std::atomic<int> velocityBeforeMax { 100 };
         std::atomic<int> repeat { 1 };
         std::atomic<float> shift { 0.5f };
         std::atomic<int> parameterLockCount { 0 };

@@ -99,6 +99,7 @@ private:
     void resetCurrent();
     void toggleCurrentNote();
     void toggleCurrentLength();
+    void toggleCurrentVelocity();
     std::vector<int> editingSteps() const;
     void commitAction (Action&&);
     void applyAction (const Action&, bool backwards);

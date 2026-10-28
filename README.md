@@ -1,3 +1,12 @@
+# LB-303 0.99.1 — TEST2.4.41: Alt+Q Velocity 127 con memoria per step
+
+- In **Alt+Q**, pagina 3 **Velocity**, **Invio** alterna tra **127** e l'ultima velocity ordinaria scelta sullo step. Esempio: `84 → 127 → 84`. Se lo step non è mai stato modificato, il valore ordinario iniziale è 100.
+- La memoria è individuale per step e pattern, è aggiornata quando si regola manualmente una velocity inferiore a 127 e viene mantenuta con selezioni multiple, Undo/Redo, copia/incolla e salvataggio/ricaricamento.
+- Le pagine **1 Note** (`nota → Pause → nota`) e **2 Length** (`lunghezza → 101 → lunghezza`) funzionavano già correttamente e restano invariate.
+- Il salvataggio delle sequenze passa dal formato **6** al formato **7**. Sono leggibili anche i formati precedenti; per una vecchia velocity già a 127, non essendo disponibile il valore precedente, il primo ripristino utilizza 100.
+- Restano sette pagine, con l'Accent originale gestito dalla velocity e da Accent Threshold, senza pagina Accent separata. Nessuna modifica al DSP, ai parametri VST3 esistenti o alla versione pubblica **0.99.1**.
+- Verificare la compilazione GitHub Actions e poi Invio/velocità in REAPER con NVDA.
+
 # LB-303 0.99.1 — TEST2.4.40: correzione focus dopo Esc da Alt+H
 
 La selezione della lingua di Help mantiene lo stesso menu a sette lingue. Quando si annulla con Esc, il focus viene restituito al controllo da cui si è aperto il menu: **Grid, Value oppure Edit manuale**. Il ripristino viene eseguito dopo la chiusura effettiva del popup e aggiorna **sia la tastiera sia il focus accessibile Windows UIA/NVDA**, con una seconda verifica differita per prevenire il blocco delle frecce nella Grid e dell'editing. Non serve premere Tab/Shift+Tab per riprendere la navigazione. Non modifica l'operazione di selezione di una lingua e apertura della guida nel browser. Non aggiunge nuovi elementi nel ciclo Tab.
