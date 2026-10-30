@@ -47,7 +47,11 @@ constexpr size_t oversamplingIndex = osc2ParameterBase + basslineCount * osc2Par
 // that would move all sequencer, LFO, OSC2 and oversampling host indices.
 constexpr size_t reverbBassDecayIndex = oversamplingIndex + 1;
 constexpr size_t reverbBassXoverIndex = reverbBassDecayIndex + 1;
-constexpr size_t parameterCount = reverbBassXoverIndex + 1;
+// Spatial reverb controls append after TEST2.4.43 (no old VST3 IDs move).
+constexpr size_t reverbMotionModeIndex = reverbBassXoverIndex + 1;
+constexpr size_t reverbMotionDepthIndex = reverbMotionModeIndex + 1;
+constexpr size_t reverbMotionRateIndex = reverbMotionDepthIndex + 1;
+constexpr size_t parameterCount = reverbMotionRateIndex + 1;
 constexpr size_t lfoParameterIndex (size_t lane, size_t control)
 { return lfoParameterBase + lane * lfoParameterCount + control; }
 namespace lfo
@@ -76,7 +80,7 @@ constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2Param
 constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 2; // MIDI channel + separate stereo output
 constexpr int voiceMidiDisplayIndex = 5; // Volume, Waveform, Osc 2 Volume, Osc 2 Detune, Pan, MIDI, ...
 constexpr size_t classicDelayParameterCount = 14;
-constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2; // last two are append-only reverb host params
+constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3; // append-only reverb bass and spatial host params
 constexpr size_t fxContextIndex = basslineCount + 1;
 size_t fxDisplayGlobalIndex (size_t displayIndex) noexcept;
 namespace fx
@@ -94,9 +98,12 @@ enum Control : size_t {
     effectOrder // append only; 0 Delay > Reverb, 1 Reverb > Delay
 };
 // Extended DSP control slots, NOT contiguous VST3 host parameter indices.
-// Host indices are reverbBassDecayIndex and reverbBassXoverIndex.
+// Host indices are the append-only reverb*Index constants above.
 constexpr size_t reverbBassDecay = fxParameterCount;
 constexpr size_t reverbBassXover = fxParameterCount + 1;
+constexpr size_t reverbMotionMode = fxParameterCount + 2;
+constexpr size_t reverbMotionDepth = fxParameterCount + 3;
+constexpr size_t reverbMotionRate = fxParameterCount + 4;
 }
 constexpr size_t sequencerParameterIndex (size_t local) { return audioParameterCount + local; }
 constexpr size_t pattern1Index = audioParameterCount;

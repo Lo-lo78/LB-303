@@ -556,6 +556,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             fxControls[i] = value (lb303::fxParameterIndex (i));
         fxControls[lb303::fx::reverbBassDecay] = value (lb303::reverbBassDecayIndex);
         fxControls[lb303::fx::reverbBassXover] = value (lb303::reverbBassXoverIndex);
+        fxControls[lb303::fx::reverbMotionMode] = value (lb303::reverbMotionModeIndex);
+        fxControls[lb303::fx::reverbMotionDepth] = value (lb303::reverbMotionDepthIndex);
+        fxControls[lb303::fx::reverbMotionRate] = value (lb303::reverbMotionRateIndex);
         // Historic B1 delay parameter IDs now control ONE master classic delay.
         lb303::SharedEffects::ClassicParameters legacy {};
         for (size_t i = 0; i < legacy.size(); ++i)

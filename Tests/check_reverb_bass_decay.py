@@ -20,17 +20,17 @@ assert "sequencerPerformanceBase = legacyParameterCount + fxParameterCount" in h
 assert "oversamplingIndex = osc2ParameterBase + basslineCount * osc2ParameterCount" in h
 assert "reverbBassDecayIndex = oversamplingIndex + 1" in h
 assert "reverbBassXoverIndex = reverbBassDecayIndex + 1" in h
-assert "parameterCount = reverbBassXoverIndex + 1" in h
+assert "reverbMotionModeIndex = reverbBassXoverIndex + 1" in h
 assert '"fx_reverb_bass_decay"' in c and '"fx_reverb_bass_xover"' in c
 assert '0.5f, 2.0f, 0.01f, 1.0f, "x"' in c
 assert '50.0f, 1000.0f, 1.0f, 360.0f, "Hz"' in c
-assert '(index == reverbBassDecayIndex || index == reverbBassXoverIndex)' in c
+assert 'index == reverbBassDecayIndex || index == reverbBassXoverIndex' in c
 assert 'result[reverbBassDecayIndex]' in c and 'result[reverbBassXoverIndex]' in c
 assert 'reverbBassDecayIndex, reverbBassXoverIndex' in c
 assert 'add (5, lb303::reverbBassDecayIndex)' in e
 assert 'add (5, lb303::reverbBassXoverIndex)' in e
 assert 'if (enabled (lb303::fx::reverbType))' in e
-assert 'std::array<float, fxParameterCount + 2>' in fxh
+assert 'std::array<float, fxParameterCount + 5>' in fxh
 assert 'for (size_t i = 0; i < lb303::fxParameterCount; ++i)' in p
 assert 'fxControls[lb303::fx::reverbBassDecay] = value (lb303::reverbBassDecayIndex)' in p
 assert 'fxControls[lb303::fx::reverbBassXover] = value (lb303::reverbBassXoverIndex)' in p
@@ -48,5 +48,5 @@ assert 'verbBassSmoothCoeff' in fx and 'verbBassXoverSmoothed' in fx
 assert 'verbBassLow.fill (0.0f)' in fx and 'verbBassGainDeltaSmoothed.fill (0.0f)' in fx
 assert 'std::max (1.0, static_cast<double> (c[fx::reverbBassDecay]))' in fx
 assert 'std::clamp (wetGuardSeconds, .5, 240.0)' in fx
-assert 'TEST2.4.43-Windows-x64' in workflow
+assert 'TEST2.4.44-Windows-x64' in workflow
 print('PASS: TEST2.4.43 append-only bass RT60/XOver, per-line feedback, smoothing, dynamic UI, wet tails.')

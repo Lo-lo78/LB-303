@@ -22,6 +22,8 @@ constexpr const char* fxDistChoices[] = { "Off", "Soft Clip", "Warm Tube", "Tape
 constexpr const char* fxOrderChoices[] = { "Delay then Reverb", "Reverb then Delay" };
 constexpr const char* oversamplingChoices[] = { "1x", "2x", "4x" };
 constexpr const char* fxReverbChoices[] = { "Off", "Room", "Plate", "Hall", "Cathedral" };
+// These are patterns of reflection exchange inside the FDN, never wet-output panning.
+constexpr const char* reverbMotionChoices[] = { "Off", "Left to Right", "Right to Left", "Bounce", "Orbit", "Expand", "Contract" };
 constexpr const char* lfoModeChoices[] = { "Free", "Triggered" };
 constexpr const char* lfoWaveChoices[] = { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Sample Hold" };
 constexpr const char* output1Choices[] = { "Off", "Out 3/4" };
@@ -64,7 +66,8 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     fxParameterIndex (fx::reverbSend2), fxParameterIndex (fx::reverbPredelay),
     fxParameterIndex (fx::reverbDecay), fxParameterIndex (fx::reverbDamping),
     fxParameterIndex (fx::reverbWidth), fxParameterIndex (fx::reverbLevel),
-    reverbBassDecayIndex, reverbBassXoverIndex
+    reverbBassDecayIndex, reverbBassXoverIndex,
+    reverbMotionModeIndex, reverbMotionDepthIndex, reverbMotionRateIndex
 }};
 // All indices are relative to audioParameterCount, including append-only
 // performance controls located AFTER the shared FX parameters.
@@ -272,6 +275,13 @@ const std::array<ParameterInfo, parameterCount>& catalog()
                                          0.5f, 2.0f, 0.01f, 1.0f, "x" };
         result[reverbBassXoverIndex] = { "fx_reverb_bass_xover", "Reverb Bass XOver",
                                          50.0f, 1000.0f, 1.0f, 360.0f, "Hz" };
+        // The default mode Off is bit-identical to TEST2.4.43's unmodulated FDN.
+        result[reverbMotionModeIndex] = { "fx_reverb_motion_mode", "Reverb Motion Mode",
+            0, 6, 1, 0, "", reverbMotionChoices, 7 };
+        result[reverbMotionDepthIndex] = { "fx_reverb_motion_depth", "Reverb Motion Depth",
+            0, 100, 1, 60, "%" };
+        result[reverbMotionRateIndex] = { "fx_reverb_motion_rate", "Reverb Motion Rate",
+            0.02f, 2.0f, 0.01f, 0.35f, "Hz" };
         result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
             0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
@@ -318,7 +328,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         const auto& p = catalog()[index];
         // Distinguish automated parameters in REAPER's global FX parameter list,
         // without adding redundant prefixes to the accessible per-bassline grids.
-        const auto hostName = (index == reverbBassDecayIndex || index == reverbBassXoverIndex)
+        const auto hostName = (index == reverbBassDecayIndex || index == reverbBassXoverIndex
+                               || index == reverbMotionModeIndex || index == reverbMotionDepthIndex
+                               || index == reverbMotionRateIndex)
             ? ("FX - " + p.name)
             : index == oversamplingIndex
             ? ("FX - " + p.name)

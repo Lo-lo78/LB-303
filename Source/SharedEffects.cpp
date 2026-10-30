@@ -63,6 +63,11 @@ void SharedEffects::prepare (double sampleRate)
     verbBassGainDeltaSmoothed.fill (0);
     verbBassXoverTarget = verbBassXoverSmoothed = 0.0f;
     verbBassSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.035 * fs)));
+    verbMotionAngles.fill (0.0f);
+    verbMotionDepthSmoothed = 0.0f;
+    verbMotionRateSmoothed = 0.35f;
+    verbMotionPhase = verbMotionAge = 0.0;
+    verbMotionSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.045 * fs)));
     tapeTime.fill (0); tapeLow.fill (0); tapeHighX.fill (0); tapeHighY.fill (0);
     tapeWetX.fill (0); tapeWetY.fill (0);
     chorusRateSmoothed = chorusTail = 0;
@@ -97,6 +102,10 @@ void SharedEffects::clearTails() noexcept
     verbBassGainDeltaTarget.fill (0.0f);
     verbBassGainDeltaSmoothed.fill (0.0f);
     verbBassXoverTarget = verbBassXoverSmoothed = 0.0f;
+    verbMotionAngles.fill (0.0f);
+    verbMotionDepthSmoothed = 0.0f;
+    verbMotionRateSmoothed = 0.35f;
+    verbMotionPhase = verbMotionAge = 0.0;
     reverbPredelayReady = false;
     reverbPredelaySamples = 0.0;
     tapeTime.fill (0.0f); tapeLow.fill (0.0f); tapeHighX.fill (0.0f); tapeHighY.fill (0.0f);
@@ -453,10 +462,83 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
                                               static_cast<double> (verb[i].data.size() - 2)));
         sum += current[i];
     }
+    // The original Householder network is orthogonal. The OPTIONAL moving
+    // reflection paths below consist only of Givens (orthogonal) rotations;
+    // unlike wet pan or a post-FDN chorus, the sound travels on every return
+    // through the room. No rotation = exactly the original FDN feedback.
+    std::array<float, 8> reflected {};
+    for (size_t i = 0; i < reflected.size(); ++i)
+        reflected[i] = sum * .25f - current[i];
+
+    const int motionMode = juce::jlimit (0, 6, juce::roundToInt (c[fx::reverbMotionMode]));
+    const float targetDepth = motionMode == 0 ? 0.0f
+        : clampf (c[fx::reverbMotionDepth] * .01f, 0.0f, 1.0f);
+    verbMotionDepthSmoothed += (targetDepth - verbMotionDepthSmoothed) * verbMotionSmoothCoeff;
+    const float targetRate = clampf (c[fx::reverbMotionRate], .02f, 2.0f);
+    verbMotionRateSmoothed += (targetRate - verbMotionRateSmoothed) * verbMotionSmoothCoeff;
+    verbMotionPhase += (2.0 * pi * verbMotionRateSmoothed) / fs;
+    if (verbMotionPhase >= 2.0 * pi) verbMotionPhase -= 2.0 * pi;
+
+    // A new wet excitation begins a new spatial expansion/contraction.
+    // Long tails keep progressing after the source has stopped, with no output
+    // amplitude gating; sustained notes keep the room near its initial size.
+    if (std::abs (inL) + std::abs (inR) > 1.0e-5f) verbMotionAge = 0.0;
+    else verbMotionAge = std::min (120.0, verbMotionAge + 1.0 / fs);
+
+    if (verbMotionDepthSmoothed > 1.0e-6f ||
+        std::any_of (verbMotionAngles.begin(), verbMotionAngles.end(),
+                     [] (float angle) { return std::abs (angle) > 1.0e-6f; }))
+    {
+        const float s = static_cast<float> (std::sin (verbMotionPhase));
+        const float q = static_cast<float> (std::cos (verbMotionPhase));
+        const float progress = clampf (static_cast<float> (verbMotionAge * verbMotionRateSmoothed), 0.0f, 1.0f);
+        const float ageCurve = progress * progress * (3.0f - 2.0f * progress);
+        std::array<float, 4> pattern {};
+        switch (motionMode)
+        {
+            case 1: pattern = { s, q, -s, -q }; break; // L -> R travelling reflections
+            case 2: pattern = { s, -q, -s, q }; break; // R -> L, reversed circulation
+            case 3: pattern = { s, s, s, s }; break; // back-and-forth bounce
+            case 4: pattern = { s, q, -s, -q }; break; // orbit in two crossing planes
+            case 5: pattern = { ageCurve, -ageCurve, ageCurve, -ageCurve }; break;
+            case 6: pattern = { 1.0f - ageCurve, ageCurve - 1.0f,
+                                1.0f - ageCurve, ageCurve - 1.0f }; break;
+            default: break; // Off, smooth rotations back to identity
+        }
+        // Across left/right-injected lines, then across distant FDN lines.
+        // Each pair rotation preserves sum-of-squares feedback energy.
+        for (size_t pair = 0; pair < 4; ++pair)
+        {
+            const float target = .90f * verbMotionDepthSmoothed * pattern[pair];
+            float& angle = verbMotionAngles[pair];
+            angle += (target - angle) * verbMotionSmoothCoeff;
+            const float sine = std::sin (angle), cosine = std::cos (angle);
+            const size_t a = pair * 2, b = a + 1;
+            const float x = reflected[a], y = reflected[b];
+            reflected[a] = cosine * x - sine * y;
+            reflected[b] = sine * x + cosine * y;
+        }
+        for (size_t pair = 0; pair < 4; ++pair)
+        {
+            // The second plane drives orbit/dispersion rather than output pan.
+            const float travel = motionMode == 4
+                ? (pair % 2 == 0 ? q : -s)
+                : (motionMode == 1 || motionMode == 2)
+                    ? pattern[(pair + 1) % 4]
+                    : (motionMode == 3 ? (pair % 2 == 0 ? s : -s) : pattern[pair]);
+            const float target = .34f * verbMotionDepthSmoothed * travel;
+            float& angle = verbMotionAngles[4 + pair];
+            angle += (target - angle) * verbMotionSmoothCoeff;
+            const float sine = std::sin (angle), cosine = std::cos (angle);
+            const size_t a = pair, b = pair + 4;
+            const float x = reflected[a], y = reflected[b];
+            reflected[a] = cosine * x - sine * y;
+            reflected[b] = sine * x + cosine * y;
+        }
+    }
     for (size_t i=0;i<8;++i)
     {
-        const float reflected = sum*.25f-current[i];
-        verbDamped[i] += (reflected-verbDamped[i])*damp;
+        verbDamped[i] += (reflected[i]-verbDamped[i])*damp;
         const double effectiveSeconds = std::clamp (
             static_cast<double> (verbTimes[i]) * size, 2.0 / fs,
             static_cast<double> (verb[i].data.size() - 2) / fs);

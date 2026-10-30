@@ -12,7 +12,7 @@ namespace lb303
 class SharedEffects final
 {
 public:
-    using Controls = std::array<float, fxParameterCount + 2>; // 35 historic + two append-only bass reverb controls
+    using Controls = std::array<float, fxParameterCount + 5>; // 35 historic + 2 bass + 3 spatial reverb controls
     using ClassicParameters = BassEngine::Values;
     void prepare (double newSampleRate);
     void clearTails() noexcept; // no allocation: reset FX after Alt+I
@@ -79,6 +79,12 @@ private:
     std::array<float, 8> verbBassLow {}, verbBassGainDeltaTarget {}, verbBassGainDeltaSmoothed {};
     float verbBassXoverTarget = 0.0f, verbBassXoverSmoothed = 0.0f;
     float verbBassSmoothCoeff = 0.0f;
+    // Motion rotates reflection paths (orthogonal cross-coupling) INSIDE the FDN.
+    // Smoothed in radians so changing direction/mode cannot jump feedback taps.
+    std::array<float, 8> verbMotionAngles {};
+    float verbMotionDepthSmoothed = 0.0f, verbMotionRateSmoothed = 0.35f;
+    float verbMotionSmoothCoeff = 0.0f;
+    double verbMotionPhase = 0.0, verbMotionAge = 0.0;
     std::array<float, 8> verbTimes {};
     int verbIndex = 0;
     float chorusRateSmoothed = 0, chorusHpCoefficient = 0, chorusTail = 0;

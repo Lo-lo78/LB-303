@@ -1,3 +1,15 @@
+# LB-303 0.99.1 — TEST2.4.44: movimento interno delle riflessioni del riverbero
+
+Nella pagina **FX**, colonna **Reverb** (Room, Plate, Hall, Cathedral), tre nuovi controlli sono raggiungibili dalla griglia con NVDA/OSARA e automatizzabili in REAPER:
+
+- **Reverb Motion Mode**: `Off` (default), `Left to Right`, `Right to Left`, `Bounce`, `Orbit`, `Expand`, `Contract`. `Bounce` oscilla fra i lati; `Orbit` fa circolare le riflessioni su due piani; `Expand` apre gradualmente la coda dopo l’ultima eccitazione del riverbero; `Contract` la richiude. I due modi direzionali invertono il senso di circolazione delle riflessioni.
+- **Reverb Motion Depth**: `0–100 %`, step 1, default `60 %`. Intensità del movimento *interno alla rete*; a 0% resta fermo anche con Mode attivo.
+- **Reverb Motion Rate**: `0.02–2.00 Hz`, step 0.01, default `0.35 Hz`. Velocità dei movimenti; in Expand/Contract determina la durata (circa 1/Rate secondi) dell'apertura o chiusura.
+
+**Non è un pan:** vengono rimescolate, durante le ricircolazioni, le 8 linee di riflessione dell'FDN tramite rotazioni ortogonali (a energia preservata) su due piani. Le due uscite wet rimangono decodificate dal solito riverbero e i send/dry non vengono mossi. L'interpolazione delle rotazioni è smussata a 45 ms per ridurre gli scatti. I parametri originali `Reverb Width`, `Bass Decay`, `Bass XOver`, `Damping`, `Level`, `Decay` e `Predelay` restano indipendenti. `Mode Off`, default dei vecchi preset, mantiene *identico* il vecchio algoritmo, senza costo significativo del movimento attivo.
+
+**Compatibilità:** tre nuovi ID `fx_reverb_motion_mode`, `fx_reverb_motion_depth`, `fx_reverb_motion_rate` aggiunti **dopo** `fx_reverb_bass_xover` senza modificare ID esistenti, lock, Pattern, Song, Accent, Length 101 o formati `.lb`. GitHub Actions pubblica il pacchetto **TEST2.4.44**. Il DSP è stato verificato con test indipendenti sul motore; il VST3 completo e l'ascolto in REAPER restano da verificare.
+
 # LB-303 0.99.1 — TEST2.4.43: controllo naturale della coda dei bassi nel riverbero
 
 Nella pagina **FX**, colonna **Reverb**, con Reverb Type su Room, Plate, Hall o Cathedral sono disponibili due nuovi parametri accessibili da tastiera/NVDA e automatizzabili in REAPER:
