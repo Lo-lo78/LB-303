@@ -48,6 +48,13 @@ void SharedEffects::prepare (double sampleRate)
     tapeR.initialise (static_cast<int> (fs * 12.0) + 8);
     preL.initialise (static_cast<int> (fs * 0.30) + 8);
     preR.initialise (static_cast<int> (fs * 0.30) + 8);
+    for (size_t v = 0; v < basslineCount; ++v)
+    {
+        sourcePreL[v].initialise (static_cast<int> (fs * 0.30) + 8);
+        sourcePreR[v].initialise (static_cast<int> (fs * 0.30) + 8);
+    }
+    sourcePositionsSmoothed.fill (0.0f);
+    sourcePositionSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.012 * fs)));
     reverbPredelaySmoothCoeff = 1.0 - std::exp (-1.0 / (0.035 * fs));
     reverbPredelaySamples = 0.0;
     reverbPredelayReady = false;
@@ -90,6 +97,9 @@ void SharedEffects::clearTails() noexcept
         std::fill (line->data.begin(), line->data.end(), 0.0f);
         line->pos = 0;
     }
+    for (auto& line : sourcePreL) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
+    for (auto& line : sourcePreR) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
+    sourcePositionsSmoothed.fill (0.0f);
     for (auto& line : chorusL) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
     for (auto& line : chorusR) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
     for (auto& line : verb)
@@ -422,7 +432,9 @@ std::pair<float, float> SharedEffects::dualDelay (float l, float r) noexcept
     return { bounded ((out1*tapePan[0]+out2*tapePan[2])*makeup),
              bounded ((out1*tapePan[1]+out2*tapePan[3])*makeup) };
 }
-std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
+std::pair<float, float> SharedEffects::reverb (float l, float r,
+    const std::array<std::pair<float, float>, basslineCount>& voiceSends,
+    const LfoSamples& lfoSamples) noexcept
 {
     // Four tunings of one Householder FDN. Decay times, diffusion and stereo
     // width differ: Room tight, Plate bright, Hall wide, Cathedral prolonged.
@@ -444,6 +456,53 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
     const double readOffset = 1.0 + reverbPredelaySamples;
     const float inL = preL.read (readOffset), inR = preR.read (readOffset);
     preL.push (l); preR.push (r);
+    for (size_t v = 0; v < basslineCount; ++v)
+    {
+        sourcePreL[v].push (voiceSends[v].first);
+        sourcePreR[v].push (voiceSends[v].second);
+    }
+
+    // Source-specific azimuth is injected into the eight FDN delay lines,
+    // BEFORE feedback diffusion; the dry basslines and wet return are untouched.
+    // The extra source pre-delay taps match the main stereo pre-delay exactly.
+    // Two orthogonal rotations of the incoming eight-dimensional excitation
+    // vector preserve its energy while changing WHICH delay lines are excited.
+    // Zero source pan / LFO depth bypasses all deltas bit-for-bit.
+    std::array<float, 8> spatialExcitationDelta {};
+    for (size_t v = 0; v < basslineCount; ++v)
+    {
+        const size_t base = v == 0 ? fx::reverbSourcePan1 : fx::reverbSourcePan2;
+        const size_t depth = v == 0 ? fx::reverbLfoPan1 : fx::reverbLfoPan2;
+        const float target = clampf ((c[base] + c[depth] * lfoSamples[v]) * .01f, -1.0f, 1.0f);
+        float& position = sourcePositionsSmoothed[v];
+        position += (target - position) * sourcePositionSmoothCoeff;
+        if (std::abs (position) < 1.0e-7f) { position = 0.0f; continue; }
+
+        const float voiceL = sourcePreL[v].read (readOffset);
+        const float voiceR = sourcePreR[v].read (readOffset);
+        if (std::abs (voiceL) + std::abs (voiceR) < 1.0e-12f) continue;
+        std::array<float, 8> source {};
+        for (size_t i = 0; i < 8; ++i) source[i] = (i & 1) == 0 ? voiceL : voiceR;
+        const float mainSin = std::sin (position * .88f);
+        const float mainCos = std::cos (position * .88f);
+        for (size_t i = 0; i < 8; i += 2)
+        {
+            const float a = source[i], b = source[i + 1];
+            source[i] = mainCos * a - mainSin * b;
+            source[i + 1] = mainSin * a + mainCos * b;
+        }
+        const float diffSin = std::sin (position * .36f);
+        const float diffCos = std::cos (position * .36f);
+        for (size_t i = 0; i < 4; ++i)
+        {
+            const float sine = (i & 1) ? -diffSin : diffSin;
+            const float a = source[i], b = source[i + 4];
+            source[i] = diffCos * a - sine * b;
+            source[i + 4] = sine * a + diffCos * b;
+        }
+        for (size_t i = 0; i < 8; ++i)
+            spatialExcitationDelta[i] += source[i] - ((i & 1) == 0 ? voiceL : voiceR);
+    }
     const double size = mode==1 ? .58 : mode==2 ? .85 : mode==3 ? 1.0 : 1.2;
     const double seconds = std::max (.15, static_cast<double> (c[fx::reverbDecay])
                                     * (mode==1 ? .55 : mode==2 ? .8 : mode==3 ? 1 : 1.55));
@@ -551,7 +610,7 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
                                         * verbBassSmoothCoeff;
         const float feedback = verbDamped[i] * std::min (.9995f, gain)
                              + verbBassLow[i] * verbBassGainDeltaSmoothed[i];
-        const float source = ((i & 1)==0 ? inL : inR) * .18f;
+        const float source = (((i & 1)==0 ? inL : inR) + spatialExcitationDelta[i]) * .18f;
         verb[i].push (bounded (source + feedback));
     }
     // Decorrelated stereo output. Diffuse tail continues even with zero input.
@@ -569,17 +628,19 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
     const float level = c[fx::reverbLevel] * .02f * reverbReturnMakeupGain;
     return { bounded ((middle+side)*level), bounded ((middle-side)*level) };
 }
-SharedEffects::Output SharedEffects::process (float aL, float aR, float bL, float bR) noexcept
+SharedEffects::Output SharedEffects::process (float aL, float aR, float bL, float bR,
+                                                        const LfoSamples& lfoSamples) noexcept
 {
     // INSERT: two distortion processors act independently, before chorus.
     const auto [axL, axR] = enabledDistortion[0] ? distort (aL, aR, 0)
                                                       : std::pair<float,float> { aL, aR };
     const auto [bxL, bxR] = enabledDistortion[1] ? distort (bL, bR, 1)
                                                       : std::pair<float,float> { bL, bR };
-    return processPostDistortion (axL, axR, bxL, bxR);
+    return processPostDistortion (axL, axR, bxL, bxR, lfoSamples);
 }
 SharedEffects::Output SharedEffects::processPostDistortion (float axL, float axR,
-                                                             float bxL, float bxR) noexcept
+                                               float bxL, float bxR,
+                                               const LfoSamples& lfoSamples) noexcept
 {
     // Whole wet graph is nonexistent when chorus, delay and reverb are off.
     // This leaves the original stereo stems and 1x rendering untouched.
@@ -618,6 +679,13 @@ SharedEffects::Output SharedEffects::processPostDistortion (float axL, float axR
                                         composed1R * s1 + composed2R * s2 };
     };
     const auto delayStem = send (fx::delaySend1, fx::delaySend2);
+    const float verbS1 = c[fx::reverbSend1] * .01f;
+    const float verbS2 = c[fx::reverbSend2] * .01f;
+    const std::array<std::pair<float, float>, basslineCount> reverbVoiceSends {{
+        { composed1L * verbS1, composed1R * verbS1 },
+        { composed2L * verbS2, composed2R * verbS2 }
+    }};
+    // Preserve the original floating-point summation order of the reverb send.
     const auto reverbStem = send (fx::reverbSend1, fx::reverbSend2);
     const int delayMode = juce::jlimit (0, 2, juce::roundToInt (c[fx::delayType]));
     const bool verbEnabled = c[fx::reverbType] > .5f;
@@ -640,7 +708,8 @@ SharedEffects::Output SharedEffects::processPostDistortion (float axL, float axR
     };
     const auto runReverb = [&] (float l, float r) -> std::pair<float, float>
     {
-        return verbEnabled ? reverb (l, r) : std::pair<float,float> { 0.0f, 0.0f };
+        return verbEnabled ? reverb (l, r, reverbVoiceSends, lfoSamples)
+                           : std::pair<float,float> { 0.0f, 0.0f };
     };
 
     // Fixed insert order: Delay -> Reverb. An old saved fx::effectOrder

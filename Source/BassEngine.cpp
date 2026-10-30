@@ -169,12 +169,29 @@ void BassEngine::setLfoParameters (const LfoValues& values) noexcept
 {
     if (lfoParameters == values) return;
     lfoParameters = values;
-    lfoHasDestination = values[lfo::pitchDepth] != 0.0f
+    lfoHasDestination = externalLfoDestination || values[lfo::pitchDepth] != 0.0f
         || values[lfo::volumeDepth] != 0.0f
         || values[lfo::filterDepth] != 0.0f
         || values[lfo::panDepth] != 0.0f;
     // When unconnected the LFO's phase is frozen. Reconnecting it resumes
     // that phase; its oscillator is not evaluated in the meantime.
+}
+
+void BassEngine::setExternalLfoDestination (bool enabled) noexcept
+{
+    externalLfoDestination = enabled;
+    lfoHasDestination = enabled || lfoParameters[lfo::pitchDepth] != 0.0f
+        || lfoParameters[lfo::volumeDepth] != 0.0f
+        || lfoParameters[lfo::filterDepth] != 0.0f
+        || lfoParameters[lfo::panDepth] != 0.0f;
+    if (! lfoHasDestination) lastLfoSample = 0.0f;
+}
+
+void BassEngine::advanceSilentLfo (int subSamples) noexcept
+{
+    if (! externalLfoDestination) return;
+    for (int i = 0; i < subSamples; ++i)
+        lastLfoSample = static_cast<float> (nextLfoSample());
 }
 
 void BassEngine::updateLpgCoefficient() noexcept
@@ -221,6 +238,7 @@ void BassEngine::reset()
     freq = targetFreq = phase = pwmPhase = osc2Phase = osc2GainSmooth = 0;
     osc2DetuneSmooth = 10;
     lfo = {};
+    lastLfoSample = 0.0f;
     envelope = lpgMemory = accentEnvelope = velNorm = 0;
     envelopeStage = 3;
     stage3 = stage4 = 0;
@@ -391,6 +409,7 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     // Precomputed once per parameter block/quality change; no pow() per sample.
     freq += (targetFreq - freq) * (legato ? glideLegatoCoeff : glideFreeCoeff);
     const auto modulation = lfoHasDestination ? nextLfoSample() : 0.0;
+    lastLfoSample = static_cast<float> (modulation);
     const auto pitchDepth = lfoParameters[lb303::lfo::pitchDepth];
     const auto tuned = freq * (pitchDepth != 0.0f
         ? std::pow (2.0, (p[14] + modulation * pitchDepth) / 12.0)

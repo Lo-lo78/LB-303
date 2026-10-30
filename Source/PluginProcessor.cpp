@@ -559,6 +559,10 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         fxControls[lb303::fx::reverbMotionMode] = value (lb303::reverbMotionModeIndex);
         fxControls[lb303::fx::reverbMotionDepth] = value (lb303::reverbMotionDepthIndex);
         fxControls[lb303::fx::reverbMotionRate] = value (lb303::reverbMotionRateIndex);
+        fxControls[lb303::fx::reverbSourcePan1] = value (lb303::reverbSourcePan1Index);
+        fxControls[lb303::fx::reverbSourcePan2] = value (lb303::reverbSourcePan2Index);
+        fxControls[lb303::fx::reverbLfoPan1] = value (lb303::reverbLfoPan1Index);
+        fxControls[lb303::fx::reverbLfoPan2] = value (lb303::reverbLfoPan2Index);
         // Historic B1 delay parameter IDs now control ONE master classic delay.
         lb303::SharedEffects::ClassicParameters legacy {};
         for (size_t i = 0; i < legacy.size(); ++i)
@@ -584,6 +588,19 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
         applyVoiceParameters (voice);
     applyFxParameters();
+    // The reverb takes its LFO from the SAME per-voice generator used for
+    // pitch/filter/pan: BPM sync, One Shot, Trigger, wave and step locks agree.
+    for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
+    {
+        const size_t depthIndex = voice == 0 ? lb303::reverbLfoPan1Index
+                                             : lb303::reverbLfoPan2Index;
+        const size_t sendIndex = voice == 0 ? lb303::fx::reverbSend1
+                                            : lb303::fx::reverbSend2;
+        const bool connected = value (lb303::fxParameterIndex (lb303::fx::reverbType)) > .5f
+            && value (lb303::fxParameterIndex (sendIndex)) > 0.0f
+            && value (depthIndex) != 0.0f;
+        engines[voice].setExternalLfoDestination (connected);
+    }
 
     const int quality = juce::jlimit (0, 2,
         juce::roundToInt (value (lb303::oversamplingIndex)));
@@ -682,7 +699,11 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             std::array<std::pair<float, float>, lb303::basslineCount> stems {};
             for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
             {
-                if (!voiceWorking[voice]) continue;
+                if (!voiceWorking[voice])
+                {
+                    engines[voice].advanceSilentLfo (oversamplingFactor);
+                    continue;
+                }
                 if (oversamplingFactor == 1)
                 {
                     // Identical original synth + insert routing at 1x.
@@ -709,11 +730,14 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                     }
                 }
             }
+            const lb303::SharedEffects::LfoSamples sourceLfo {{
+                engines[0].currentLfoSample(), engines[1].currentLfoSample()
+            }};
             const auto fx = oversamplingFactor == 1
                 ? sharedFx.process (stems[0].first, stems[0].second,
-                                    stems[1].first, stems[1].second)
+                                    stems[1].first, stems[1].second, sourceLfo)
                 : sharedFx.processPostDistortion (stems[0].first, stems[0].second,
-                                                   stems[1].first, stems[1].second);
+                                                   stems[1].first, stems[1].second, sourceLfo);
             if (wetEnabled)
             {
                 if (anyVoiceWorking || std::abs (fx.wet.first) > 1.0e-8f

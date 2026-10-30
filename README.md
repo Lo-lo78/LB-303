@@ -1,3 +1,16 @@
+# LB-303 0.99.1 — TEST2.4.45: Reverb Source Pan e LFO spaziali indipendenti
+
+In **FX → Reverb** sono disponibili quattro nuovi parametri, per Room, Plate, Hall e Cathedral:
+
+- **Reverb Source Pan 1** e **Reverb Source Pan 2**: da **-100 a +100** (default 0). Spostano il punto di eccitazione del reverbero della rispettiva bassline, **senza muovere il suo segnale dry** e senza applicare un pan al ritorno del riverbero.
+- **Reverb LFO Pan 1** e **Reverb LFO Pan 2**: da **-100 a +100** (default 0). Regolano quanto gli LFO già esistenti di Bassline 1 e Bassline 2 muovono il rispettivo punto di origine delle riflessioni. Il segno negativo inverte la modulazione. LFO Wave, Rate, BPM Sync, Phase, Mode, One Shot, Smooth e i lock di ogni bassline rimangono quelli della pagina Bassline: non nasce un terzo LFO.
+
+La rete FDN resta **una sola**: ogni send mantiene il proprio segnale stereo attraverso due tap di predelay aggiuntivi per bassline, e l'ingresso al motore FDN viene distribuito su otto linee mediante due piani di rotazioni ortogonali. Non cambia l'uscita wet o la coda già generata: una sorgente spostata immette nuove riflessioni in punti diversi, poi lo Spatial Motion esistente può farle circolare nella rete. Il delay collegato al riverbero mantiene il vecchio routing stereo. Le posizioni sono smussate a 12 ms durante le automazioni; la quantità di energia dell'ingresso di ciascuna bassline è conservata nelle rotazioni.
+
+**Default 0 per tutti e quattro**: la vecchia distribuzione stereo fra linee pari e dispari resta identica; nessuno degli ID VST3 precedenti è stato spostato, né i Parameter Locks, i pattern, i formati preset, il Song Editor o Length 101. Versione pubblica 0.99.1 invariata. Gli LFO continuano a essere valutati per modulare il send anche quando non hanno altre destinazioni sul synth, ma non spostano il suono dry. Nessun secondo reverbero; memoria aggiunta limitata a quattro piccole linee di predelay.
+
+**Prova suggerita:** seleziona Hall; Source Pan 1 = -60, Source Pan 2 = +60; Reverb LFO Pan 1 = +75 e Pan 2 = -60; modifica i Rate e le Wave degli LFO nelle rispettive pagine Bassline. Porta tutti i quattro valori a 0 per confrontare con la TEST2.4.44. Compilare con GitHub Actions e verificare il suono in REAPER; nessuna compilazione locale.
+
 # LB-303 0.99.1 — TEST2.4.44: movimento interno delle riflessioni del riverbero
 
 Nella pagina **FX**, colonna **Reverb** (Room, Plate, Hall, Cathedral), tre nuovi controlli sono raggiungibili dalla griglia con NVDA/OSARA e automatizzabili in REAPER:

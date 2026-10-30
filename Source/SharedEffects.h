@@ -12,8 +12,9 @@ namespace lb303
 class SharedEffects final
 {
 public:
-    using Controls = std::array<float, fxParameterCount + 5>; // 35 historic + 2 bass + 3 spatial reverb controls
+    using Controls = std::array<float, fxParameterCount + 9>; // 35 historic + 2 bass + 3 motion + 4 source-position controls
     using ClassicParameters = BassEngine::Values;
+    using LfoSamples = std::array<float, basslineCount>;
     void prepare (double newSampleRate);
     void clearTails() noexcept; // no allocation: reset FX after Alt+I
     void setParameters (const Controls&, const ClassicParameters&, double newTempo);
@@ -29,10 +30,12 @@ public:
         std::array<std::pair<float, float>, basslineCount> dry;
         // Post-distortion voice, no FX tails, BEFORE global FX Dry Level.
     };
-    Output process (float b1l, float b1r, float b2l, float b2r) noexcept;
+    Output process (float b1l, float b1r, float b2l, float b2r,
+                    const LfoSamples& = {}) noexcept;
     void setInsertOversamplingFactor (int factor) noexcept;
     std::pair<float, float> processDistortionInsert (float l, float r, size_t voice) noexcept;
-    Output processPostDistortion (float b1l, float b1r, float b2l, float b2r) noexcept;
+    Output processPostDistortion (float b1l, float b1r, float b2l, float b2r,
+                                  const LfoSamples& = {}) noexcept;
 private:
     struct Ring
     {
@@ -51,7 +54,9 @@ private:
     std::pair<float, float> distort (float, float, size_t voice) noexcept;
     std::pair<float, float> chorus (float, float, size_t voice) noexcept;
     std::pair<float, float> dualDelay (float, float) noexcept;
-    std::pair<float, float> reverb (float, float) noexcept;
+    std::pair<float, float> reverb (float, float,
+         const std::array<std::pair<float, float>, basslineCount>& voiceSends,
+         const LfoSamples&) noexcept;
     float toneFeedback (float x, float tone, size_t lane) noexcept;
     float saturateTape (float) const noexcept;
     static float bounded (float v) noexcept;
@@ -72,6 +77,11 @@ private:
     int lastDelayMode = 0;
     std::array<Ring, basslineCount> chorusL, chorusR;
     Ring tapeL, tapeR, preL, preR;
+    // Per-voice pre-delay taps retain each source independently through the
+    // original predelay. Only the FDN INPUT uses spatial position / LFO.
+    std::array<Ring, basslineCount> sourcePreL, sourcePreR;
+    LfoSamples sourcePositionsSmoothed {};
+    float sourcePositionSmoothCoeff = 0.0f;
     std::array<Ring, 8> verb {};
     std::array<float, 8> verbDamped {};
     // In-loop bass RT60 control. The LP state isolates bass energy in each

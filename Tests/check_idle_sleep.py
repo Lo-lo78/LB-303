@@ -19,7 +19,7 @@ assert 'const bool anyVoiceWorking' in processor
 assert 'if (!anyVoiceWorking && wetTailGuardSamples == 0)' in processor
 assert 'nextSample = end;' in processor
 assert 'wetTailGuardSamples = std::max (wetTailGuardSamples, wetGuardLimit)' in processor
-assert 'if (!voiceWorking[voice]) continue;' in processor
+assert 'if (!voiceWorking[voice])' in processor and 'engines[voice].advanceSilentLfo (oversamplingFactor)' in processor
 assert 'engines[static_cast<size_t> (midiChannel - 1)].midi (message);' in processor
 assert 'renderTo (offset);' in processor
 assert 'python Tests/check_idle_sleep.py' in read('.github/workflows/build-windows.yml')

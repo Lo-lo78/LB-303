@@ -67,7 +67,9 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     fxParameterIndex (fx::reverbDecay), fxParameterIndex (fx::reverbDamping),
     fxParameterIndex (fx::reverbWidth), fxParameterIndex (fx::reverbLevel),
     reverbBassDecayIndex, reverbBassXoverIndex,
-    reverbMotionModeIndex, reverbMotionDepthIndex, reverbMotionRateIndex
+    reverbMotionModeIndex, reverbMotionDepthIndex, reverbMotionRateIndex,
+    reverbSourcePan1Index, reverbSourcePan2Index,
+    reverbLfoPan1Index, reverbLfoPan2Index
 }};
 // All indices are relative to audioParameterCount, including append-only
 // performance controls located AFTER the shared FX parameters.
@@ -282,6 +284,16 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             0, 100, 1, 60, "%" };
         result[reverbMotionRateIndex] = { "fx_reverb_motion_rate", "Reverb Motion Rate",
             0.02f, 2.0f, 0.01f, 0.35f, "Hz" };
+        // Source-position and LFO depth belong to the reverb excitation, not its output.
+        // Zero is fully backward-compatible; negative LFO depth reverses the phase.
+        result[reverbSourcePan1Index] = { "fx_reverb_source_pan1", "Reverb Source Pan 1",
+            -100, 100, 1, 0, "%" };
+        result[reverbSourcePan2Index] = { "fx_reverb_source_pan2", "Reverb Source Pan 2",
+            -100, 100, 1, 0, "%" };
+        result[reverbLfoPan1Index] = { "fx_reverb_lfo_pan1", "Reverb LFO Pan 1",
+            -100, 100, 1, 0, "%" };
+        result[reverbLfoPan2Index] = { "fx_reverb_lfo_pan2", "Reverb LFO Pan 2",
+            -100, 100, 1, 0, "%" };
         result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
             0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
@@ -330,7 +342,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         // without adding redundant prefixes to the accessible per-bassline grids.
         const auto hostName = (index == reverbBassDecayIndex || index == reverbBassXoverIndex
                                || index == reverbMotionModeIndex || index == reverbMotionDepthIndex
-                               || index == reverbMotionRateIndex)
+                               || index == reverbMotionRateIndex
+                               || index == reverbSourcePan1Index || index == reverbSourcePan2Index
+                               || index == reverbLfoPan1Index || index == reverbLfoPan2Index)
             ? ("FX - " + p.name)
             : index == oversamplingIndex
             ? ("FX - " + p.name)

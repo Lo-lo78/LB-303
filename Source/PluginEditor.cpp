@@ -501,6 +501,10 @@ void LB303AudioProcessorEditor::updateFxColumns()
         add (5, lb303::reverbMotionModeIndex);
         add (5, lb303::reverbMotionDepthIndex);
         add (5, lb303::reverbMotionRateIndex);
+        add (5, lb303::reverbSourcePan1Index);
+        add (5, lb303::reverbSourcePan2Index);
+        add (5, lb303::reverbLfoPan1Index);
+        add (5, lb303::reverbLfoPan2Index);
     }
     // Historical fx::effectOrder deliberately absent from this view.
 }

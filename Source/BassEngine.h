@@ -19,6 +19,10 @@ public:
     void setParameters (const Values& values, double bpm);
     using LfoValues = std::array<float, lfoParameterCount>;
     void setLfoParameters (const LfoValues& values) noexcept;
+    // One LFO generator per bassline shared by synth and reverb send source.
+    void setExternalLfoDestination (bool enabled) noexcept;
+    float currentLfoSample() const noexcept { return lastLfoSample; }
+    void advanceSilentLfo (int subSamples) noexcept;
     using Osc2Values = std::array<float, osc2ParameterCount>;
     void setOsc2Parameters (const Osc2Values& values) noexcept;
     void midi (const juce::MidiMessage& event);
@@ -66,6 +70,8 @@ private:
     // synthesising every 2x/4x sub-sample. No LFO waveform is evaluated when
     // no destination has depth. Existing saved parameter IDs are unchanged.
     bool lfoHasDestination = false;
+    bool externalLfoDestination = false;
+    float lastLfoSample = 0.0f;
     double glideFreeCoeff = 1.0, glideLegatoCoeff = 1.0;
     double lpgSpeedCoeff = 0.03, accentDecayCoeff = 0.0;
     double staticPitchRatio = 1.0;

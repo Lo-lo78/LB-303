@@ -28,10 +28,10 @@ assert 'reverbBassXoverIndex = reverbBassDecayIndex + 1' in h
 assert 'reverbMotionModeIndex = reverbBassXoverIndex + 1' in h
 assert 'reverbMotionDepthIndex = reverbMotionModeIndex + 1' in h
 assert 'reverbMotionRateIndex = reverbMotionDepthIndex + 1' in h
-assert 'parameterCount = reverbMotionRateIndex + 1' in h
+assert 'reverbSourcePan1Index = reverbMotionRateIndex + 1' in h
 assert 'sequencerPerformanceBase = legacyParameterCount + fxParameterCount' in h
-assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3' in h
-assert 'std::array<float, fxParameterCount + 5>' in fxh
+assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4' in h
+assert 'std::array<float, fxParameterCount + 9>' in fxh
 for index, label, ident in [
     ('reverbMotionModeIndex', 'Reverb Motion Mode', 'fx_reverb_motion_mode'),
     ('reverbMotionDepthIndex', 'Reverb Motion Depth', 'fx_reverb_motion_depth'),
@@ -67,9 +67,9 @@ assert 'verbMotionSmoothCoeff' in body
 assert 'const float middle = .5f*(wetL+wetR), side = .5f*(wetL-wetR)*width;' in body
 assert 'wetL *= .23f; wetR *= .23f;' in body
 assert 'verbBassGainDeltaSmoothed[i]' in body
-assert 'const float source = ((i & 1)==0 ? inL : inR) * .18f' in body
+assert 'const float source = (((i & 1)==0 ? inL : inR) + spatialExcitationDelta[i]) * .18f' in body
 assert 'verb[i].push (bounded (source + feedback));' in body
-assert 'TEST2.4.44-Windows-x64' in workflow
+assert 'TEST2.4.45-Windows-x64' in workflow
 assert 'python Tests/check_reverb_spatial.py' in workflow
 for lang in ('en', 'it', 'es', 'fr', 'ru', 'zh', 'ja'):
     html = read('Help/LB303Help.html')

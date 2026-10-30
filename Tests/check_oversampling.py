@@ -35,7 +35,7 @@ assert 'sharedFx.processDistortionInsert (' in processor
 assert 'stems[voice] = voiceDecimators[voice].process (' in processor
 assert 'sharedFx.processPostDistortion (' in processor
 assert 'sharedFx.process (stems[0].first, stems[0].second' in processor
-assert 'return processPostDistortion (axL, axR, bxL, bxR);' in fx
+assert 'return processPostDistortion (axL, axR, bxL, bxR, lfoSamples);' in fx
 assert 'return distort (l, r, voice);' in fx
 assert 'const auto rate = fs * factor;' in fx
 assert 'fs = hostFs * factor;' in voice
@@ -43,7 +43,7 @@ assert 'voiceDecimators[voice].setFactor (oversamplingFactor)' in processor
 assert 'setOversamplingFactor (int factor) noexcept' in voice
 assert 'BassEngine::tick' in voice and 'osc2Phase' in voice
 assert 'setParameters (fxControls, legacy, bpm)' in processor
-assert '  push:' in workflow and 'TEST2.4.44-Windows-x64' in workflow
+assert '  push:' in workflow and 'TEST2.4.45-Windows-x64' in workflow
 assert 'python Tests/check_oversampling.py' in workflow
 assert 'VoiceDecimator' in get('Source/Oversampling.h')
 print('PASS: append-only 1x/2x/4x accessible parameter; both native-rate synths and distortion inserts; shared FX stay at host rate.')
