@@ -80,7 +80,7 @@ assert 'engines[0].currentLfoSample(), engines[1].currentLfoSample()' in p
 assert 'sharedFx.processPostDistortion (stems[0].first' in p
 assert 'sharedFx.process (stems[0].first' in p
 assert 'engines[voice].setExternalLfoDestination (connected)' in p
-assert 'TEST2.4.47-Windows-x64' in wf
+assert 'TEST2.4.49-Windows-x64' in wf
 assert 'python Tests/check_reverb_source_spatial.py' in wf
 for language in ('en', 'it', 'es', 'fr', 'ru', 'zh', 'ja'):
     html = read('Help/LB303Help.html')

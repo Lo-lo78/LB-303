@@ -1,4 +1,4 @@
-"""TEST2.4.47: continuous centred early reflections, independent FX level and stable IDs.
+"""TEST2.4.48: 15% default and TEST2.4.47 continuous centred early reflections, independent FX level and stable IDs.
 Static source checks and a numerical check of the stereo early-reflection mixing law.
 No local build: the VST3 is built only by GitHub Actions.
 """
@@ -21,11 +21,15 @@ assert 'reverbEarlyLevel = fxParameterCount + 9' in h
 assert 'fxParameterCount + 10' in fxh
 assert 'fx_reverb_early_level' in c
 assert '"Reverb Early Reflections Level"' in c
-assert '0, 100, 1, 100, "%"' in c
+assert '0, 100, 1, 15, "%"' in c
 assert 'reverbLfoPan1Index, reverbLfoPan2Index, reverbEarlyLevelIndex' in c
 assert 'add (5, lb303::reverbEarlyLevelIndex);' in e
 assert 'fxControls[lb303::fx::reverbEarlyLevel] = value (lb303::reverbEarlyLevelIndex)' in p
 assert 'earlyReflectionsLevelSmoothed' in fxh
+assert 'float earlyReflectionsLevelSmoothed = 0.15f;' in fxh
+assert 'earlyReflectionsLevelSmoothed = 0.15f;' in fx
+assert 'earlyReflectionsLevelSmoothed = clampf (c[fx::reverbEarlyLevel] * .01f' in fx
+assert 'earlyReflectionsLevelSmoothed = clampf (settings[fx::reverbEarlyLevel] * .01f' in fx
 assert 'sourcePresenceSmoothed' not in fxh and 'sourcePresenceSmoothed' not in fx
 assert 'std::max (std::abs (c[base]), std::abs (c[depth]))' not in fx
 assert 'if (std::abs (position) > 1.0e-7f)' in fx
@@ -35,7 +39,7 @@ assert 'earlyReflectionsLevelSmoothCoeff' in fx
 assert 'const float positionComp' in fx
 assert 'if (!settingsPrepared)' in fx
 assert 'reverbEarlyLevelIndex' in h and 'reverbEarlyLevelIndex' in c
-assert 'LB-303-0.99.1-TEST2.4.47-Windows-x64' in wf
+assert 'LB-303-0.99.1-TEST2.4.49-Windows-x64' in wf
 assert 'python Tests/check_reverb_early_level.py' in wf
 # Fixed reflection taps are constant across pan: only the stereo distribution
 # changes. Centre is never gated, and LFO zero crossings do not add/remove taps.
@@ -61,4 +65,6 @@ for i in range(-100,101):
 for lang in ('en','it','fr','es','ru','zh','ja'):
     match = re.search(r'<article class="manual" id="'+lang+r'".*?</article>', read('Help/LB303Help.html'), re.S)
     assert match and 'TEST2.4.47' in match.group(), lang
-print('PASS: TEST2.4.47 early reflection level, centred presence, smooth automation, constant-power movement, append-only IDs')
+    new_default = re.search(r'<p><strong>TEST2\.4\.48.*?</p>', match.group(), re.S)
+    assert new_default and '15%' in new_default.group(), lang
+print('PASS: TEST2.4.48 default 15%, centred early reflections, smooth automation, seven-language help and stable IDs')

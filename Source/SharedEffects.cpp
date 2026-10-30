@@ -13,6 +13,10 @@ constexpr double pi = juce::MathConstants<double>::pi;
 // TEST2.4.7: +18.06 dB on the reverb wet RETURN only, relative to TEST2.4.6.
 // This makes moderate sends (e.g. 20% send, 50% level) clearly audible.
 constexpr float reverbReturnMakeupGain = 8.0f;
+// TEST2.4.49: -6.00 dB applied once at the final Reverb WET return,
+// AFTER the FDN tail and early-reflection contributions are combined.
+// Do not change the reverb feedback, dry bus, chorus or delay.
+constexpr float reverbWetOutputTrim6dB = 0.501187234f; // 10^(-6/20)
 float clampf (float x, float lo, float hi) noexcept { return std::clamp (x, lo, hi); }
 float lerp (float a, float b, float t) noexcept { return a + (b - a) * t; }
 }
@@ -54,7 +58,7 @@ void SharedEffects::prepare (double sampleRate)
         sourcePreR[v].initialise (static_cast<int> (fs * 0.30) + 8);
     }
     sourcePositionsSmoothed.fill (0.0f);
-    earlyReflectionsLevelSmoothed = 1.0f;
+    earlyReflectionsLevelSmoothed = 0.15f;
     earlyReflectionsLevelSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.025 * fs)));
     sourcePositionSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.012 * fs)));
     reverbPredelaySmoothCoeff = 1.0 - std::exp (-1.0 / (0.035 * fs));
@@ -669,13 +673,12 @@ std::pair<float, float> SharedEffects::reverb (float l, float r,
     wetR += directionalEarlyReflections[1] * (1.8f * earlyReflectionsLevelSmoothed);
     const float width = c[fx::reverbWidth]*.01f;
     const float middle = .5f*(wetL+wetR), side = .5f*(wetL-wetR)*width;
-    // TEST2.4.7: stronger wet return. The 2.4.6 return was still too quiet at
-    // musical send settings such as Send 20%, Level 50%. Multiply the return
-    // by 8 (+18.06 dB versus TEST2.4.6), without boosting dry, FDN feedback,
-    // decay or the other FX. 50% Level with 20% Send is now approximately
-    // 1.6 times the OLD TEST2.4.5 full-send/full-level wet return.
-    // With very hot sources and both controls near 100%, watch headroom.
-    const float level = c[fx::reverbLevel] * .02f * reverbReturnMakeupGain;
+    // Historical TEST2.4.7 makeup (+18.06 dB) stays in place. TEST2.4.49
+    // applies a separate exact -6 dB final wet trim to BOTH diffuse tail
+    // and early reflections. Sends, the 0-100% Reverb Level control, dry,
+    // reverb feedback, chorus and delay keep their original behaviour.
+    const float level = c[fx::reverbLevel] * .02f * reverbReturnMakeupGain
+                      * reverbWetOutputTrim6dB;
     return { bounded ((middle+side)*level), bounded ((middle-side)*level) };
 }
 SharedEffects::Output SharedEffects::process (float aL, float aR, float bL, float bR,

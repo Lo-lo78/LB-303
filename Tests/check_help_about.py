@@ -40,7 +40,7 @@ for term in ['0.99.1','27 October 2026','Alt+H','Alt+A','Alt+Q','Alt+B','101','O
  assert help.count(term)>=7,term
 wf=(root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
 assert 'python Tests/check_help_about.py' in wf
-assert 'LB-303-0.99.1-TEST2.4.47-Windows-x64' in wf
+assert 'LB-303-0.99.1-TEST2.4.49-Windows-x64' in wf
 assert (root/'.gitignore').exists()
 # Regression: Esc returns native keyboard *and* UIA focus to all three controls.
 assert 'void LB303AudioProcessorEditor::restoreFocusAfterHelpMenu (Control original)' in editor

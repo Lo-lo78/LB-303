@@ -1,3 +1,33 @@
+# LB-303 0.99.1 — TEST2.4.49: Bass Decay 0.50× e ritorno Reverb −6 dB
+
+## Nuovi valori di partenza del reverbero
+
+- **Reverb Bass Decay**: default **0,50×** (prima 1,00×). L'intervallo resta 0,50–2,00×: a 0,50 i bassi decadono in metà tempo rispetto alla coda dei medi, **all'interno della rete di feedback FDN**, non con un EQ sull'uscita. Il reset tramite Backspace e le nuove istanze usano 0,50×.
+- **Reverb Early Reflections Level**: default **15%**, invariato rispetto alla TEST2.4.48.
+- **Volume del solo reverbero**: ridotto in DSP di **6 dB esatti**, moltiplicando il ritorno wet finale per `10^(-6/20) ≈ 0,501187234`. Il taglio interessa sia la coda diffusa sia le prime riflessioni, senza ridurre l'energia all'interno dell'FDN. Il parametro **Reverb Level** mantiene la scala 0–100% e il default 50%; non viene modificato il guadagno dei Delay, Chorus, Dry, delle due bassline né dei Reverb Send.
+
+**Compatibilità:** nessun nuovo ID VST3 e nessun parametro rinumerato. I progetti e i preset che hanno già salvato esplicitamente Bass Decay a 1,00× (o un altro valore) continueranno a usarlo: per ottenere 0,50× occorre impostarlo o ripristinarlo manualmente e salvare di nuovo. **La riduzione di 6 dB del reverbero si applica a tutti i preset**, anche quelli già salvati; non cambia invece il parametro Reverb Level memorizzato. Il valore default 15% delle prime riflessioni rimane tale. Nessuna modifica al sequencer, Song, Length 101, automazioni o movimento spaziale. Compilazione solo tramite GitHub Actions.
+
+---
+
+# LB-303 0.99.1 — TEST2.4.48: default Early Reflections 15%
+
+## TEST2.4.48 — Reverb Early Reflections Level, default 15%
+
+**Reverb Early Reflections Level** in **FX → Reverb** now defaults to **15%**
+(previously 100%). Its range remains **0–100%**, with 1% steps.
+The level affects only the initial stereo reflections, not the bassline dry
+signals or the diffuse FDN tail. The early reflections remain equally present
+at centre and at the stereo extremes, and panning does not change their volume.
+Backspace/parameter reset and new instances use 15%. Saved projects/presets
+that explicitly contain another value (including 100%) retain their stored
+value; change and resave those if desired. No VST3 IDs, sequencer data,
+Parameter Locks or audio routing have been changed.
+
+Compilation is via GitHub Actions, with no local VST3 build.
+
+---
+
 # LB-303 0.99.1 — TEST2.4.47: livello costante delle prime riflessioni
 
 ## TEST2.4.47 — Reverb Early Reflections Level

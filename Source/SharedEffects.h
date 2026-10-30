@@ -82,7 +82,7 @@ private:
     std::array<Ring, basslineCount> sourcePreL, sourcePreR;
     LfoSamples sourcePositionsSmoothed {};
     float sourcePositionSmoothCoeff = 0.0f;
-    float earlyReflectionsLevelSmoothed = 1.0f;
+    float earlyReflectionsLevelSmoothed = 0.15f;
     float earlyReflectionsLevelSmoothCoeff = 0.0f;
     std::array<Ring, 8> verb {};
     std::array<float, 8> verbDamped {};

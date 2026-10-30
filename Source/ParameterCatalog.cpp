@@ -272,9 +272,10 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             result[osc2ParameterIndex (lane, osc2::detune)] = {
                 juce::String (prefix) + "detune", "Osc 2 Detune", -100, 100, 1, 10, "cents" };
         }
-        // Append-only: older REAPER projects do not contain this ID => 1x default.
+        // TEST2.4.49: new instances/reset default to 0.50x, shortening bass
+        // RT60 inside the FDN. Explicitly stored old values remain unchanged.
         result[reverbBassDecayIndex] = { "fx_reverb_bass_decay", "Reverb Bass Decay",
-                                         0.5f, 2.0f, 0.01f, 1.0f, "x" };
+                                         0.5f, 2.0f, 0.01f, 0.5f, "x" };
         result[reverbBassXoverIndex] = { "fx_reverb_bass_xover", "Reverb Bass XOver",
                                          50.0f, 1000.0f, 1.0f, 360.0f, "Hz" };
         // The default mode Off is bit-identical to TEST2.4.43's unmodulated FDN.
@@ -294,10 +295,10 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             -100, 100, 1, 0, "%" };
         result[reverbLfoPan2Index] = { "fx_reverb_lfo_pan2", "Reverb LFO Pan 2",
             -100, 100, 1, 0, "%" };
-        // The existing TEST2.4.46 maximum early-reflection intensity is 100%.
-        // Default retains that intensity at the edges, now also at centre.
+        // TEST2.4.48: 15% is the new default for early reflections at centre
+        // and edges. 100% remains available as a user-selected maximum.
         result[reverbEarlyLevelIndex] = { "fx_reverb_early_level", "Reverb Early Reflections Level",
-            0, 100, 1, 100, "%" };
+            0, 100, 1, 15, "%" };
         result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
             0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
