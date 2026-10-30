@@ -29,9 +29,10 @@ assert 'reverbSourcePan1Index = reverbMotionRateIndex + 1' in h
 assert 'reverbSourcePan2Index = reverbSourcePan1Index + 1' in h
 assert 'reverbLfoPan1Index = reverbSourcePan2Index + 1' in h
 assert 'reverbLfoPan2Index = reverbLfoPan1Index + 1' in h
-assert 'parameterCount = reverbLfoPan2Index + 1' in h
-assert 'std::array<float, fxParameterCount + 9>' in fxh
-assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4' in h
+assert 'reverbEarlyLevelIndex = reverbLfoPan2Index + 1' in h
+assert 'parameterCount = reverbEarlyLevelIndex + 1' in h
+assert 'std::array<float, fxParameterCount + 10>' in fxh
+assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1' in h
 for index, identity, label in [
     ('reverbSourcePan1Index', 'fx_reverb_source_pan1', 'Reverb Source Pan 1'),
     ('reverbSourcePan2Index', 'fx_reverb_source_pan2', 'Reverb Source Pan 2'),
@@ -59,9 +60,10 @@ assert 'const float source = (((i & 1)==0 ? inL : inR) + spatialExcitationDelta[
 assert 'const float leftWeight = std::max (0.0f, -position);' in fx
 assert 'const float rightWeight = std::max (0.0f, position);' in fx
 assert 'sourcePositionsSmoothed.fill (0.0f)' in fx
-assert 'sourcePresenceSmoothed.fill (0.0f)' in fx
+assert 'sourcePositionsSmoothed.fill (0.0f)' in fx
+assert 'sourcePresenceSmoothed' not in fx
 assert 'sourcePositionSmoothCoeff' in fx
-assert 'if (std::abs (position) < 1.0e-7f && presence < 1.0e-7f)' in fx
+assert 'if (std::abs (position) > 1.0e-7f)' in fx
 assert 'reverb (l, r, reverbVoiceSends, lfoSamples)' in fx
 assert 'Output out;' in fx and 'out.dry[0] = { bounded (axL), bounded (axR) }' in fx
 assert 'const auto delayWet = runDelay (delayStem.first, delayStem.second);' in fx
@@ -78,7 +80,7 @@ assert 'engines[0].currentLfoSample(), engines[1].currentLfoSample()' in p
 assert 'sharedFx.processPostDistortion (stems[0].first' in p
 assert 'sharedFx.process (stems[0].first' in p
 assert 'engines[voice].setExternalLfoDestination (connected)' in p
-assert 'TEST2.4.46-Windows-x64' in wf
+assert 'TEST2.4.47-Windows-x64' in wf
 assert 'python Tests/check_reverb_source_spatial.py' in wf
 for language in ('en', 'it', 'es', 'fr', 'ru', 'zh', 'ja'):
     html = read('Help/LB303Help.html')

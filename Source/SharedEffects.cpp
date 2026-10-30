@@ -54,7 +54,8 @@ void SharedEffects::prepare (double sampleRate)
         sourcePreR[v].initialise (static_cast<int> (fs * 0.30) + 8);
     }
     sourcePositionsSmoothed.fill (0.0f);
-    sourcePresenceSmoothed.fill (0.0f);
+    earlyReflectionsLevelSmoothed = 1.0f;
+    earlyReflectionsLevelSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.025 * fs)));
     sourcePositionSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.012 * fs)));
     reverbPredelaySmoothCoeff = 1.0 - std::exp (-1.0 / (0.035 * fs));
     reverbPredelaySamples = 0.0;
@@ -101,7 +102,7 @@ void SharedEffects::clearTails() noexcept
     for (auto& line : sourcePreL) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
     for (auto& line : sourcePreR) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
     sourcePositionsSmoothed.fill (0.0f);
-    sourcePresenceSmoothed.fill (0.0f);
+    earlyReflectionsLevelSmoothed = clampf (c[fx::reverbEarlyLevel] * .01f, 0.0f, 1.0f);
     for (auto& line : chorusL) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
     for (auto& line : chorusR) { std::fill (line.data.begin(), line.data.end(), 0.0f); line.pos = 0; }
     for (auto& line : verb)
@@ -136,6 +137,8 @@ void SharedEffects::setParameters (const Controls& settings,
     const double nextBpm = std::max (1.0, std::isfinite (tempo) ? tempo : 120.0);
     if (settingsPrepared && c == settings && lastClassicParameters == original
         && bpm == nextBpm) return;
+    if (!settingsPrepared)
+        earlyReflectionsLevelSmoothed = clampf (settings[fx::reverbEarlyLevel] * .01f, 0.0f, 1.0f);
     settingsPrepared = true;
     lastClassicParameters = original;
     bpm = nextBpm;
@@ -473,6 +476,12 @@ std::pair<float, float> SharedEffects::reverb (float l, float r,
     // At position zero the original input is EXACTLY unchanged.
     std::array<float, 8> spatialExcitationDelta {};
     std::array<float, 2> directionalEarlyReflections {};
+    // Independent of source pan/LFO: the early-reflection field is ALWAYS
+    // present, including at the exact centre. Automation is ramped to avoid
+    // clicks. This controls only the early reflections, NOT the diffuse FDN.
+    const float earlyTarget = clampf (c[fx::reverbEarlyLevel] * .01f, 0.0f, 1.0f);
+    earlyReflectionsLevelSmoothed += (earlyTarget - earlyReflectionsLevelSmoothed)
+                                   * earlyReflectionsLevelSmoothCoeff;
     constexpr std::array<float, 8> leftBasis {{ 1,-1, 1,-1, 1,-1, 1,-1 }};
     constexpr std::array<float, 8> rightBasis {{ 1, 1,-1,-1, 1, 1,-1,-1 }};
     for (size_t v = 0; v < basslineCount; ++v)
@@ -482,35 +491,27 @@ std::pair<float, float> SharedEffects::reverb (float l, float r,
         const float target = clampf ((c[base] + c[depth] * lfoSamples[v]) * .01f, -1.0f, 1.0f);
         float& position = sourcePositionsSmoothed[v];
         position += (target - position) * sourcePositionSmoothCoeff;
-        // The optional early-reflection field stays present when the LFO
-        // crosses centre; do not fade the reflections in/out every half cycle.
-        const float targetPresence = clampf (
-            std::max (std::abs (c[base]), std::abs (c[depth])) * .01f, 0.0f, 1.0f);
-        float& presence = sourcePresenceSmoothed[v];
-        presence += (targetPresence - presence) * sourcePositionSmoothCoeff;
-        if (std::abs (position) < 1.0e-7f && presence < 1.0e-7f)
+        // Keep the original FDN exactly unchanged when position is zero.
+        // Early reflections are independent: centred sources need the same
+        // reflection field as moving ones, with no sudden level increase.
+        if (std::abs (position) > 1.0e-7f)
         {
-            position = 0.0f;
-            presence = 0.0f;
-            continue;
+            const float voiceL = sourcePreL[v].read (readOffset);
+            const float voiceR = sourcePreR[v].read (readOffset);
+            const float centre = 0.5f * (voiceL + voiceR);
+            const float originalWeight = std::sqrt (std::max (0.0f, 1.0f - position * position));
+            const float leftWeight = std::max (0.0f, -position);
+            const float rightWeight = std::max (0.0f, position);
+            for (size_t i = 0; i < 8; ++i)
+            {
+                const float original = (i & 1) == 0 ? voiceL : voiceR;
+                const float steered = original * originalWeight
+                    + centre * (leftWeight * leftBasis[i] + rightWeight * rightBasis[i]);
+                spatialExcitationDelta[i] += steered - original;
+            }
         }
 
-        const float voiceL = sourcePreL[v].read (readOffset);
-        const float voiceR = sourcePreR[v].read (readOffset);
-        if (std::abs (voiceL) + std::abs (voiceR) < 1.0e-12f) continue;
-        const float centre = 0.5f * (voiceL + voiceR);
-        const float originalWeight = std::sqrt (std::max (0.0f, 1.0f - position * position));
-        const float leftWeight = std::max (0.0f, -position);
-        const float rightWeight = std::max (0.0f, position);
-        for (size_t i = 0; i < 8; ++i)
-        {
-            const float original = (i & 1) == 0 ? voiceL : voiceR;
-            const float steered = original * originalWeight
-                + centre * (leftWeight * leftBasis[i] + rightWeight * rightBasis[i]);
-            spatialExcitationDelta[i] += steered - original;
-        }
-
-        if (presence > 1.0e-6f)
+        if (earlyReflectionsLevelSmoothed > 1.0e-6f)
         {
             // Four real pre-delay reflections for each source. Their arrival
             // times are different, so the listener hears a moving origin in
@@ -532,9 +533,18 @@ std::pair<float, float> SharedEffects::reverb (float l, float r,
             const float oppositeWall = .10f * t2 - .08f * t3 + .07f * t4;
             const float nearLeft = std::sqrt (.5f * (1.0f - position));
             const float nearRight = std::sqrt (.5f * (1.0f + position));
-            directionalEarlyReflections[0] += presence
+            // The near and opposite walls share two tap delays. Their
+            // correlation would otherwise make the centre slightly louder
+            // than the sides. Normalise the tap impulse-response energy so
+            // turning Source Pan/LFO Pan changes placement, NOT ER volume.
+            constexpr float tapEnergy = .45f*.45f + .26f*.26f + .16f*.16f
+                                      + .10f*.10f + .08f*.08f + .07f*.07f;
+            constexpr float commonTapProduct = .26f*.10f + .16f*.08f;
+            const float positionComp = std::sqrt (tapEnergy /
+                 (tapEnergy + 4.0f * nearLeft * nearRight * commonTapProduct));
+            directionalEarlyReflections[0] += positionComp
                 * (nearLeft * nearWall + nearRight * oppositeWall);
-            directionalEarlyReflections[1] += presence
+            directionalEarlyReflections[1] += positionComp
                 * (nearRight * nearWall + nearLeft * oppositeWall);
         }
     }
@@ -652,11 +662,11 @@ std::pair<float, float> SharedEffects::reverb (float l, float r,
     float wetL = current[0]-current[1]+current[2]-current[3]+current[4]-current[5]+current[6]-current[7];
     float wetR = current[0]+current[1]-current[2]-current[3]+current[4]+current[5]-current[6]-current[7];
     wetL *= .23f; wetR *= .23f;
-    // Add SOURCE-SPECIFIC early reflections, not a pan on the diffuse tail.
-    // Existing reverberation and the direct bass remain exactly untouched
-    // when Source Pan and LFO Pan are both zero (including automation).
-    wetL += directionalEarlyReflections[0] * 1.8f;
-    wetR += directionalEarlyReflections[1] * 1.8f;
+    // Source-specific early-reflection level independent from Source Pan/LFO Pan.
+    // At zero: the original FDN reverb remains audible, but the four early taps
+    // vanish. At centre: the early taps are as present as at other positions.
+    wetL += directionalEarlyReflections[0] * (1.8f * earlyReflectionsLevelSmoothed);
+    wetR += directionalEarlyReflections[1] * (1.8f * earlyReflectionsLevelSmoothed);
     const float width = c[fx::reverbWidth]*.01f;
     const float middle = .5f*(wetL+wetR), side = .5f*(wetL-wetR)*width;
     // TEST2.4.7: stronger wet return. The 2.4.6 return was still too quiet at

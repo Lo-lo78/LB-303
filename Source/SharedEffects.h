@@ -12,7 +12,7 @@ namespace lb303
 class SharedEffects final
 {
 public:
-    using Controls = std::array<float, fxParameterCount + 9>; // 35 historic + 2 bass + 3 motion + 4 source-position controls
+    using Controls = std::array<float, fxParameterCount + 10>; // 35 historic + 2 bass + 3 motion + 4 source-position + early level
     using ClassicParameters = BassEngine::Values;
     using LfoSamples = std::array<float, basslineCount>;
     void prepare (double newSampleRate);
@@ -80,8 +80,10 @@ private:
     // Per-voice pre-delay taps retain each source independently through the
     // original predelay. Only the FDN INPUT uses spatial position / LFO.
     std::array<Ring, basslineCount> sourcePreL, sourcePreR;
-    LfoSamples sourcePositionsSmoothed {}, sourcePresenceSmoothed {};
+    LfoSamples sourcePositionsSmoothed {};
     float sourcePositionSmoothCoeff = 0.0f;
+    float earlyReflectionsLevelSmoothed = 1.0f;
+    float earlyReflectionsLevelSmoothCoeff = 0.0f;
     std::array<Ring, 8> verb {};
     std::array<float, 8> verbDamped {};
     // In-loop bass RT60 control. The LP state isolates bass energy in each

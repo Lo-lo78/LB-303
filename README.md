@@ -1,3 +1,41 @@
+# LB-303 0.99.1 — TEST2.4.47: livello costante delle prime riflessioni
+
+## TEST2.4.47 — Reverb Early Reflections Level
+
+In **Alt+Q → FX → Reverb** è disponibile il parametro **Reverb Early Reflections Level**
+(`0–100%`, step 1%, default `100%`). Controlla esclusivamente il livello delle
+**prime riflessioni stereo (11/23/34/49 ms)**: a 0% le disattiva e resta il
+reverbero FDN diffuso; a 100% usa l'intensità prevista dalla TEST2.4.46
+agli estremi del pan. Il livello viene smussato per circa 25 ms durante
+l'automazione. Il dry delle due bassline, il volume generale del riverbero,
+i Reverb Send e la coda FDN non vengono alterati dal nuovo parametro.
+
+**Correzione essenziale:** nella TEST2.4.46 le prime riflessioni erano di fatto
+attenuate o disattivate quando **Source Pan** e **Reverb LFO Pan** erano a zero,
+poi emergevano mano a mano che ci si spostava dal centro. Adesso le riflessioni
+**sono presenti anche al centro** e il loro livello non dipende più dall'ampiezza
+del pan o dell'LFO. Gli LFO e Source Pan regolano soltanto la **posizione**
+delle prime riflessioni, usando una distribuzione stereo a potenza approssimativamente
+costante. Una compensazione calcolata dai coefficienti dei quattro tap
+normalizza anche la loro energia attesa fra centro e lati. Restano possibili
+variazioni timbriche dovute ai tempi e alle fasi fra le pareti, ma non viene più applicato un guadagno legato alla posizione.
+
+**Compatibilità:** nuovo ID VST3 `fx_reverb_early_level` aggiunto in fondo al
+catalogo, dopo i 4 parametri Source Pan/LFO Pan. Nessun parametro precedente,
+Parameter Lock, pattern, Song Editor o preset viene rinumerato. I vecchi preset
+ricevono il nuovo default 100%: **il centro suonerà diversamente rispetto alla
+TEST2.4.46, intenzionalmente**, perché ora produce le medesime prime riflessioni.
+Room, Plate, Hall, Cathedral, Reverb Spatial Motion, Bass Decay/XOver e i due LFO
+continuano a funzionare come prima. Compilazione VST3 esclusivamente con GitHub Actions.
+
+**Prova:** Hall, Width 100%, Early Reflections Level 100%, Source Pan 1 = 0,
+poi -100 e +100; il livello delle prime riflessioni deve essere presente anche
+al centro. Porta Early Reflections Level a 20–40% per dosarle, poi attiva
+Reverb LFO Pan 1 per ascoltare il movimento senza sbalzi di volume legati
+all'attraversamento del centro.
+
+---
+
 # LB-303 0.99.1 — TEST2.4.46: Reverb Source Pan più incisivo
 
 ## TEST2.4.46 — Correzione della posizione spaziale del reverbero
@@ -14,8 +52,9 @@ prime riflessioni il campo del reverbero diventa naturalmente più diffuso.
 Non è un autopan del wet e non viene spostato il segnale diretto della bassline.
 Non sono necessari nuovi parametri: **Reverb Source Pan 1/2** e **Reverb LFO Pan
 1/2** già esistenti regolano la posizione e il movimento. A tutti e quattro i
-controlli a zero, il DSP mantiene il percorso della TEST2.4.44 senza cambiare
-il suono dei vecchi preset. Preset, ID VST3, automazioni, sequencer e
+controlli a zero, la TEST2.4.46 manteneva il vecchio percorso senza nuove
+riflessioni. **Dalla TEST2.4.47 le prime riflessioni sono invece presenti anche
+al centro**, come spiegato sopra. Preset, ID VST3, automazioni, sequencer e
 controlli accessibili restano invariati. Il piccolo costo aggiuntivo (solo con
 pan/LFO pan attivo) sono letture da buffer di predelay già esistenti.
 
@@ -31,7 +70,7 @@ In **FX → Reverb** sono disponibili quattro nuovi parametri, per Room, Plate, 
 
 La rete FDN resta **una sola**: ogni send mantiene il proprio segnale stereo attraverso due tap di predelay aggiuntivi per bassline, e l'ingresso al motore FDN viene distribuito su otto linee mediante due piani di rotazioni ortogonali. Non cambia l'uscita wet o la coda già generata: una sorgente spostata immette nuove riflessioni in punti diversi, poi lo Spatial Motion esistente può farle circolare nella rete. Il delay collegato al riverbero mantiene il vecchio routing stereo. Le posizioni sono smussate a 12 ms durante le automazioni; la quantità di energia dell'ingresso di ciascuna bassline è conservata nelle rotazioni.
 
-**Default 0 per tutti e quattro**: la vecchia distribuzione stereo fra linee pari e dispari resta identica; nessuno degli ID VST3 precedenti è stato spostato, né i Parameter Locks, i pattern, i formati preset, il Song Editor o Length 101. Versione pubblica 0.99.1 invariata. Gli LFO continuano a essere valutati per modulare il send anche quando non hanno altre destinazioni sul synth, ma non spostano il suono dry. Nessun secondo reverbero; memoria aggiunta limitata a quattro piccole linee di predelay.
+**Default 0 per tutti e quattro**: la vecchia distribuzione stereo della rete FDN fra linee pari e dispari resta identica (ma nella TEST2.4.47 si aggiungono le prime riflessioni al centro); nessuno degli ID VST3 precedenti è stato spostato, né i Parameter Locks, i pattern, i formati preset, il Song Editor o Length 101. Versione pubblica 0.99.1 invariata. Gli LFO continuano a essere valutati per modulare il send anche quando non hanno altre destinazioni sul synth, ma non spostano il suono dry. Nessun secondo reverbero; memoria aggiunta limitata a quattro piccole linee di predelay.
 
 **Prova suggerita:** seleziona Hall; Source Pan 1 = -60, Source Pan 2 = +60; Reverb LFO Pan 1 = +75 e Pan 2 = -60; modifica i Rate e le Wave degli LFO nelle rispettive pagine Bassline. Porta tutti i quattro valori a 0 per confrontare con la TEST2.4.44. Compilare con GitHub Actions e verificare il suono in REAPER; nessuna compilazione locale.
 

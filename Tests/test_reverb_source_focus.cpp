@@ -13,7 +13,7 @@ struct Result
     std::vector<float> early;
 };
 Result render (int mode, size_t voice, float pan, float lfoDepth = 0.0f,
-               float lfo = 0.0f)
+               float lfo = 0.0f, float earlyLevel = 100.0f)
 {
     SharedEffects fx;
     fx.prepare (44100.0);
@@ -28,6 +28,7 @@ Result render (int mode, size_t voice, float pan, float lfoDepth = 0.0f,
     c[fx::reverbLevel] = 20.0f;
     c[fx::reverbBassDecay] = 1.0f;
     c[fx::reverbBassXover] = 360.0f;
+    c[fx::reverbEarlyLevel] = earlyLevel;
     c[voice == 0 ? fx::reverbSourcePan1 : fx::reverbSourcePan2] = pan;
     c[voice == 0 ? fx::reverbLfoPan1 : fx::reverbLfoPan2] = lfoDepth;
     SharedEffects::ClassicParameters legacy {};
@@ -89,6 +90,34 @@ int main()
                 return 3; // old 8-line diffuse tail must continue
             if (centre.early == left.early || centre.early == right.early)
                 return 4;
+            // TEST2.4.47: early reflections exist at centre as well as edges.
+            // With Early Level zero only the existing FDN remains. The delta
+            // is the pure early-reflection field (plus finite-precision mix).
+            const auto centreNoEarly = render (mode, voice, 0.0f, 0.0f, 0.0f, 0.0f);
+            const auto leftNoEarly = render (mode, voice, -100.0f, 0.0f, 0.0f, 0.0f);
+            const auto rightNoEarly = render (mode, voice, 100.0f, 0.0f, 0.0f, 0.0f);
+            auto earlyEnergy = [] (const Result& full, const Result& none)
+            {
+                double sum = 0.0;
+                for (size_t k = 0; k < full.early.size(); ++k)
+                {
+                    const double d = static_cast<double> (full.early[k]) - none.early[k];
+                    sum += d * d;
+                }
+                return sum;
+            };
+            const double ec = earlyEnergy (centre, centreNoEarly);
+            const double el = earlyEnergy (left, leftNoEarly);
+            const double er = earlyEnergy (right, rightNoEarly);
+            if (ec < 1.0e-7 || el < 1.0e-7 || er < 1.0e-7)
+                return 7; // centre cannot have vanishing reflections
+            if (ec / el < 0.60 || ec / el > 1.60
+                || ec / er < 0.60 || ec / er > 1.60)
+                return 8; // no pan-triggered increase/decrease of ER loudness
+            const auto centreHalf = render (mode, voice, 0.0f, 0.0f, 0.0f, 50.0f);
+            const double halfEnergy = earlyEnergy (centreHalf, centreNoEarly);
+            if (halfEnergy / ec < 0.20 || halfEnergy / ec > 0.30)
+                return 9; // 50% = half the amplitude, quarter the energy
             // Even if the nominal pan is zero, LFO modulation reaches the
             // same left/right room-origin geometry using the real input.
             const auto lfoLeft = render (mode, voice, 0.0f, 100.0f, -1.0f);
@@ -98,6 +127,6 @@ int main()
             const auto zeroLfo = render (mode, voice, 0.0f, 0.0f, 1.0f);
             if (centre.early != zeroLfo.early) return 6;
         }
-    std::cout << "PASS: TEST2.4.46 distinct left/right source positions and LFO\n"
+    std::cout << "PASS: TEST2.4.47 directional source positions, centred early reflections, independent level and LFO\n"
                  "across all four reverbs and both voices, diffuse tails, dry preserved\n";
 }

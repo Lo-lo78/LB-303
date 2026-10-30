@@ -69,7 +69,7 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     reverbBassDecayIndex, reverbBassXoverIndex,
     reverbMotionModeIndex, reverbMotionDepthIndex, reverbMotionRateIndex,
     reverbSourcePan1Index, reverbSourcePan2Index,
-    reverbLfoPan1Index, reverbLfoPan2Index
+    reverbLfoPan1Index, reverbLfoPan2Index, reverbEarlyLevelIndex
 }};
 // All indices are relative to audioParameterCount, including append-only
 // performance controls located AFTER the shared FX parameters.
@@ -294,6 +294,10 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             -100, 100, 1, 0, "%" };
         result[reverbLfoPan2Index] = { "fx_reverb_lfo_pan2", "Reverb LFO Pan 2",
             -100, 100, 1, 0, "%" };
+        // The existing TEST2.4.46 maximum early-reflection intensity is 100%.
+        // Default retains that intensity at the edges, now also at centre.
+        result[reverbEarlyLevelIndex] = { "fx_reverb_early_level", "Reverb Early Reflections Level",
+            0, 100, 1, 100, "%" };
         result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
             0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
@@ -344,7 +348,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                || index == reverbMotionModeIndex || index == reverbMotionDepthIndex
                                || index == reverbMotionRateIndex
                                || index == reverbSourcePan1Index || index == reverbSourcePan2Index
-                               || index == reverbLfoPan1Index || index == reverbLfoPan2Index)
+                               || index == reverbLfoPan1Index || index == reverbLfoPan2Index
+                               || index == reverbEarlyLevelIndex)
             ? ("FX - " + p.name)
             : index == oversamplingIndex
             ? ("FX - " + p.name)

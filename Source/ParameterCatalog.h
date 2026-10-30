@@ -56,7 +56,9 @@ constexpr size_t reverbSourcePan1Index = reverbMotionRateIndex + 1;
 constexpr size_t reverbSourcePan2Index = reverbSourcePan1Index + 1;
 constexpr size_t reverbLfoPan1Index = reverbSourcePan2Index + 1;
 constexpr size_t reverbLfoPan2Index = reverbLfoPan1Index + 1;
-constexpr size_t parameterCount = reverbLfoPan2Index + 1;
+// Separate early-reflection level: append-only, all older host IDs remain stable.
+constexpr size_t reverbEarlyLevelIndex = reverbLfoPan2Index + 1;
+constexpr size_t parameterCount = reverbEarlyLevelIndex + 1;
 constexpr size_t lfoParameterIndex (size_t lane, size_t control)
 { return lfoParameterBase + lane * lfoParameterCount + control; }
 namespace lfo
@@ -85,7 +87,7 @@ constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2Param
 constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 2; // MIDI channel + separate stereo output
 constexpr int voiceMidiDisplayIndex = 5; // Volume, Waveform, Osc 2 Volume, Osc 2 Detune, Pan, MIDI, ...
 constexpr size_t classicDelayParameterCount = 14;
-constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4; // append-only reverb bass and spatial host params
+constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1; // append-only reverb bass and spatial host params
 constexpr size_t fxContextIndex = basslineCount + 1;
 size_t fxDisplayGlobalIndex (size_t displayIndex) noexcept;
 namespace fx
@@ -113,6 +115,7 @@ constexpr size_t reverbSourcePan1 = fxParameterCount + 5;
 constexpr size_t reverbSourcePan2 = fxParameterCount + 6;
 constexpr size_t reverbLfoPan1 = fxParameterCount + 7;
 constexpr size_t reverbLfoPan2 = fxParameterCount + 8;
+constexpr size_t reverbEarlyLevel = fxParameterCount + 9;
 }
 constexpr size_t sequencerParameterIndex (size_t local) { return audioParameterCount + local; }
 constexpr size_t pattern1Index = audioParameterCount;
