@@ -54,12 +54,14 @@ assert 'sourcePreL[v].push (voiceSends[v].first)' in fx
 assert 'sourcePreR[v].push (voiceSends[v].second)' in fx
 assert 'sourcePreL[v].read (readOffset)' in fx
 assert 'sourcePreR[v].read (readOffset)' in fx
-assert 'spatialExcitationDelta[i] += source[i]' in fx
+assert 'spatialExcitationDelta[i] += steered - original;' in fx
 assert 'const float source = (((i & 1)==0 ? inL : inR) + spatialExcitationDelta[i]) * .18f;' in fx
-assert 'const float sine = (i & 1) ? -diffSin : diffSin;' in fx
+assert 'const float leftWeight = std::max (0.0f, -position);' in fx
+assert 'const float rightWeight = std::max (0.0f, position);' in fx
 assert 'sourcePositionsSmoothed.fill (0.0f)' in fx
+assert 'sourcePresenceSmoothed.fill (0.0f)' in fx
 assert 'sourcePositionSmoothCoeff' in fx
-assert 'if (std::abs (position) < 1.0e-7f) { position = 0.0f; continue; }' in fx
+assert 'if (std::abs (position) < 1.0e-7f && presence < 1.0e-7f)' in fx
 assert 'reverb (l, r, reverbVoiceSends, lfoSamples)' in fx
 assert 'Output out;' in fx and 'out.dry[0] = { bounded (axL), bounded (axR) }' in fx
 assert 'const auto delayWet = runDelay (delayStem.first, delayStem.second);' in fx
@@ -76,10 +78,10 @@ assert 'engines[0].currentLfoSample(), engines[1].currentLfoSample()' in p
 assert 'sharedFx.processPostDistortion (stems[0].first' in p
 assert 'sharedFx.process (stems[0].first' in p
 assert 'engines[voice].setExternalLfoDestination (connected)' in p
-assert 'TEST2.4.45-Windows-x64' in wf
+assert 'TEST2.4.46-Windows-x64' in wf
 assert 'python Tests/check_reverb_source_spatial.py' in wf
 for language in ('en', 'it', 'es', 'fr', 'ru', 'zh', 'ja'):
     html = read('Help/LB303Help.html')
     block = re.search(r'<article class="manual" id="' + language + r'".*?</article>', html, re.S)
     assert block and 'TEST2.4.45' in block.group(), language
-print('PASS: TEST2.4.45 append-only IDs, independent source predelays, real shared LFO, FDN spatial injection, UI and seven help languages.')
+print('PASS: TEST2.4.46 append-only IDs, independent source predelays, real shared LFO, FDN spatial injection, UI and seven help languages.')

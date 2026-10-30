@@ -69,7 +69,7 @@ assert 'wetL *= .23f; wetR *= .23f;' in body
 assert 'verbBassGainDeltaSmoothed[i]' in body
 assert 'const float source = (((i & 1)==0 ? inL : inR) + spatialExcitationDelta[i]) * .18f' in body
 assert 'verb[i].push (bounded (source + feedback));' in body
-assert 'TEST2.4.45-Windows-x64' in workflow
+assert 'TEST2.4.46-Windows-x64' in workflow
 assert 'python Tests/check_reverb_spatial.py' in workflow
 for lang in ('en', 'it', 'es', 'fr', 'ru', 'zh', 'ja'):
     html = read('Help/LB303Help.html')

@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.99.1-TEST2.4.45-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.1-TEST2.4.46-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n                playing' not in processor
-assert 'LB-303-0.99.1-TEST2.4.45-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.1-TEST2.4.46-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -825,7 +825,7 @@ assert 'b2L[nextSample] += fx.dry[1].first;' in processor
 assert 'const float mainDry = sharedFx.dryLevel();' in processor
 assert 'mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first' in processor
 assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
-assert 'LB-303-0.99.1-TEST2.4.45-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.1-TEST2.4.46-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.16 browser NVDA names + existing preview + 4 stereo buses + separate distortion stems + stable IDs (static).')
 
 # TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
@@ -882,7 +882,7 @@ assert 'osc += osc2GainSmooth * waveform (osc2Phase, secondaryDt);' in engine
 assert 'setOsc2Parameters (layerValues)' in processor
 assert 'lock.sliderNumber - 1 - static_cast<int> (lb303::osc2LocalBase)' in processor
 assert 'voiceParameterGlobalIndex' in step
-assert 'LB-303-0.99.1-TEST2.4.45-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.1-TEST2.4.46-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.19 two independent second oscillators, shared waveform/voice envelopes, cents detune, stable APVTS and lock slots.')
 
 # TEST2.4.20 — Ctrl+A selects only focused and active keyboard steps.
@@ -1017,7 +1017,7 @@ assert 'processor.syncSelectedPatternPerformance();' in shortcuts
 assert 'selectParameter();' in shortcuts
 assert 'lb303::announceToActiveScreenReader (active,' in shortcuts
 assert 'lb303::editTrackIndex' in editor.split('int LB303AudioProcessorEditor::shortcutPatternLane()', 1)[1].split('void LB303AudioProcessorEditor::changePatternFromGrid', 1)[0]
-assert 'TEST2.4.45' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.46' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.24 Alt+M and Ctrl+Up/Down accessible across all four parameter grids.')
 
 # TEST2.4.25: Ctrl+Up/Down cannot require !Command on Windows because JUCE
@@ -1039,7 +1039,7 @@ assert 'presetBrowser->active()' in root_fallback_2425
 assert 'mods.isCtrlDown()' in root_fallback_2425
 assert 'return handleKey (key, control);' in root_fallback_2425
 assert '! mods.isCommandDown()' not in root_fallback_2425
-assert 'TEST2.4.45' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.46' in (root / '.github/workflows/build-windows.yml').read_text()
 # Explicitly model JUCE's Windows flags: both isCtrlDown and isCommandDown
 # are TRUE for the ctrlModifier bit. The fixed predicate must accept it.
 ctrl_pressed_windows = True
@@ -1061,7 +1061,7 @@ song_code_2426 = step.split('bool SequencerStepEditor::handleSongKey (', 1)[1].s
 assert song_code_2426.count('if (! selection.empty())') >= 3
 assert 'if (selection.size() > 1)' not in song_code_2426
 assert song_code_2426.index('code == juce::KeyPress::spaceKey && mods.isShiftDown()') < song_code_2426.index('if (mods.isCtrlDown())')
-assert 'TEST2.4.45' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.46' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.26 Shift+Space explicitly selects even one Song row; clipboard/delete honor singleton.')
 
 # TEST2.4.27 — explicit singleton selection is visible to NVDA everywhere.

@@ -80,7 +80,7 @@ private:
     // Per-voice pre-delay taps retain each source independently through the
     // original predelay. Only the FDN INPUT uses spatial position / LFO.
     std::array<Ring, basslineCount> sourcePreL, sourcePreR;
-    LfoSamples sourcePositionsSmoothed {};
+    LfoSamples sourcePositionsSmoothed {}, sourcePresenceSmoothed {};
     float sourcePositionSmoothCoeff = 0.0f;
     std::array<Ring, 8> verb {};
     std::array<float, 8> verbDamped {};

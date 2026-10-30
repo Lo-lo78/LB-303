@@ -1,4 +1,28 @@
-# LB-303 0.99.1 — TEST2.4.45: Reverb Source Pan e LFO spaziali indipendenti
+# LB-303 0.99.1 — TEST2.4.46: Reverb Source Pan più incisivo
+
+## TEST2.4.46 — Correzione della posizione spaziale del reverbero
+
+La precedente codifica nella FDN mescolava la posizione sinistra/destra in modo
+quasi impercettibile: i canali risultavano quasi uguali anche con Source Pan
+agli estremi. **La TEST2.4.46 corregge la codifica direzionale delle sorgenti**
+rispetto alla decodifica del motore FDN e introduce **prime riflessioni stereo
+per singola bassline**, con quattro tempi diversi (11, 23, 34, 49 ms) oltre al
+predelay esistente. La riflessione più vicina è più intensa dal lato della
+sorgente, quella opposta arriva con percorsi e intensità differenti. Dopo le
+prime riflessioni il campo del reverbero diventa naturalmente più diffuso.
+
+Non è un autopan del wet e non viene spostato il segnale diretto della bassline.
+Non sono necessari nuovi parametri: **Reverb Source Pan 1/2** e **Reverb LFO Pan
+1/2** già esistenti regolano la posizione e il movimento. A tutti e quattro i
+controlli a zero, il DSP mantiene il percorso della TEST2.4.44 senza cambiare
+il suono dei vecchi preset. Preset, ID VST3, automazioni, sequencer e
+controlli accessibili restano invariati. Il piccolo costo aggiuntivo (solo con
+pan/LFO pan attivo) sono letture da buffer di predelay già esistenti.
+
+**Prova:** un solo Reverb Send attivo, Reverb Type = Hall, Reverb Width = 100,
+Source Pan corrispondente a -100 e poi +100. Per un movimento continuo,
+Source Pan = 0 e Reverb LFO Pan = 100 con un LFO lento a sinusoide.
+
 
 In **FX → Reverb** sono disponibili quattro nuovi parametri, per Room, Plate, Hall e Cathedral:
 
