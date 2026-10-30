@@ -1,3 +1,17 @@
+# LB-303 0.99.1 — TEST2.4.50: coda del reverbero realmente in movimento
+
+**Correzione di Reverb Spatial Motion**, senza nuovi parametri VST3. Le modalità `Left to Right`, `Right to Left`, `Bounce` e `Orbit` ora controllano sia le rotazioni interne alle otto linee FDN, sia una **decodifica spaziale dinamica della coda diffusa**: il bilanciamento sinistra/destra della coda cambia in modo percepibile anche dopo il rilascio delle note, non soltanto il timbro delle riflessioni. La lettura avviene separatamente sulle otto linee con un peso differente per ogni percorso, prima della somma con le early reflections e prima del controllo Width. **Non viene applicato alcun autopan al segnale dry né al bus wet complessivo.**
+
+- **Reverb Motion Mode**: `Left to Right` percorre prevalentemente il campo da sinistra a destra, con ritorno breve e smussato; `Right to Left` fa il percorso opposto. `Bounce` oscilla regolarmente fra i due lati. `Orbit` conserva la circolazione interna e modula la posizione della coda. `Expand` e `Contract` modulano invece l'ampiezza stereo della coda durante il suo decadimento, senza imporre un movimento laterale.
+- **Reverb Motion Depth** (0–100%, default 60%): controlla anche quanto si sposta la **coda lunga**. A 100%, ai lati, la decodifica FDN privilegia nettamente un canale; a 0% il comportamento è invariato rispetto alla TEST2.4.49.
+- **Reverb Motion Rate** (0,02–2 Hz, default 0,35 Hz): velocità del movimento. Per ascoltare chiaramente un attraversamento durante un riverbero breve, prova `1,00 Hz` o più e una coda di 2–3 secondi.
+
+Le transizioni di posizione e di modalità hanno uno smoothing di 30 ms. L'uscita wet mantiene il trim **−6 dB** della TEST2.4.49; **Reverb Bass Decay** di default resta **0,50×**, **Reverb Early Reflections Level** rimane **15%**. Reverb Source Pan 1/2 e Reverb LFO Pan 1/2 continuano a posizionare l'**eccitazione** delle due sorgenti, senza controllare questo nuovo movimento della coda. Off e Depth 0, dopo l'inizializzazione, mantengono il percorso esatto della TEST2.4.49; durante la disattivazione, la posizione torna al centro gradualmente per evitare scatti.
+
+La compilazione VST3 è prevista **esclusivamente tramite GitHub Actions**, non eseguita localmente. La resa sonora finale va verificata in REAPER.
+
+---
+
 # LB-303 0.99.1 — TEST2.4.49: Bass Decay 0.50× e ritorno Reverb −6 dB
 
 ## Nuovi valori di partenza del reverbero

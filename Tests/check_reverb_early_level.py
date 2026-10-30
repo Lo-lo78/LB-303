@@ -39,7 +39,7 @@ assert 'earlyReflectionsLevelSmoothCoeff' in fx
 assert 'const float positionComp' in fx
 assert 'if (!settingsPrepared)' in fx
 assert 'reverbEarlyLevelIndex' in h and 'reverbEarlyLevelIndex' in c
-assert 'LB-303-0.99.1-TEST2.4.49-Windows-x64' in wf
+assert 'LB-303-0.99.1-TEST2.4.50-Windows-x64' in wf
 assert 'python Tests/check_reverb_early_level.py' in wf
 # Fixed reflection taps are constant across pan: only the stereo distribution
 # changes. Centre is never gated, and LFO zero crossings do not add/remove taps.

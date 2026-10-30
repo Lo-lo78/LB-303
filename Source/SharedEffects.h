@@ -96,6 +96,10 @@ private:
     std::array<float, 8> verbMotionAngles {};
     float verbMotionDepthSmoothed = 0.0f, verbMotionRateSmoothed = 0.35f;
     float verbMotionSmoothCoeff = 0.0f;
+    // Smoothed listening position of the diffuse tail; independent from the
+    // moving FDN feedback paths and from the two bassline source LFOs.
+    float verbTailPanSmoothed = 0.0f, verbTailSpreadSmoothed = 0.0f;
+    float verbTailMotionSmoothCoeff = 0.0f;
     double verbMotionPhase = 0.0, verbMotionAge = 0.0;
     std::array<float, 8> verbTimes {};
     int verbIndex = 0;

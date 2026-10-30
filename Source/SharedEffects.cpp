@@ -81,6 +81,8 @@ void SharedEffects::prepare (double sampleRate)
     verbMotionRateSmoothed = 0.35f;
     verbMotionPhase = verbMotionAge = 0.0;
     verbMotionSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.045 * fs)));
+    verbTailMotionSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.030 * fs)));
+    verbTailPanSmoothed = verbTailSpreadSmoothed = 0.0f;
     tapeTime.fill (0); tapeLow.fill (0); tapeHighX.fill (0); tapeHighY.fill (0);
     tapeWetX.fill (0); tapeWetY.fill (0);
     chorusRateSmoothed = chorusTail = 0;
@@ -123,6 +125,7 @@ void SharedEffects::clearTails() noexcept
     verbMotionDepthSmoothed = 0.0f;
     verbMotionRateSmoothed = 0.35f;
     verbMotionPhase = verbMotionAge = 0.0;
+    verbTailPanSmoothed = verbTailSpreadSmoothed = 0.0f;
     reverbPredelayReady = false;
     reverbPredelaySamples = 0.0;
     tapeTime.fill (0.0f); tapeLow.fill (0.0f); tapeHighX.fill (0.0f); tapeHighY.fill (0.0f);
@@ -662,9 +665,89 @@ std::pair<float, float> SharedEffects::reverb (float l, float r,
         const float source = (((i & 1)==0 ? inL : inR) + spatialExcitationDelta[i]) * .18f;
         verb[i].push (bounded (source + feedback));
     }
-    // Decorrelated stereo output. Diffuse tail continues even with zero input.
+    // TEST2.4.50: Spatial Motion must steer the ALREADY REVERBERATING tail,
+    // not just change the feedback topology (which was almost inaudible as
+    // left/right motion once Householder diffusion had mixed the eight lines).
+    // Decode the eight individual FDN lines through a MOVING stereo field:
+    // each reflection path has its own slightly different listening geometry.
+    // This happens BEFORE early reflections, width and wet level -- not an
+    // autopan of the finished reverb bus and never a pan of the dry bassline.
+    // Feedback stays orthogonal and unaffected by these listening weights.
+    // Off or Depth=0 takes the exact original sample-by-sample output path.
     float wetL = current[0]-current[1]+current[2]-current[3]+current[4]-current[5]+current[6]-current[7];
     float wetR = current[0]+current[1]-current[2]-current[3]+current[4]+current[5]-current[6]-current[7];
+    float targetTailPan = 0.0f, targetTailSpread = 0.0f;
+    if (motionMode >= 1 && motionMode <= 4 && verbMotionDepthSmoothed > 1.0e-6f)
+    {
+        const float s = static_cast<float> (std::sin (verbMotionPhase));
+        const float q = static_cast<float> (std::cos (verbMotionPhase));
+        float position = 0.0f;
+        if (motionMode == 1 || motionMode == 2)
+        {
+            // Mostly one-way travel, with a short, SMOOTH return: repeated
+            // L->R and R->L sweeps do not become identical to Bounce.
+            // Both endpoints have zero velocity, so the restart cannot click.
+            const float cycle = static_cast<float> (verbMotionPhase / (2.0 * pi));
+            const float part = cycle < 0.84f ? cycle / 0.84f
+                                              : (1.0f - cycle) / 0.16f;
+            const float t = clampf (part, 0.0f, 1.0f);
+            const float smooth = t * t * (3.0f - 2.0f * t);
+            position = (motionMode == 1 ? -1.0f : 1.0f) * (1.0f - 2.0f * smooth);
+        }
+        else if (motionMode == 3)
+            position = -q; // symmetrical left/right bounce
+        else
+            position = s;  // orbit: transverse motion plus rotating FDN planes
+
+        // Constant-power, deliberately directional late-field decoder. At
+        // Depth=100 and either edge it has ~12 dB of interaural energy bias;
+        // Depth=60 is clearly audible but retains the ambience. The original
+        // FDN lines keep their individual decorrelation and spatial facets.
+        targetTailPan = 0.93f * verbMotionDepthSmoothed * position;
+    }
+    else if (motionMode == 5 || motionMode == 6)
+    {
+        // Expand/Contract alter diffuse-field width, NOT left/right balance.
+        const float progress = clampf (static_cast<float> (verbMotionAge * verbMotionRateSmoothed), 0.0f, 1.0f);
+        const float envelope = progress * progress * (3.0f - 2.0f * progress);
+        targetTailSpread = (motionMode == 5 ? envelope : 1.0f - envelope)
+                          * verbMotionDepthSmoothed;
+    }
+    // Smoothing applies to mode changes as well as continuous movement:
+    // avoid a sudden left/right gain step when switching to Off or another mode.
+    verbTailPanSmoothed += (targetTailPan - verbTailPanSmoothed) * verbTailMotionSmoothCoeff;
+    verbTailSpreadSmoothed += (targetTailSpread - verbTailSpreadSmoothed) * verbTailMotionSmoothCoeff;
+    if (std::abs (verbTailPanSmoothed) > 1.0e-6f)
+    {
+        const float sweep = verbTailPanSmoothed;
+        const float gLeft = std::sqrt (std::max (0.01f, 1.0f - sweep));
+        const float gRight = std::sqrt (std::max (0.01f, 1.0f + sweep));
+        constexpr std::array<float, 8> leftSign {{ 1,-1, 1,-1, 1,-1, 1,-1 }};
+        constexpr std::array<float, 8> rightSign {{ 1, 1,-1,-1, 1, 1,-1,-1 }};
+        constexpr std::array<float, 8> facet {{ -.9f, .7f, -.4f, 1.0f,
+                                                  .5f, -.8f, .9f, -.6f }};
+        float directedL = 0.0f, directedR = 0.0f;
+        for (size_t i = 0; i < 8; ++i)
+        {
+            // Stagger the movement between the eight FDN paths instead of
+            // scaling the already-mixed two-channel tail as an autopanner.
+            const float path = sweep * (0.12f * facet[i]);
+            directedL += current[i] * leftSign[i] * (gLeft + path);
+            directedR += current[i] * rightSign[i] * (gRight - path);
+        }
+        wetL = directedL;
+        wetR = directedR;
+    }
+    if (verbTailSpreadSmoothed > 1.0e-6f)
+    {
+        // The late field opens or closes while the first reflections keep
+        // their original level. No output-side pan is introduced.
+        const float mid = .5f * (wetL + wetR);
+        const float side = .5f * (wetL - wetR);
+        const float spread = 1.0f + 0.75f * verbTailSpreadSmoothed;
+        wetL = mid + side * spread;
+        wetR = mid - side * spread;
+    }
     wetL *= .23f; wetR *= .23f;
     // Source-specific early-reflection level independent from Source Pan/LFO Pan.
     // At zero: the original FDN reverb remains audible, but the four early taps
