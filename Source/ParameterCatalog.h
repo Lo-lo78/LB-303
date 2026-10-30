@@ -43,7 +43,11 @@ constexpr size_t osc2ParameterIndex (size_t lane, size_t control)
 namespace osc2 { enum Control : size_t { volume, detune }; }
 // Append-only host parameter. Values: 0 = 1x, 1 = 2x, 2 = 4x.
 constexpr size_t oversamplingIndex = osc2ParameterBase + basslineCount * osc2ParameterCount;
-constexpr size_t parameterCount = oversamplingIndex + 1;
+// Host parameter indices MUST remain append-only. Never grow fxParameterCount:
+// that would move all sequencer, LFO, OSC2 and oversampling host indices.
+constexpr size_t reverbBassDecayIndex = oversamplingIndex + 1;
+constexpr size_t reverbBassXoverIndex = reverbBassDecayIndex + 1;
+constexpr size_t parameterCount = reverbBassXoverIndex + 1;
 constexpr size_t lfoParameterIndex (size_t lane, size_t control)
 { return lfoParameterBase + lane * lfoParameterCount + control; }
 namespace lfo
@@ -72,7 +76,7 @@ constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2Param
 constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 2; // MIDI channel + separate stereo output
 constexpr int voiceMidiDisplayIndex = 5; // Volume, Waveform, Osc 2 Volume, Osc 2 Detune, Pan, MIDI, ...
 constexpr size_t classicDelayParameterCount = 14;
-constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1;
+constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2; // last two are append-only reverb host params
 constexpr size_t fxContextIndex = basslineCount + 1;
 size_t fxDisplayGlobalIndex (size_t displayIndex) noexcept;
 namespace fx
@@ -89,6 +93,10 @@ enum Control : size_t {
     distortion2Type, distortion2Amount, distortion2Harmonics,
     effectOrder // append only; 0 Delay > Reverb, 1 Reverb > Delay
 };
+// Extended DSP control slots, NOT contiguous VST3 host parameter indices.
+// Host indices are reverbBassDecayIndex and reverbBassXoverIndex.
+constexpr size_t reverbBassDecay = fxParameterCount;
+constexpr size_t reverbBassXover = fxParameterCount + 1;
 }
 constexpr size_t sequencerParameterIndex (size_t local) { return audioParameterCount + local; }
 constexpr size_t pattern1Index = audioParameterCount;

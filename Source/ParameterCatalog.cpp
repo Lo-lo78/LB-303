@@ -63,7 +63,8 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     fxParameterIndex (fx::reverbType), fxParameterIndex (fx::reverbSend1),
     fxParameterIndex (fx::reverbSend2), fxParameterIndex (fx::reverbPredelay),
     fxParameterIndex (fx::reverbDecay), fxParameterIndex (fx::reverbDamping),
-    fxParameterIndex (fx::reverbWidth), fxParameterIndex (fx::reverbLevel)
+    fxParameterIndex (fx::reverbWidth), fxParameterIndex (fx::reverbLevel),
+    reverbBassDecayIndex, reverbBassXoverIndex
 }};
 // All indices are relative to audioParameterCount, including append-only
 // performance controls located AFTER the shared FX parameters.
@@ -267,6 +268,10 @@ const std::array<ParameterInfo, parameterCount>& catalog()
                 juce::String (prefix) + "detune", "Osc 2 Detune", -100, 100, 1, 10, "cents" };
         }
         // Append-only: older REAPER projects do not contain this ID => 1x default.
+        result[reverbBassDecayIndex] = { "fx_reverb_bass_decay", "Reverb Bass Decay",
+                                         0.5f, 2.0f, 0.01f, 1.0f, "x" };
+        result[reverbBassXoverIndex] = { "fx_reverb_bass_xover", "Reverb Bass XOver",
+                                         50.0f, 1000.0f, 1.0f, 360.0f, "Hz" };
         result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
             0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
@@ -313,7 +318,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         const auto& p = catalog()[index];
         // Distinguish automated parameters in REAPER's global FX parameter list,
         // without adding redundant prefixes to the accessible per-bassline grids.
-        const auto hostName = index == oversamplingIndex
+        const auto hostName = (index == reverbBassDecayIndex || index == reverbBassXoverIndex)
+            ? ("FX - " + p.name)
+            : index == oversamplingIndex
             ? ("FX - " + p.name)
             : index >= osc2ParameterBase
             ? ("Bassline " + juce::String (1 + (index - osc2ParameterBase) / osc2ParameterCount)

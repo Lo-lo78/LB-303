@@ -550,8 +550,12 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     const auto applyFxParameters = [&]
     {
         lb303::SharedEffects::Controls fxControls {};
-        for (size_t i = 0; i < fxControls.size(); ++i)
+        // The historic 35 FX VST3 IDs are followed in the DSP array by
+        // TWO controls whose host IDs are appended after oversampling.
+        for (size_t i = 0; i < lb303::fxParameterCount; ++i)
             fxControls[i] = value (lb303::fxParameterIndex (i));
+        fxControls[lb303::fx::reverbBassDecay] = value (lb303::reverbBassDecayIndex);
+        fxControls[lb303::fx::reverbBassXover] = value (lb303::reverbBassXoverIndex);
         // Historic B1 delay parameter IDs now control ONE master classic delay.
         lb303::SharedEffects::ClassicParameters legacy {};
         for (size_t i = 0; i < legacy.size(); ++i)

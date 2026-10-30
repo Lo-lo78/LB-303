@@ -58,6 +58,11 @@ void SharedEffects::prepare (double sampleRate)
         verbTimes[i] = static_cast<float> (lengths[i]);
     }
     verbDamped.fill (0);
+    verbBassLow.fill (0);
+    verbBassGainDeltaTarget.fill (0);
+    verbBassGainDeltaSmoothed.fill (0);
+    verbBassXoverTarget = verbBassXoverSmoothed = 0.0f;
+    verbBassSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.035 * fs)));
     tapeTime.fill (0); tapeLow.fill (0); tapeHighX.fill (0); tapeHighY.fill (0);
     tapeWetX.fill (0); tapeWetY.fill (0);
     chorusRateSmoothed = chorusTail = 0;
@@ -88,6 +93,10 @@ void SharedEffects::clearTails() noexcept
         line.pos = 0;
     }
     verbDamped.fill (0.0f);
+    verbBassLow.fill (0.0f);
+    verbBassGainDeltaTarget.fill (0.0f);
+    verbBassGainDeltaSmoothed.fill (0.0f);
+    verbBassXoverTarget = verbBassXoverSmoothed = 0.0f;
     reverbPredelayReady = false;
     reverbPredelaySamples = 0.0;
     tapeTime.fill (0.0f); tapeLow.fill (0.0f); tapeHighX.fill (0.0f); tapeHighY.fill (0.0f);
@@ -154,9 +163,33 @@ void SharedEffects::setParameters (const Controls& settings,
                                 : mode == 3 ? 1.0 : 1.55;
         wetGuardSeconds = std::max (wetGuardSeconds,
             2.0 * static_cast<double> (c[fx::reverbDecay]) * tailFactor
+                * std::max (1.0, static_cast<double> (c[fx::reverbBassDecay]))
             + .001 * static_cast<double> (c[fx::reverbPredelay]) + .5);
     }
-    wetGuardSeconds = std::clamp (wetGuardSeconds, .5, 120.0);
+    wetGuardSeconds = std::clamp (wetGuardSeconds, .5, 240.0);
+
+    // LJuno Reverb 1 principle: independent RT60 for bass IN the FDN loop.
+    // Each line's low feedback gain is computed from its effective delay time.
+    // The main decay and the high-frequency damping are kept unchanged.
+    if (c[fx::reverbType] > 0.5f)
+    {
+        const int mode = juce::jlimit (1, 4, juce::roundToInt (c[fx::reverbType]));
+        const double size = mode == 1 ? .58 : mode == 2 ? .85 : mode == 3 ? 1.0 : 1.2;
+        const double seconds = std::max (.15, static_cast<double> (c[fx::reverbDecay])
+            * (mode == 1 ? .55 : mode == 2 ? .8 : mode == 3 ? 1.0 : 1.55));
+        const double lowSeconds = seconds * std::clamp (
+            static_cast<double> (c[fx::reverbBassDecay]), .5, 2.0);
+        const double hz = std::clamp (static_cast<double> (c[fx::reverbBassXover]), 50.0, 1000.0);
+        verbBassXoverTarget = static_cast<float> (1.0 - std::exp (-2.0 * pi * hz / fs));
+        for (size_t i = 0; i < verb.size(); ++i)
+        {
+            const double delay = std::clamp (static_cast<double> (verbTimes[i]) * size,
+                2.0 / fs, static_cast<double> (verb[i].data.size() - 2) / fs);
+            const double midGain = std::pow (10.0, -3.0 * delay / seconds);
+            const double lowGain = std::pow (10.0, -3.0 * delay / lowSeconds);
+            verbBassGainDeltaTarget[i] = static_cast<float> (lowGain - midGain);
+        }
+    }
     for (size_t voice = 0; voice < basslineCount; ++voice)
     {
         const auto type = voice == 0 ? fx::distortionType : fx::distortion2Type;
@@ -407,6 +440,9 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
                                     * (mode==1 ? .55 : mode==2 ? .8 : mode==3 ? 1 : 1.55));
     const double cutoff = c[fx::reverbDamping]*(mode==2 ? 1.3 : mode==4 ? .75 : 1);
     const float damp = static_cast<float> (1-std::exp (-2*pi*std::min (cutoff,fs*.45)/fs));
+    // Smooth automations to avoid a step in the reverb feedback gain/crossover.
+    verbBassXoverSmoothed += (verbBassXoverTarget - verbBassXoverSmoothed)
+                                * verbBassSmoothCoeff;
     std::array<float,8> current {};
     float sum=0;
     for (size_t i=0;i<8;++i)
@@ -425,8 +461,16 @@ std::pair<float, float> SharedEffects::reverb (float l, float r) noexcept
             static_cast<double> (verbTimes[i]) * size, 2.0 / fs,
             static_cast<double> (verb[i].data.size() - 2) / fs);
         const auto gain = static_cast<float> (std::pow (10.0, -3.0*effectiveSeconds/seconds));
+        // Split the damped feedback *inside* the network. A shorter bass RT60
+        // subtracts low feedback on successive circulations, while leaving
+        // the initial reflections and mid/high decay untouched.
+        verbBassLow[i] += (verbDamped[i] - verbBassLow[i]) * verbBassXoverSmoothed;
+        verbBassGainDeltaSmoothed[i] += (verbBassGainDeltaTarget[i] - verbBassGainDeltaSmoothed[i])
+                                        * verbBassSmoothCoeff;
+        const float feedback = verbDamped[i] * std::min (.9995f, gain)
+                             + verbBassLow[i] * verbBassGainDeltaSmoothed[i];
         const float source = ((i & 1)==0 ? inL : inR) * .18f;
-        verb[i].push (bounded (source+verbDamped[i]*std::min (.9995f,gain)));
+        verb[i].push (bounded (source + feedback));
     }
     // Decorrelated stereo output. Diffuse tail continues even with zero input.
     float wetL = current[0]-current[1]+current[2]-current[3]+current[4]-current[5]+current[6]-current[7];

@@ -21,7 +21,7 @@ ed = get('Source/PluginEditor.cpp')
 workflow = get('.github/workflows/build-windows.yml')
 
 assert 'oversamplingIndex = osc2ParameterBase + basslineCount * osc2ParameterCount' in h
-assert 'parameterCount = oversamplingIndex + 1' in h
+assert 'reverbBassDecayIndex = oversamplingIndex + 1' in h
 assert 'fx_oversampling' in c and 'oversamplingChoices, 3' in c
 assert '"1x", "2x", "4x"' in c
 assert 'add (0, lb303::oversamplingIndex)' in ed
@@ -43,7 +43,7 @@ assert 'voiceDecimators[voice].setFactor (oversamplingFactor)' in processor
 assert 'setOversamplingFactor (int factor) noexcept' in voice
 assert 'BassEngine::tick' in voice and 'osc2Phase' in voice
 assert 'setParameters (fxControls, legacy, bpm)' in processor
-assert '  push:' in workflow and 'TEST2.4.42-Windows-x64' in workflow
+assert '  push:' in workflow and 'TEST2.4.43-Windows-x64' in workflow
 assert 'python Tests/check_oversampling.py' in workflow
 assert 'VoiceDecimator' in get('Source/Oversampling.h')
 print('PASS: append-only 1x/2x/4x accessible parameter; both native-rate synths and distortion inserts; shared FX stay at host rate.')

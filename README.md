@@ -1,3 +1,14 @@
+# LB-303 0.99.1 — TEST2.4.43: controllo naturale della coda dei bassi nel riverbero
+
+Nella pagina **FX**, colonna **Reverb**, con Reverb Type su Room, Plate, Hall o Cathedral sono disponibili due nuovi parametri accessibili da tastiera/NVDA e automatizzabili in REAPER:
+
+- **Reverb Bass Decay** `0.50–2.00 x` (step 0.01; default **1.00 x**): moltiplica il tempo RT60 delle sole basse frequenze in ciascuna delle 8 linee di feedback. `0.50` accorcia la coda dei bassi alla metà; `1.00` mantiene invariato il vecchio comportamento; `2.00` raddoppia il tempo di decadimento dei bassi. L'inizio del riverbero e la coda dei medi/alti rimangono presenti; non è un semplice EQ high-pass sul ritorno wet.
+- **Reverb Bass XOver** `50–1000 Hz` (step 1 Hz; default **360 Hz**): imposta la frequenza della separazione graduale del decadimento basso rispetto ai medi. Se Bass Decay è 1.00, XOver non cambia la timbrica.
+
+I due controlli operano **dentro la rete di feedback FDN**: filtro passa-basso interno al feedback per separare le componenti, con differenza di guadagno calcolata dai due RT60. Il controllo Damping originale continua ad agire sulle alte frequenze. I coefficienti dell'attenuazione del basso e del crossover cambiano con smoothing (35 ms) per ridurre gli scatti durante l'automazione. La soglia di mantenimento della coda DSP include ora il decadimento basso quando supera quello principale. Nessun cambiamento all'ordine degli FX o al gain del ritorno.
+
+**Compatibilità:** VST3 ID `fx_reverb_bass_decay` e `fx_reverb_bass_xover` aggiunti *dopo* l'ID `fx_oversampling` (non in mezzo ai vecchi FX). Nessun vecchio ID, slot di lock, parametro Sequencer/LFO/OSC2 o formato di salvataggio viene spostato. Preset vecchi utilizzano i valori neutri; preset nuovi salvano entrambi i valori automaticamente tramite APVTS. Le sette pagine Alt+Q, l'Accent via Velocity e il Legato 101 restano invariati. Workflow GitHub Actions: **TEST2.4.43**, nessuna compilazione locale.
+
 # LB-303 0.99.1 — TEST2.4.42: legato 101 continuo su più step
 
 **Alt+Q → Length 101** è ora un vero legame di gate, non una nota di durata 102%. Quattro step consecutivi a 101 mantengono un unico gate per quattro step; 16 step a 101 proseguono senza interruzione anche dall'ultimo al primo. Se l'altezza cambia, il sequencer esegue un passaggio legato senza vuoti; se resta uguale non emette nuovi Note On. Il primo step con Length ordinario stabilisce la fine dell'intera frase. Pause, stop, reset e disabilitazione rilasciano la nota. Velocity 127, invio con memoria, synth, FX, pattern e Song invariati.

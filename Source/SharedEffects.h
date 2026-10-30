@@ -12,7 +12,7 @@ namespace lb303
 class SharedEffects final
 {
 public:
-    using Controls = std::array<float, fxParameterCount>;
+    using Controls = std::array<float, fxParameterCount + 2>; // 35 historic + two append-only bass reverb controls
     using ClassicParameters = BassEngine::Values;
     void prepare (double newSampleRate);
     void clearTails() noexcept; // no allocation: reset FX after Alt+I
@@ -74,6 +74,11 @@ private:
     Ring tapeL, tapeR, preL, preR;
     std::array<Ring, 8> verb {};
     std::array<float, 8> verbDamped {};
+    // In-loop bass RT60 control. The LP state isolates bass energy in each
+    // feedback line; the difference gain changes its decay, not the wet EQ.
+    std::array<float, 8> verbBassLow {}, verbBassGainDeltaTarget {}, verbBassGainDeltaSmoothed {};
+    float verbBassXoverTarget = 0.0f, verbBassXoverSmoothed = 0.0f;
+    float verbBassSmoothCoeff = 0.0f;
     std::array<float, 8> verbTimes {};
     int verbIndex = 0;
     float chorusRateSmoothed = 0, chorusHpCoefficient = 0, chorusTail = 0;
