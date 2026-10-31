@@ -70,7 +70,8 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     reverbBassDecayIndex, reverbBassXoverIndex,
     reverbMotionModeIndex, reverbMotionDepthIndex, reverbMotionRateIndex,
     reverbSourcePan1Index, reverbSourcePan2Index,
-    reverbLfoPan1Index, reverbLfoPan2Index, reverbEarlyLevelIndex, reverbAccentSendIndex
+    reverbLfoPan1Index, reverbLfoPan2Index, reverbEarlyLevelIndex, reverbAccentSendIndex,
+    reverbDuckAmountIndex, reverbDuckRecoveryIndex
 }};
 // All indices are relative to audioParameterCount, including append-only
 // performance controls located AFTER the shared FX parameters.
@@ -310,6 +311,11 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             -100, 100, 1, 50, "%" };
         result[reverbAccentSendIndex] = { "fx_reverb_accent_send", "Reverb Accent Send",
             -100, 100, 1, 50, "%" };
+        // Ducking is applied only to the reverb RETURN; 0% preserves old presets.
+        result[reverbDuckAmountIndex] = { "fx_reverb_duck_amount", "Reverb Duck Amount",
+            0, 100, 1, 0, "%" };
+        result[reverbDuckRecoveryIndex] = { "fx_reverb_duck_recovery", "Reverb Duck Recovery",
+            10, 2000, 10, 350, "ms" };
         result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
             0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
@@ -362,7 +368,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                || index == reverbSourcePan1Index || index == reverbSourcePan2Index
                                || index == reverbLfoPan1Index || index == reverbLfoPan2Index
                                || index == reverbEarlyLevelIndex
-                               || index == delayAccentSendIndex || index == reverbAccentSendIndex)
+                               || index == delayAccentSendIndex || index == reverbAccentSendIndex
+                               || index == reverbDuckAmountIndex || index == reverbDuckRecoveryIndex)
             ? ("FX - " + p.name)
             : index == oversamplingIndex
             ? ("FX - " + p.name)

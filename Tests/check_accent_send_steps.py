@@ -54,7 +54,7 @@ assert 'Ctrl+1: Delay Send' in ui and 'Ctrl+2: Reverb Send' in ui
 assert 'portamentoCurve2Index = portamentoCurve1Index + 1' in ch
 assert 'delayAccentSendIndex = portamentoCurve2Index + 1' in ch
 assert 'reverbAccentSendIndex = delayAccentSendIndex + 1' in ch
-assert 'parameterCount = reverbAccentSendIndex + 1' in ch
+assert 'parameterCount = reverbDuckRecoveryIndex + 1' in ch
 for index, name in [('delayAccentSendIndex','Delay Accent Send'),('reverbAccentSendIndex','Reverb Accent Send')]:
     assert f'result[{index}]' in c
     assert f'"{name}"' in c
@@ -94,5 +94,5 @@ for language in ['en','it','es','fr','ru','zh','ja']:
     assert manual.count('TEST2.4.53 —') >= 6
 assert 'TEST2.4.53' in read('README.md')
 assert 'Tests/check_accent_send_steps.py' in workflow
-assert 'TEST2.4.54-Windows-x64' in workflow
+assert 'TEST2.4.55-Windows-x64' in workflow
 print('PASS: TEST2.4.53 velocity-dependent Delay/Reverb step sends, v8 migration, Alt+Q accessible pages and DSP smoothing')

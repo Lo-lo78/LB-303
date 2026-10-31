@@ -11,7 +11,7 @@ w=read('.github/workflows/build-windows.yml')
 assert 'portamentoCurve1Index = reverbEarlyLevelIndex + 1' in h
 assert 'portamentoCurve2Index = portamentoCurve1Index + 1' in h
 assert 'portamentoCurve2Index = portamentoCurve1Index + 1' in h
-assert 'parameterCount = reverbAccentSendIndex + 1' in h
+assert 'parameterCount = reverbDuckRecoveryIndex + 1' in h
 assert 'voiceGridParameterCount = voiceVisibleParameterCount + 3' in h
 assert 'voiceLocalParameterCount = osc2LocalBase + osc2ParameterCount' in h
 assert 'constexpr size_t synthParameterCount = 35' in h
@@ -32,7 +32,7 @@ assert 'std::log (0.01) / std::log1p (-coefficient)' in b
 assert 'curvedElapsed *= ratio;' in b and 'curvedDuration *= ratio;' in b
 assert 'if (portamentoCurveMode != 0 && curvedGlideActive && glideSettingsChanged)' in b
 assert 'shaped = t*t;' in b and 'shaped = t*t*(3.0 - 2.0*t);' in b
-assert 'TEST2.4.54-Windows-x64' in w
+assert 'TEST2.4.55-Windows-x64' in w
 assert 'python Tests/check_portamento_curves.py' in w
 assert 'TEST2.4.53' in read('README.md')
 help=read('Help/LB303Help.html')

@@ -33,6 +33,7 @@ jobs:
           python Tests/check_portamento_curves.py
           python Tests/check_accent_send_steps.py
           python Tests/check_step_send_levels.py
+          python Tests/check_reverb_ducking.py
 
       - name: Build LB-303 VST3 (Release)
         shell: pwsh
@@ -47,12 +48,12 @@ jobs:
           }
           # An actual VST3 is a bundle (directory) on Windows in JUCE 8.
           # Preserve its internal layout (Contents/x86_64-win/*.vst3).
-          Compress-Archive -Path $plugin -DestinationPath "LB-303-0.99.1-TEST2.4.54-Windows-x64.zip" -Force
+          Compress-Archive -Path $plugin -DestinationPath "LB-303-0.99.1-TEST2.4.55-Windows-x64.zip" -Force
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LB-303-0.99.1-TEST2.4.54-Windows-x64
-          path: LB-303-0.99.1-TEST2.4.54-Windows-x64.zip
+          name: LB-303-0.99.1-TEST2.4.55-Windows-x64
+          path: LB-303-0.99.1-TEST2.4.55-Windows-x64.zip
           if-no-files-found: error
           retention-days: 14

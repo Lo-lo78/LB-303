@@ -28,7 +28,7 @@ assert 'return { bounded ((middle+side)*level), bounded ((middle-side)*level) };
 assert 'verbBassLow[i] * verbBassGainDeltaSmoothed[i]' in reverb
 assert 'reverbWet = runReverb' in fx and 'delayWet.first + reverbWet.first' in fx
 assert 'reverbWetOutputTrim6dB' not in fx.split('SharedEffects::Output SharedEffects::process (',1)[1]
-assert 'TEST2.4.54-Windows-x64' in w
+assert 'TEST2.4.55-Windows-x64' in w
 assert 'python Tests/check_reverb_defaults_trim.py' in w
 for lang in ('en','it','es','fr','ru','zh','ja'):
     block=re.search(r'<article class="manual" id="'+lang+r'".*?</article>',help,re.S)

@@ -31,7 +31,7 @@ assert 'reverbMotionRateIndex = reverbMotionDepthIndex + 1' in h
 assert 'reverbSourcePan1Index = reverbMotionRateIndex + 1' in h
 assert 'sequencerPerformanceBase = legacyParameterCount + fxParameterCount' in h
 assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1 + 2' in h
-assert 'std::array<float, fxParameterCount + 10>' in fxh
+assert 'std::array<float, fxParameterCount + 12>' in fxh
 for index, label, ident in [
     ('reverbMotionModeIndex', 'Reverb Motion Mode', 'fx_reverb_motion_mode'),
     ('reverbMotionDepthIndex', 'Reverb Motion Depth', 'fx_reverb_motion_depth'),
@@ -69,7 +69,7 @@ assert 'wetL *= .23f; wetR *= .23f;' in body
 assert 'verbBassGainDeltaSmoothed[i]' in body
 assert 'const float source = (((i & 1)==0 ? inL : inR) + spatialExcitationDelta[i]) * .18f' in body
 assert 'verb[i].push (bounded (source + feedback));' in body
-assert 'TEST2.4.54-Windows-x64' in workflow
+assert 'TEST2.4.55-Windows-x64' in workflow
 assert 'python Tests/check_reverb_spatial.py' in workflow
 for lang in ('en', 'it', 'es', 'fr', 'ru', 'zh', 'ja'):
     html = read('Help/LB303Help.html')

@@ -43,7 +43,7 @@ assert 'voiceDecimators[voice].setFactor (oversamplingFactor)' in processor
 assert 'setOversamplingFactor (int factor) noexcept' in voice
 assert 'BassEngine::tick' in voice and 'osc2Phase' in voice
 assert 'setParameters (fxControls, legacy, bpm)' in processor
-assert '  push:' in workflow and 'TEST2.4.54-Windows-x64' in workflow
+assert '  push:' in workflow and 'TEST2.4.55-Windows-x64' in workflow
 assert 'python Tests/check_oversampling.py' in workflow
 assert 'VoiceDecimator' in get('Source/Oversampling.h')
 print('PASS: append-only 1x/2x/4x accessible parameter; both native-rate synths and distortion inserts; shared FX stay at host rate.')

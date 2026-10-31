@@ -566,6 +566,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         fxControls[lb303::fx::reverbLfoPan1] = value (lb303::reverbLfoPan1Index);
         fxControls[lb303::fx::reverbLfoPan2] = value (lb303::reverbLfoPan2Index);
         fxControls[lb303::fx::reverbEarlyLevel] = value (lb303::reverbEarlyLevelIndex);
+        fxControls[lb303::fx::reverbDuckAmount] = value (lb303::reverbDuckAmountIndex);
+        fxControls[lb303::fx::reverbDuckRecovery] = value (lb303::reverbDuckRecoveryIndex);
         // Historic B1 delay parameter IDs now control ONE master classic delay.
         lb303::SharedEffects::ClassicParameters legacy {};
         for (size_t i = 0; i < legacy.size(); ++i)
@@ -838,7 +840,15 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         const auto& message = entry.getMessage();
         const int midiChannel = message.getChannel();
         if (midiChannel >= 1 && midiChannel <= static_cast<int> (lb303::basslineCount))
+        {
+            // Real Note On means a new musical attack, including a changed
+            // pitch in legato, but NOT identical-pitch Length 101 ties.
+            // The sequencer and direct MIDI both use the same engine stream.
+            // An FX Send Mute step still ducks the previous reverb tail.
+            if (message.isNoteOn())
+                sharedFx.triggerReverbDuck (message.getVelocity());
             engines[static_cast<size_t> (midiChannel - 1)].midi (message);
+        }
     }
     renderTo (count);
     // Extra outputs contain two optional post-distortion voice stems and

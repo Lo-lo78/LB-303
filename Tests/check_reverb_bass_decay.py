@@ -30,7 +30,7 @@ assert 'reverbBassDecayIndex, reverbBassXoverIndex' in c
 assert 'add (5, lb303::reverbBassDecayIndex)' in e
 assert 'add (5, lb303::reverbBassXoverIndex)' in e
 assert 'if (enabled (lb303::fx::reverbType))' in e
-assert 'std::array<float, fxParameterCount + 10>' in fxh
+assert 'std::array<float, fxParameterCount + 12>' in fxh
 assert 'for (size_t i = 0; i < lb303::fxParameterCount; ++i)' in p
 assert 'fxControls[lb303::fx::reverbBassDecay] = value (lb303::reverbBassDecayIndex)' in p
 assert 'fxControls[lb303::fx::reverbBassXover] = value (lb303::reverbBassXoverIndex)' in p
@@ -48,5 +48,5 @@ assert 'verbBassSmoothCoeff' in fx and 'verbBassXoverSmoothed' in fx
 assert 'verbBassLow.fill (0.0f)' in fx and 'verbBassGainDeltaSmoothed.fill (0.0f)' in fx
 assert 'std::max (1.0, static_cast<double> (c[fx::reverbBassDecay]))' in fx
 assert 'std::clamp (wetGuardSeconds, .5, 240.0)' in fx
-assert 'TEST2.4.54-Windows-x64' in workflow
+assert 'TEST2.4.55-Windows-x64' in workflow
 print('PASS: TEST2.4.43 append-only bass RT60/XOver, per-line feedback, smoothing, dynamic UI, wet tails.')

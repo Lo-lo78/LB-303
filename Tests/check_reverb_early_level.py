@@ -18,9 +18,9 @@ assert 'fxParameterCount = 35' in h
 assert 'reverbEarlyLevelIndex = reverbLfoPan2Index + 1' in h
 assert 'portamentoCurve1Index = reverbEarlyLevelIndex + 1' in h
 assert 'portamentoCurve2Index = portamentoCurve1Index + 1' in h
-assert 'parameterCount = reverbAccentSendIndex + 1' in h
+assert 'parameterCount = reverbDuckRecoveryIndex + 1' in h
 assert 'reverbEarlyLevel = fxParameterCount + 9' in h
-assert 'fxParameterCount + 10' in fxh
+assert 'fxParameterCount + 12' in fxh
 assert 'fx_reverb_early_level' in c
 assert '"Reverb Early Reflections Level"' in c
 assert '0, 100, 1, 15, "%"' in c
@@ -41,7 +41,7 @@ assert 'earlyReflectionsLevelSmoothCoeff' in fx
 assert 'const float positionComp' in fx
 assert 'if (!settingsPrepared)' in fx
 assert 'reverbEarlyLevelIndex' in h and 'reverbEarlyLevelIndex' in c
-assert 'LB-303-0.99.1-TEST2.4.54-Windows-x64' in wf
+assert 'LB-303-0.99.1-TEST2.4.55-Windows-x64' in wf
 assert 'python Tests/check_reverb_early_level.py' in wf
 # Fixed reflection taps are constant across pan: only the stereo distribution
 # changes. Centre is never gated, and LFO zero crossings do not add/remove taps.

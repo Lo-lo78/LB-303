@@ -73,5 +73,5 @@ for global_send in (0, 10, 50, 100):
 assert 'TEST2.4.54' in read('README.md')
 assert read('Help/LB303Help.html').count('TEST2.4.54') >= 7
 assert 'Tests/check_step_send_levels.py' in workflow
-assert 'TEST2.4.54-Windows-x64' in workflow
+assert 'TEST2.4.55-Windows-x64' in workflow
 print('PASS: TEST2.4.54 real per-step sends, old preset migration, key cycling, audio smoothing and compatible FX routing')

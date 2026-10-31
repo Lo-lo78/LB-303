@@ -66,7 +66,10 @@ constexpr size_t portamentoCurveIndex (size_t lane) { return portamentoCurve1Ind
 // Per-effect velocity response, applied only to steps whose Send is Accent.
 constexpr size_t delayAccentSendIndex = portamentoCurve2Index + 1;
 constexpr size_t reverbAccentSendIndex = delayAccentSendIndex + 1;
-constexpr size_t parameterCount = reverbAccentSendIndex + 1;
+// TEST2.4.55: append-only reverb return ducking, triggered by musical Note On.
+constexpr size_t reverbDuckAmountIndex = reverbAccentSendIndex + 1;
+constexpr size_t reverbDuckRecoveryIndex = reverbDuckAmountIndex + 1;
+constexpr size_t parameterCount = reverbDuckRecoveryIndex + 1;
 constexpr size_t lfoParameterIndex (size_t lane, size_t control)
 { return lfoParameterBase + lane * lfoParameterCount + control; }
 namespace lfo
@@ -95,7 +98,7 @@ constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2Param
 constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 3; // MIDI channel, separate output, Portamento Curve (GUI-only)
 constexpr int voiceMidiDisplayIndex = 5; // Volume, Waveform, Osc 2 Volume, Osc 2 Detune, Pan, MIDI, ...
 constexpr size_t classicDelayParameterCount = 14;
-constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1 + 2; // append-only reverb bass and spatial host params
+constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1 + 2 + 2; // append-only reverb bass and spatial host params
 constexpr size_t fxContextIndex = basslineCount + 1;
 size_t fxDisplayGlobalIndex (size_t displayIndex) noexcept;
 namespace fx
@@ -124,6 +127,8 @@ constexpr size_t reverbSourcePan2 = fxParameterCount + 6;
 constexpr size_t reverbLfoPan1 = fxParameterCount + 7;
 constexpr size_t reverbLfoPan2 = fxParameterCount + 8;
 constexpr size_t reverbEarlyLevel = fxParameterCount + 9;
+constexpr size_t reverbDuckAmount = fxParameterCount + 10;
+constexpr size_t reverbDuckRecovery = fxParameterCount + 11;
 }
 constexpr size_t sequencerParameterIndex (size_t local) { return audioParameterCount + local; }
 constexpr size_t pattern1Index = audioParameterCount;

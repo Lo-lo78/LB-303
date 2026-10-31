@@ -1,3 +1,18 @@
+# LB-303 0.99.1 — TEST2.4.55: Reverb Ducking sugli attacchi
+
+**TEST2.4.55 — due controlli FX nella colonna Reverb:**
+
+- **Reverb Duck Amount** (0–100%, **default 0%**): un vero Note On della Bassline 1 o 2 abbassa temporaneamente **solo il ritorno del reverbero**; 100% con Velocity 127 arriva a circa **−18 dB**. La quantità segue la Velocity reale dell'evento. Uno step **Reverb Send Mute** può comunque far arretrare le code esistenti, perché il detector è indipendente dal Send.
+- **Reverb Duck Recovery** (10–2000 ms, **default 350 ms**): dopo un attacco smussato in 5 ms, il reverbero torna automaticamente al livello normale, **anche se la nota dura ancora**. Il tempo indica il recupero del 99% della riduzione in dB, senza dipendere da Note Off o release dell'inviluppo.
+
+Il ducking usa gli **eventi Note On effettivamente inviati ai due sintetizzatori**: in legato Length 101, una nota legata dello stesso pitch NON provoca un nuovo duck, mentre un cambio di pitch con nuovo Note On lo provoca. Non si attiva su pause, Note Off, spostamenti dello step senza nuovo attacco, MIDI usato solo per avviare il sequencer, né su echi/riflessioni. Gli attacchi simultanei delle due bassline usano la riduzione maggiore, non sommano i dB. Nuovi attacchi possono rilanciare dolcemente l'attenuazione durante il recupero.
+
+La rete di feedback a otto linee, le prime riflessioni e Spatial Motion continuano a lavorare anche durante il ducking; l'attenuazione viene applicata **dopo il riverbero**, e prima della somma con chorus/delay. Non viene toccato il segnale dry, né gli altri effetti. **Duck Amount 0% è un bypass reale**, perciò i vecchi progetti e preset conservano lo stesso audio. Tutti gli ID VST3 preesistenti sono invariati; i due nuovi sono aggiunti in fondo al catalogo. Nessuna modifica al formato LSQ2 v9, ai pattern o ai Parameter Locks.
+
+Compilazione del VST3 **solo tramite GitHub Actions**. I controlli statici/numerici non sostituiscono la prova sonora in REAPER.
+
+---
+
 # LB-303 0.99.1 — TEST2.4.54: Send per step 0–100%, stato con tasto corrente
 
 **Novità TEST2.4.54:** nelle pagine Ctrl+1 e Ctrl+2, Normal ora ha un Send **reale 0–100% per singolo step**. Per cambiare Normal → Accent → Mute premi di nuovo il tasto dello step corrente, oppure Invio. La Velocity governa ancora Accent. Il riverbero spaziale delle versioni precedenti è preservato.

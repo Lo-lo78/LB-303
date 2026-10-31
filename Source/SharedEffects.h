@@ -12,7 +12,7 @@ namespace lb303
 class SharedEffects final
 {
 public:
-    using Controls = std::array<float, fxParameterCount + 10>; // 35 historic + 2 bass + 3 motion + 4 source-position + early level
+    using Controls = std::array<float, fxParameterCount + 12>; // historic + bass, spatial, early level and two ducking controls
     using ClassicParameters = BassEngine::Values;
     using LfoSamples = std::array<float, basslineCount>;
     void prepare (double newSampleRate);
@@ -22,6 +22,9 @@ public:
                            const std::array<float, basslineCount>& reverb) noexcept;
     void setStepSendOverrides (const std::array<float, basslineCount>& delay,
                                const std::array<float, basslineCount>& reverb) noexcept;
+    // Call only on actual Note On for either playing bassline, on the audio thread.
+    // Step changes and Note Offs do NOT trigger ducking; no DSP allocation.
+    void triggerReverbDuck (int velocity) noexcept;
     float dryLevel() const noexcept { return classicDryLevel; }
     bool wetEffectsEnabled() const noexcept { return enabledSharedWetFx; }
     double wetTailGuardSeconds() const noexcept { return wetGuardSeconds; }
@@ -83,6 +86,14 @@ private:
     std::array<float, basslineCount> delayOverrideMixSmoothed {{ 0.0f, 0.0f }};
     std::array<float, basslineCount> reverbOverrideMixSmoothed {{ 0.0f, 0.0f }};
     float stepSendSmoothingCoeff = 0.0f;
+    // Short attack then self-recovering attenuation in dB. No gate/Note Off
+    // dependency: long and tied notes cannot pin down the reverb indefinitely.
+    float reverbDuckReductionDb = 0.0f;
+    float reverbDuckAttackTargetDb = 0.0f;
+    float reverbDuckRecoveryCoeff = 0.0f;
+    int reverbDuckAttackSamplesLeft = 0;
+    int reverbDuckAttackSamples = 1;
+    float nextReverbDuckGain() noexcept;
     double wetGuardSeconds = 0.5;
     double fs = 44100.0, bpm = 120.0;
     // Smoothed fractional read position for the shared reverb pre-delay.

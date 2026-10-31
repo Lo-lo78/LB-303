@@ -41,6 +41,10 @@ void SharedEffects::prepare (double sampleRate)
     fs = std::max (8000.0, sampleRate);
     classic.prepare (fs);
     stepSendSmoothingCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.006 * fs)));
+    reverbDuckAttackSamples = std::max (1, static_cast<int> (std::lround (0.005 * fs)));
+    reverbDuckRecoveryCoeff = static_cast<float> (1.0 - std::exp (-std::log (100.0) / (0.350 * fs)));
+    reverbDuckReductionDb = reverbDuckAttackTargetDb = 0.0f;
+    reverbDuckAttackSamplesLeft = 0;
     delayStepSendTarget.fill (1.0f); reverbStepSendTarget.fill (1.0f);
     delayStepSendSmoothed.fill (1.0f); reverbStepSendSmoothed.fill (1.0f);
     delayAbsoluteTarget.fill (0.0f); reverbAbsoluteTarget.fill (0.0f);
@@ -113,6 +117,8 @@ void SharedEffects::prepare (double sampleRate)
 void SharedEffects::clearTails() noexcept
 {
     classic.reset();
+    reverbDuckReductionDb = reverbDuckAttackTargetDb = 0.0f;
+    reverbDuckAttackSamplesLeft = 0;
     delayStepSendTarget.fill (1.0f); reverbStepSendTarget.fill (1.0f);
     delayStepSendSmoothed.fill (1.0f); reverbStepSendSmoothed.fill (1.0f);
     delayAbsoluteTarget.fill (0.0f); reverbAbsoluteTarget.fill (0.0f);
@@ -187,6 +193,54 @@ void SharedEffects::setStepSendOverrides (const std::array<float, basslineCount>
             reverbAbsoluteTarget[lane] = clampf (reverb[lane], 0.0f, 100.0f);
     }
 }
+void SharedEffects::triggerReverbDuck (int velocity) noexcept
+{
+    // Audio-thread only. The musical onset is detected upstream from the
+    // actual synth Note On, not from reverb energy or the Send state.
+    if (c[fx::reverbType] <= 0.5f || c[fx::reverbDuckAmount] <= 0.0f
+        || velocity <= 0) return;
+    const float velocityStrength = clampf (static_cast<float> (velocity) / 127.0f, 0.0f, 1.0f);
+    // 100% / velocity 127 = maximum 18 dB attenuation on the reverb RETURN.
+    const float requestedDb = 18.0f * clampf (c[fx::reverbDuckAmount] * .01f, 0.0f, 1.0f)
+                                      * velocityStrength;
+    // Simultaneous notes combine by maximum, not addition: two basslines
+    // cannot accidentally double the attenuation or clip its control path.
+    if (requestedDb > reverbDuckReductionDb + 1.0e-5f)
+    {
+        reverbDuckAttackTargetDb = std::max (reverbDuckAttackTargetDb, requestedDb);
+        reverbDuckAttackSamplesLeft = reverbDuckAttackSamples;
+    }
+}
+
+float SharedEffects::nextReverbDuckGain() noexcept
+{
+    if (c[fx::reverbDuckAmount] <= 0.0f)
+    {
+        // True bypass at the default. No floating-point change to older audio.
+        reverbDuckReductionDb = reverbDuckAttackTargetDb = 0.0f;
+        reverbDuckAttackSamplesLeft = 0;
+        return 1.0f;
+    }
+    if (reverbDuckAttackSamplesLeft > 0)
+    {
+        // Exact straight ramp in dB, restarting smoothly when a new Note On
+        // interrupts a previous recovery. Never step the gain on trigger.
+        reverbDuckReductionDb += (reverbDuckAttackTargetDb - reverbDuckReductionDb)
+                               / static_cast<float> (reverbDuckAttackSamplesLeft--);
+        if (reverbDuckAttackSamplesLeft == 0)
+            reverbDuckAttackTargetDb = 0.0f;
+    }
+    else
+    {
+        // Recovery time = time to release 99% of the attenuation in dB.
+        reverbDuckReductionDb *= (1.0f - reverbDuckRecoveryCoeff);
+        if (reverbDuckReductionDb < 1.0e-5f) reverbDuckReductionDb = 0.0f;
+    }
+    return reverbDuckReductionDb > 0.0f
+        ? std::exp (-0.11512925464970229f * reverbDuckReductionDb)
+        : 1.0f;
+}
+
 void SharedEffects::setParameters (const Controls& settings,
                                    const ClassicParameters& original, double tempo)
 {
@@ -199,6 +253,17 @@ void SharedEffects::setParameters (const Controls& settings,
     lastClassicParameters = original;
     bpm = nextBpm;
     c = settings;
+    // Calculate the envelope rate once per parameter change, never in the
+    // per-sample path. At 350ms it releases 99% of the dB reduction.
+    const double recoverySeconds = std::clamp (
+        static_cast<double> (c[fx::reverbDuckRecovery]), 10.0, 2000.0) * 0.001;
+    reverbDuckRecoveryCoeff = static_cast<float> (
+        1.0 - std::exp (-std::log (100.0) / (recoverySeconds * fs)));
+    if (c[fx::reverbType] <= 0.5f || c[fx::reverbDuckAmount] <= 0.0f)
+    {
+        reverbDuckReductionDb = reverbDuckAttackTargetDb = 0.0f;
+        reverbDuckAttackSamplesLeft = 0;
+    }
     // Bound a delay's *silent gaps* by its actual time and feedback, rather
     // than paying a fixed 30 seconds of DSP after every short echo.
     // Continuous measurable wet output keeps the graph awake regardless.
@@ -943,10 +1008,14 @@ SharedEffects::Output SharedEffects::processPostDistortion (float axL, float axR
     const auto delayWet = runDelay (delayStem.first, delayStem.second);
     const auto reverbWet = runReverb (reverbStem.first + delayWet.first * reverbLink,
                                       reverbStem.second + delayWet.second * reverbLink);
+    // Duck only the fully formed reverb return: early reflections and long
+    // moving FDN tail together. Neither FDN feedback nor dry/chorus/delay is
+    // attenuated. The tail continues generating even while momentarily hidden.
+    const float duckGain = verbEnabled ? nextReverbDuckGain() : 1.0f;
     Output out;
     // Exactly one shared wet bus, even when both voices are sent to stems.
-    out.wet = { bounded (ch1L + ch2L + delayWet.first + reverbWet.first),
-                bounded (ch1R + ch2R + delayWet.second + reverbWet.second) };
+    out.wet = { bounded (ch1L + ch2L + delayWet.first + reverbWet.first * duckGain),
+                bounded (ch1R + ch2R + delayWet.second + reverbWet.second * duckGain) };
     out.dry[0] = { bounded (axL), bounded (axR) };
     out.dry[1] = { bounded (bxL), bounded (bxR) };
     return out;
