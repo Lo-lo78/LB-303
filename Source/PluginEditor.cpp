@@ -515,6 +515,10 @@ void LB303AudioProcessorEditor::updateFxColumns()
         add (5, lb303::reverbLfoPan2Index);
         add (5, lb303::reverbEarlyLevelIndex);
         add (5, lb303::reverbAccentSendIndex);
+        // TEST2.4.56: expose the existing automated ducking parameters
+        // in the NVDA-accessible Reverb FX column (active reverb only).
+        add (5, lb303::reverbDuckAmountIndex);
+        add (5, lb303::reverbDuckRecoveryIndex);
     }
     // Historical fx::effectOrder deliberately absent from this view.
 }

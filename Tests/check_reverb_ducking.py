@@ -20,6 +20,17 @@ assert 'constexpr size_t reverbDuckAmount = fxParameterCount + 10;' in h
 assert 'constexpr size_t reverbDuckRecovery = fxParameterCount + 11;' in h
 assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1 + 2 + 2;' in h
 assert 'reverbDuckAmountIndex, reverbDuckRecoveryIndex' in c
+# REGRESSION TEST TEST2.4.56: the host catalog alone does NOT make a control
+# visible in Alt+Q > FX. The filtered FX grid must include both duck controls.
+editor=read('Source/PluginEditor.cpp')
+start=editor.index('void LB303AudioProcessorEditor::updateFxColumns()')
+end=editor.index('std::pair<int, int> LB303AudioProcessorEditor::fxCell',start)
+fxview=editor[start:end]
+rev=fxview[fxview.index('// Column 5: reverb type picker'):]
+assert 'if (enabled (lb303::fx::reverbType))' in rev
+assert rev.index('add (5, lb303::reverbAccentSendIndex);') < rev.index('add (5, lb303::reverbDuckAmountIndex);') < rev.index('add (5, lb303::reverbDuckRecoveryIndex);')
+assert rev.count('add (5, lb303::reverbDuckAmountIndex);') == 1
+assert rev.count('add (5, lb303::reverbDuckRecoveryIndex);') == 1
 assert '"fx_reverb_duck_amount", "Reverb Duck Amount",\n            0, 100, 1, 0, "%"' in c
 assert '"fx_reverb_duck_recovery", "Reverb Duck Recovery",\n            10, 2000, 10, 350, "ms"' in c
 for name in ('reverbDuckAmountIndex','reverbDuckRecoveryIndex'):
@@ -56,11 +67,11 @@ for fs in (44100,48000,96000):
   assert 0.17 < reduction < 0.19,(fs,ms,reduction)
  assert 10**(-18/20) < 0.127
 assert 'python Tests/check_reverb_ducking.py' in w
-assert 'TEST2.4.55-Windows-x64' in w
-assert 'TEST2.4.55' in read('README.md')
+assert 'TEST2.4.56-Windows-x64' in w
+assert 'TEST2.4.56' in read('README.md')
 manual=read('Help/LB303Help.html')
-assert manual.count('TEST2.4.55') >= 7
+assert manual.count('TEST2.4.56') >= 7
 for locale in ('en','it','es','fr','ru','zh','ja'):
  sec=manual.split('<article class="manual" id="'+locale+'"',1)[1].split('</article>',1)[0]
  assert 'Reverb Duck Amount' in sec and 'Reverb Duck Recovery' in sec
-print('PASS: TEST2.4.55 append-only reverb ducking, note-on detector, 5ms attack, recovery, routing, 0%-bypass, 7 guides')
+print('PASS: TEST2.4.56 reverb ducking visible in NVDA FX grid, append-only IDs, Note On ducking, 0%-bypass, 7 guides')

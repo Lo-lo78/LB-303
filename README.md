@@ -1,3 +1,19 @@
+# LB-303 0.99.1 — TEST2.4.56: fix accessibilità Reverb Ducking in FX
+
+**Correzione della TEST2.4.55:** in Alt+Q → pagina FX → colonna Reverb,
+con Reverb Type impostato su Room, Plate, Hall o Cathedral, compaiono ora
+**Reverb Duck Amount** (0–100%, default 0%) e **Reverb Duck Recovery**
+(10–2000 ms, default 350 ms), subito dopo Reverb Accent Send.
+
+La precedente versione aveva già i due parametri nel catalogo automatizzabile
+VST3 e nel DSP, ma li ometteva dalla griglia filtrata `updateFxColumns()`.
+Questa versione modifica soltanto la visibilità nell'editor e aggiunge un test
+di regressione dedicato. ID VST3, preset, DSP, scalature, reset e audio invariati.
+Reverb Type Off continua a nascondere tutti i controlli specifici del reverbero.
+Build VST3 esclusivamente con GitHub Actions.
+
+---
+
 # LB-303 0.99.1 — TEST2.4.55: Reverb Ducking sugli attacchi
 
 **TEST2.4.55 — due controlli FX nella colonna Reverb:**
