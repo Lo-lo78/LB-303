@@ -751,7 +751,7 @@ juce::String SequencerState::serialiseToBase64 (bool includeSelectedSequence) co
     // v3 = original TEST2.4.29; v4/5 included a now-discarded Accent field.
     // v6 stores Note and Length memories; v7 adds Velocity memory; v8 adds two send states.
     // No separate Accent per-step is introduced.
-    stream.writeInt (9);
+    stream.writeInt (10); // 64 patterns per bassline; v1..v9 stored 16.
     stream.writeInt (getRoutingMode());
     stream.writeInt (includeSelectedSequence ? getSelectedSequence() : 0);
 
@@ -827,7 +827,7 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
     if (stream.readInt() != 0x4c535132)
         return false;
     const auto formatVersion = stream.readInt();
-    if (formatVersion < 1 || formatVersion > 9)
+    if (formatVersion < 1 || formatVersion > 10)
         return false;
 
     // Silence the generator while its atomic fields are replaced.
@@ -835,7 +835,10 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
     const auto restoredMode = juce::jlimit (0, 3, stream.readInt());
     const auto restoredSelected = clampSequence (stream.readInt());
 
-    for (int sequenceIndex = 0; sequenceIndex < maximumSequences; ++sequenceIndex)
+    // Legacy LSQ2 versions saved only 16 sequences. Never consume bytes for
+    // patterns 17..64 when restoring old projects. Those slots stay empty.
+    const int savedSequenceCount = formatVersion >= 10 ? maximumSequences : 16;
+    for (int sequenceIndex = 0; sequenceIndex < savedSequenceCount; ++sequenceIndex)
     {
         auto& sequence = sequences[static_cast<std::size_t> (sequenceIndex)];
         sequence.startStep.store (juce::jlimit (1, stepsPerSequence, stream.readInt()), std::memory_order_relaxed);
@@ -939,6 +942,10 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
             }
         }
     }
+
+    if (formatVersion < 10)
+        for (int p = savedSequenceCount; p < maximumSequences; ++p)
+            resetSequence (p); // clear unused slots after loading any legacy bank
 
     // Versions that stored Input Polyphony per lane may contain a mixed state.
     // If either pitched lane requested Poly, preserve that intent and make the

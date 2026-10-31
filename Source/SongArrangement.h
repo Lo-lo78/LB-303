@@ -16,7 +16,7 @@ namespace lb303
 class SongArrangement
 {
 public:
-    using Column = std::vector<int>; // 0..15, independent for each bassline
+    using Column = std::vector<int>; // 0..63, independent for each bassline
     using Snapshot = std::shared_ptr<const Column>;
     struct Position
     {

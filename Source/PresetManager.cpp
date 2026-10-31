@@ -14,7 +14,7 @@ const juce::Identifier folderKey { "presetBrowserDirectory" };
 const juce::Identifier rowKey { "presetBrowserRow" };
 constexpr auto browserSettingsName = "LB-303 Preset Browser";
 // JUCE XML state is already used by REAPER; preserving its binary blob also
-// keeps the two independent 16-pattern banks, every step, and every lock.
+// keeps the two independent 64-pattern banks, every step, and every lock.
 }
 
 PresetManager::PresetManager (LB303AudioProcessor& p)

@@ -36,7 +36,7 @@ public:
     void changeProgramName (int, const juce::String&) override {}
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
-    void resetToInitialState(); // Alt+I: full synth, FX, MIDI, all 32 patterns
+    void resetToInitialState(); // Alt+I: full synth, FX, MIDI, all 128 patterns
 
     // Editor navigation belongs to this live processor instance, not to
     // the host project or a .lb preset. Recreating this instance starts clean.

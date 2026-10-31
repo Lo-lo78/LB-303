@@ -29,7 +29,7 @@ for field in ['delaySendState', 'reverbSendState']:
     assert f'stream.writeByte (static_cast<char> (juce::jlimit (0, 2, step.{field})))' in s
     assert f'step.{field}.store (formatVersion >= 8' in s
     assert s.count(f'storeRelaxed (step.{field}, 0);') >= 3
-assert 'stream.writeInt (9);' in s and 'formatVersion > 9' in s
+assert 'stream.writeInt (10);' in s and 'formatVersion > 10' in s
 assert s.index('step.reverbSendState.store (formatVersion >= 8') < s.index('step.parameterLockCount.store (0, std::memory_order_relaxed);', s.index('const int loadedVelocity ='))
 assert 'maximumParameterLocks = 32' in h
 assert 'source.noteBeforePause' in s and 'source.lengthBeforeLegato' in s
@@ -94,5 +94,5 @@ for language in ['en','it','es','fr','ru','zh','ja']:
     assert manual.count('TEST2.4.53 —') >= 6
 assert 'TEST2.4.53' in read('README.md')
 assert 'Tests/check_accent_send_steps.py' in workflow
-assert 'TEST2.4.56-Windows-x64' in workflow
+assert 'TEST2.4.57-Windows-x64' in workflow
 print('PASS: TEST2.4.53 velocity-dependent Delay/Reverb step sends, v8 migration, Alt+Q accessible pages and DSP smoothing')

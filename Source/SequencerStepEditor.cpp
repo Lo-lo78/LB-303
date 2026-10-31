@@ -165,7 +165,7 @@ void SequencerStepEditor::refresh()
     const auto config = bank().getConfig (pat);
     juce::String text;
     text << "LB-303 SEQUENCER — BASSLINE " << (track + 1)
-         << " — PATTERN " << (pat + 1) << "/16 — PAGE " << (page == 7 ? juce::String ("Ctrl+1")
+         << " — PATTERN " << (pat + 1) << "/" << lb303::SequencerState::maximumSequences << " — PAGE " << (page == 7 ? juce::String ("Ctrl+1")
                          : page == 8 ? juce::String ("Ctrl+2") : juce::String (page + 1))
          << " " << pageName() << "\n\n";
     if (page == 5)
@@ -354,7 +354,7 @@ void SequencerStepEditor::changeTrack (int direction)
 void SequencerStepEditor::changePattern (int direction)
 {
     const int old = pattern();
-    const int next = juce::jlimit (0, 15, old + direction);
+    const int next = juce::jlimit (0, lb303::SequencerState::maximumSequences - 1, old + direction);
     if (next == old) return;
     // Only the selector for the current bassline is touched.
     const auto index = track == 0 ? lb303::pattern1Index : lb303::pattern2Index;
@@ -676,7 +676,7 @@ void SequencerStepEditor::pasteSteps()
     announce (juce::String (count) + " steps pasted");
 }
 // The versioned system clipboard contains a SINGLE source pattern (config,
-// all 128 steps and all parameter locks), never a full 16-pattern bank.
+// all 128 steps and all parameter locks), never a full 64-pattern bank.
 // SequencerState already has a stable serializer and a copySequenceFrom
 // primitive, so stage the copied pattern in temporary slot 0 on the HEAP.
 // This supports pasting between patterns, basslines and plugin instances.
@@ -1012,7 +1012,7 @@ bool SequencerStepEditor::handlePickerKey (const juce::KeyPress& key)
     return true;
 }
 
-// A Song row holds one of this lane's sixteen patterns, NOT a copy of its steps.
+// A Song row holds one of this lane's 64 patterns, NOT a copy of its steps.
 // Selections can be discontinuous; Ctrl+C/X/V always compacts selected rows
 // in ascending song order. Cursors and selections are runtime editor state.
 void SequencerStepEditor::renderSong()
@@ -1050,7 +1050,7 @@ void SequencerStepEditor::renderSong()
          << "\nShift+Up/Down: select range | Shift+Space: toggle item | Ctrl+Shift+Up/Down: add range"
          << "\nCtrl+A: whole column | Ctrl+C/X/V: compact copy/cut/insert | Ctrl+Z/Shift+Z: undo/redo"
          << "\nAlt+I: insert | Delete: delete | Ctrl+Delete: clear with confirmation"
-         << "\nCtrl+Up/Down: change P1–P16 | Alt+L: lane loop | Alt+M: Song/Pattern preview | Alt+Shift+M: audition focused pattern"
+         << "\nCtrl+Up/Down: change P1–P64 | Alt+L: lane loop | Alt+M: Song/Pattern preview | Alt+Shift+M: audition focused pattern"
          << "\nAlt+R: Song/Pattern preview | Tab: full row details | Alt+S: Steps editor"
          << "\nAlt+P: Space target | Space: play/stop preview (when routed to Sequencer) | Esc: close";
     if (songConfirmClear) text << "\nConfirm clearing entire song column with Ctrl+Delete or Enter. Esc cancels.";
@@ -1245,7 +1245,7 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
         {
             if (data.empty()) return true;
             const int old = data[static_cast<size_t> (cursor)];
-            const int next = juce::jlimit (0, 15, old + (code == juce::KeyPress::upKey ? 1 : -1));
+            const int next = juce::jlimit (0, lb303::SequencerState::maximumSequences - 1, old + (code == juce::KeyPress::upKey ? 1 : -1));
             if (next == old) return true; // silent boundary
             data[static_cast<size_t> (cursor)] = next;
             applySongEdit (std::move (data));
@@ -1312,7 +1312,7 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
             {
                 if (token.isEmpty()) continue;
                 const int p = token.getIntValue();
-                if (p < 1 || p > 16 || ! token.trim().containsOnly ("0123456789"))
+                if (p < 1 || p > lb303::SequencerState::maximumSequences || ! token.trim().containsOnly ("0123456789"))
                 { announce ("Invalid Song clipboard"); return true; }
                 paste.push_back (p - 1);
             }
@@ -1349,7 +1349,7 @@ bool SequencerStepEditor::handleSongKey (const juce::KeyPress& key)
     if (code == juce::KeyPress::returnKey)
     {
         // Enter no longer opens a second selector. Ctrl+Up/Down edits P1..P16
-        // directly; Enter reads details just like Tab.
+        // directly (P1..P64); Enter reads details just like Tab.
         announceSong (true);
         return true;
     }

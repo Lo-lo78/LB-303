@@ -88,7 +88,7 @@ void LB303AudioProcessorEditor::ParameterValue::setEntryAccessibility()
     const auto name = juce::String (lb303::catalog()[editor.globalIndex()].name);
     setName ("Value. " + name);
     setTitle ("Value. " + name);
-    setDescription ("Alt+V");
+    setDescription ("Tab");
 }
 void LB303AudioProcessorEditor::ParameterValue::focusGained (FocusChangeType cause)
 {
@@ -397,27 +397,30 @@ size_t LB303AudioProcessorEditor::globalIndex (int local) const
     if (context == static_cast<int> (lb303::fxContextIndex))
         return visibleFxParameters.at (static_cast<size_t> (local));
     if (context < 2)
-    {
+        return basslineParameterIndex (context, local);
+    return lb303::sequencerParameterIndex (lb303::displayToLocal (
+        static_cast<size_t> (context), static_cast<size_t> (local)));
+}
+
+size_t LB303AudioProcessorEditor::basslineParameterIndex (int lane, int local) const
+{
         // TEST2.4.52: GUI-only Portamento Curve immediately follows Time/Mode.
         // Display slot 17 is virtual and NOT a sequencer lock slot. No old
         // voiceDisplayOrder entries, MIDI indices or host IDs are shifted.
         constexpr int curveDisplayIndex = 17;
         if (local == curveDisplayIndex)
-            return lb303::portamentoCurveIndex (static_cast<size_t> (context));
+            return lb303::portamentoCurveIndex (static_cast<size_t> (lane));
         if (local > curveDisplayIndex) --local;
         // Reuse the existing, automated MIDI channel ID in each voice grid,
         // without changing voice DSP local indices or the lock picker mapping.
         if (local == lb303::voiceMidiDisplayIndex)
-            return context == 0 ? lb303::midiChannel1Index : lb303::midiChannel2Index;
+            return lane == 0 ? lb303::midiChannel1Index : lb303::midiChannel2Index;
         if (local == lb303::voiceMidiDisplayIndex + 1)
-            return lb303::separateOutputIndex (static_cast<size_t> (context));
+            return lb303::separateOutputIndex (static_cast<size_t> (lane));
         const int voiceDisplay = local > lb303::voiceMidiDisplayIndex + 1 ? local - 2 : local;
-        const auto actual = lb303::displayToLocal (static_cast<size_t> (context),
+        const auto actual = lb303::displayToLocal (static_cast<size_t> (lane),
                                                    static_cast<size_t> (voiceDisplay));
-        return lb303::voiceParameterGlobalIndex (static_cast<size_t> (context), actual);
-    }
-    return lb303::sequencerParameterIndex (lb303::displayToLocal (
-        static_cast<size_t> (context), static_cast<size_t> (local)));
+        return lb303::voiceParameterGlobalIndex (static_cast<size_t> (lane), actual);
 }
 juce::String LB303AudioProcessorEditor::contextName() const
 {
@@ -1088,7 +1091,7 @@ void LB303AudioProcessorEditor::initialisePlugin()
     auto& speaking = focused == &parameterValue ? static_cast<juce::Component&> (parameterValue)
                    : focused == &numericEdit ? static_cast<juce::Component&> (numericEdit)
                    : static_cast<juce::Component&> (parameterGrid);
-    lb303::announceToActiveScreenReader (speaking, "LB-303 initialized. Both basslines, effects and 32 patterns reset");
+    lb303::announceToActiveScreenReader (speaking, "LB-303 initialized. Both basslines, effects and 128 patterns reset");
 }
 void LB303AudioProcessorEditor::openStepEditor()
 {
@@ -1129,7 +1132,7 @@ void LB303AudioProcessorEditor::changePatternFromGrid (int direction, Control cu
     const int lane = shortcutPatternLane();
     const auto patternParameter = lane == 0 ? lb303::pattern1Index : lb303::pattern2Index;
     const int old = processor.currentPattern (static_cast<size_t> (lane));
-    const int next = juce::jlimit (0, 15, old + direction);
+    const int next = juce::jlimit (0, lb303::SequencerState::maximumSequences - 1, old + direction);
     if (next == old) return; // identical to Alt+Q: silent at first/last pattern
     if (auto* parameter = processor.parameter (patternParameter))
     {
@@ -1150,6 +1153,90 @@ void LB303AudioProcessorEditor::changePatternFromGrid (int direction, Control cu
         numericEdit.selectAll();
 }
 
+// Cross-instance clipboard: full Bassline *sound page* only (no patterns, song,
+// shared FX or sequencer enable/selection). Includes LFO, OSC2, channel,
+// separate output and Portamento Curve, through their stable host IDs.
+namespace
+{
+const juce::String basslineClipboardHeader = "LB303-BASSLINE-PARAMS-V1:";
+constexpr int basslineClipboardMagic = 0x4c423343; // LB3C
+}
+
+void LB303AudioProcessorEditor::copyBasslineParameters (Control current)
+{
+    if (context >= 2) return;
+    juce::MemoryOutputStream bytes;
+    bytes.writeInt (basslineClipboardMagic);
+    bytes.writeInt (1);
+    bytes.writeInt (static_cast<int> (lb303::voiceGridParameterCount));
+    for (int display = 0; display < static_cast<int> (lb303::voiceGridParameterCount); ++display)
+        bytes.writeFloat (processor.value (basslineParameterIndex (context, display)));
+    juce::SystemClipboard::copyTextToClipboard (basslineClipboardHeader
+        + juce::Base64::toBase64 (bytes.getData(), bytes.getDataSize()));
+    auto& focused = current == Control::grid ? static_cast<juce::Component&> (parameterGrid)
+                 : current == Control::value ? static_cast<juce::Component&> (parameterValue)
+                                             : static_cast<juce::Component&> (numericEdit);
+    lb303::announceToActiveScreenReader (focused,
+        "Bassline " + juce::String (context + 1) + " parameters copied");
+}
+
+void LB303AudioProcessorEditor::pasteBasslineParameters (Control current)
+{
+    if (context >= 2) return;
+    auto& focused = current == Control::grid ? static_cast<juce::Component&> (parameterGrid)
+                 : current == Control::value ? static_cast<juce::Component&> (parameterValue)
+                                             : static_cast<juce::Component&> (numericEdit);
+    const auto clipboard = juce::SystemClipboard::getTextFromClipboard().trim();
+    if (! clipboard.startsWith (basslineClipboardHeader))
+    {
+        lb303::announceToActiveScreenReader (focused, "No LB-303 bassline parameters in clipboard");
+        return;
+    }
+    juce::MemoryOutputStream decoded;
+    if (! juce::Base64::convertFromBase64 (decoded, clipboard.substring (basslineClipboardHeader.length())))
+    {
+        lb303::announceToActiveScreenReader (focused, "Invalid bassline clipboard");
+        return;
+    }
+    constexpr int count = static_cast<int> (lb303::voiceGridParameterCount);
+    if (decoded.getDataSize() != static_cast<size_t> (12 + count * 4))
+    {
+        lb303::announceToActiveScreenReader (focused, "Invalid bassline clipboard size");
+        return;
+    }
+    juce::MemoryInputStream input (decoded.getData(), decoded.getDataSize(), false);
+    if (input.readInt() != basslineClipboardMagic || input.readInt() != 1 || input.readInt() != count)
+    {
+        lb303::announceToActiveScreenReader (focused, "Unsupported bassline clipboard");
+        return;
+    }
+    std::array<float, lb303::voiceGridParameterCount> values {};
+    for (auto& v : values)
+    {
+        v = input.readFloat();
+        if (! std::isfinite (v))
+        {
+            lb303::announceToActiveScreenReader (focused, "Invalid bassline parameter");
+            return;
+        }
+    }
+    // Never paste to the sequencer or FX contexts. Do not touch pattern banks.
+    for (int display = 0; display < count; ++display)
+        if (auto* param = processor.parameter (basslineParameterIndex (context, display)))
+        {
+            const auto& info = lb303::catalog()[basslineParameterIndex (context, display)];
+            const auto bounded = juce::jlimit (info.minimum, info.maximum, values[static_cast<size_t> (display)]);
+            const auto value = param->convertTo0to1 (bounded);
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (value);
+            param->endChangeGesture();
+        }
+    refreshLabels (true);
+    selectParameter();
+    lb303::announceToActiveScreenReader (focused,
+        "Parameters pasted to Bassline " + juce::String (context + 1));
+}
+
 bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control current)
 {
     const auto code = key.getKeyCode();
@@ -1159,6 +1246,20 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
     {
         return ch == c || code == juce::CharacterFunctions::toUpperCase (c);
     };
+    // Alt+C/Alt+V operate ONLY on the two Bassline sound pages. On
+    // Sequencer and FX they intentionally make no change. Alt+V replaces the
+    // former direct Value-focus shortcut (Tab still navigates Value).
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isShiftDown()
+        && ! mods.isCommandDown() && (letter ('c') || letter ('v')))
+    {
+        if (context < 2)
+        {
+            if (current == Control::edit && editDirty && ! commitEdit()) return true;
+            if (letter ('c')) copyBasslineParameters (current);
+            else pasteBasslineParameters (current);
+        }
+        return true;
+    }
     // Space target is shared by all four parameter pages and the Alt+Q editor.
     // It is instance-only and does not change the selected parameter or focus.
     if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isCommandDown() && letter ('p'))
@@ -1237,7 +1338,6 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
     if (mods.isAltDown())
     {
         if (letter ('l')) { focusControl (Control::grid, current == Control::edit); return true; }
-        if (letter ('v')) { focusControl (Control::value, current == Control::edit); return true; }
         if (letter ('e')) { enterEdit(); return true; }
         if (letter ('q')) { openStepEditor(); return true; }
         if (code == juce::KeyPress::upKey) { changeValue (1, mods.isShiftDown() ? 10 : 1); return true; }

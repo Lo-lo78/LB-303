@@ -78,7 +78,7 @@ struct SequencerConfig
 class SequencerState
 {
 public:
-    static constexpr int maximumSequences = 16;
+    static constexpr int maximumSequences = 64;
     static constexpr int stepsPerSequence = 128;
 
     enum class ConfigParameter

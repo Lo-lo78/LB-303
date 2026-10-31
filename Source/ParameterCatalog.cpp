@@ -13,8 +13,16 @@ constexpr const char* transientChoices[] = { "Loose", "Neutral", "Tight" };
 constexpr const char* syncChoices[] = { "Off", "1/16", "1/12T", "1/8", "1/6T", "1/4", "1/3T", "1/2", "1/1" };
 constexpr const char* delayModeChoices[] = { "Normal", "Ping-Pong" };
 constexpr const char* responseChoices[] = { "Gate", "Lowpass Gate" };
-constexpr const char* patternChoices[] = { "1", "2", "3", "4", "5", "6", "7", "8",
-                                          "9", "10", "11", "12", "13", "14", "15", "16" };
+constexpr const char* patternChoices[] = {
+    "1", "2", "3", "4", "5", "6", "7", "8",
+    "9", "10", "11", "12", "13", "14", "15", "16",
+    "17", "18", "19", "20", "21", "22", "23", "24",
+    "25", "26", "27", "28", "29", "30", "31", "32",
+    "33", "34", "35", "36", "37", "38", "39", "40",
+    "41", "42", "43", "44", "45", "46", "47", "48",
+    "49", "50", "51", "52", "53", "54", "55", "56",
+    "57", "58", "59", "60", "61", "62", "63", "64"
+};
 constexpr const char* switchChoices[] = { "Off", "On" };
 constexpr const char* trackChoices[] = { "Bassline 1", "Bassline 2" };
 constexpr const char* fxDelayChoices[] = { "Off", "LB-303 Classic", "LJuno Dual Tape" };
@@ -154,8 +162,8 @@ const std::array<ParameterInfo, parameterCount>& catalog()
                 voice == 0 ? "b1_pan" : "b2_pan", "Pan",
                 -100.0f, 100.0f, 1.0f, 0.0f, "%" };
         }
-        result[pattern1Index] = { "seq_b1_pattern", "Pattern Bassline 1", 0, 15, 1, 0, "", patternChoices, 16 };
-        result[pattern2Index] = { "seq_b2_pattern", "Pattern Bassline 2", 0, 15, 1, 0, "", patternChoices, 16 };
+        result[pattern1Index] = { "seq_b1_pattern", "Pattern Bassline 1", 0, 63, 1, 0, "", patternChoices, 64 };
+        result[pattern2Index] = { "seq_b2_pattern", "Pattern Bassline 2", 0, 63, 1, 0, "", patternChoices, 64 };
         result[sequencer1EnabledIndex] = { "seq_b1_enable", "Sequencer Bassline 1", 0, 1, 1, 0, "", switchChoices, 2 };
         result[sequencer2EnabledIndex] = { "seq_b2_enable", "Sequencer Bassline 2", 0, 1, 1, 0, "", switchChoices, 2 };
         result[editTrackIndex] = { "seq_edit_track", "Editor Track", 0, 1, 1, 0, "", trackChoices, 2 };

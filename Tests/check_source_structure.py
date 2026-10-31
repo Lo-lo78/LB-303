@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.99.1-TEST2.4.56-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.1-TEST2.4.57-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -123,11 +123,11 @@ assert 'Bassline 1, channel 1' in (root / 'README.md').read_text()
 assert 'Bassline 2, channel 2' in (root / 'README.md').read_text()
 print('PASS: TEST1.7 MIDI ch1 -> Bassline 1, ch2 -> Bassline 2 only.')
 
-# TEST2.1 regression: two independent banks, 16 patterns each, persist ALL steps.
+# TEST2.1 regression: two independent banks, 64 patterns each, persist ALL steps.
 seqh = (root / 'Source' / 'SequencerState.h').read_text(encoding='utf-8')
 seqcpp = (root / 'Source' / 'SequencerState.cpp').read_text(encoding='utf-8')
 playback = (root / 'Source' / 'SequencerPlayback.cpp').read_text(encoding='utf-8')
-assert 'maximumSequences = 16' in seqh
+assert 'maximumSequences = 64' in seqh
 assert 'stepsPerSequence = 128' in seqh
 assert 'maximumParameterLocks = 32' in seqh
 assert 'note { 128 }' in seqh, 'unprogrammed patterns must be silent'
@@ -152,7 +152,7 @@ assert 'juce::MidiBuffer generated;' in processor
 assert 'context < 2' in editor and 'lb303::sequencerParameterIndex' in editor
 assert 'Source/SequencerState.cpp' in (root / 'CMakeLists.txt').read_text()
 assert 'Source/SequencerPlayback.cpp' in (root / 'CMakeLists.txt').read_text()
-print('PASS: TEST2.1 two independent 16-pattern lanes, PPQ scheduling, MIDI 1/2, preset persistence, accessible Sequencer parameters.')
+print('PASS: TEST2.1 two independent 64-pattern lanes, PPQ scheduling, MIDI 1/2, preset persistence, accessible Sequencer parameters.')
 
 # TEST2.2: editor migrated from LJuno step-navigation semantics, with two
 # autonomous patterns and preserved focus, MIDI and project serialization.
@@ -385,7 +385,7 @@ assert 'processor.editorSession.sequencerPage' in step
 assert 'lastPickerPosition[static_cast<size_t> (track)]' in step
 assert 'returnControl = focus;' in step
 assert 'key.getModifiers().isAltDown()' in step and 'close(); return true;' in step
-assert 'displayToLocal (static_cast<size_t> (context)' in editor
+assert 'displayToLocal (static_cast<size_t> (lane)' in editor
 assert 'displayToLocal (static_cast<size_t> (track)' in step
 assert 'lastSelected[static_cast<size_t> (context)] = chosen;' in editor
 print('PASS: TEST2.3.1 independent configurable MIDI inputs and Omni, combined preview, UI focus memory and stable IDs.')
@@ -672,7 +672,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n                playing' not in processor
-assert 'LB-303-0.99.1-TEST2.4.56-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.1-TEST2.4.57-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -717,7 +717,7 @@ for suffix in ('mode','rate','bpm_sync','wave','square_pwm','delay','phase','upp
                'volume_depth','filter_depth','pan_depth'):
     assert f'"{suffix}"' in param_cpp
 assert 'const juce::String id = lane == 0 ? "b1_lfo_" : "b2_lfo_";' in param_cpp
-assert 'voiceParameterGlobalIndex (static_cast<size_t> (context), actual)' in editor
+assert 'voiceParameterGlobalIndex (static_cast<size_t> (lane), actual)' in editor
 assert 'voiceParameterGlobalIndex' in step and 'voiceLocalParameterCount' in step
 assert 'engines[voice].setLfoParameters (voiceLfo)' in processor
 assert 'lb303::voiceParameterCount' in processor and 'lock.sliderNumber' in processor
@@ -786,7 +786,7 @@ copy_sequence = state.split('void SequencerState::copySequenceFrom', 1)[1].split
 assert 'storeRelaxed (dst.midiInputPolyphony, loadRelaxed (src.midiInputPolyphony));' in copy_sequence
 assert 'sequences[1].midiInputPolyphony' not in copy_sequence
 assert 'sequences[2].midiInputPolyphony' not in copy_sequence
-print('PASS: TEST2.4.15 portable single-pattern clipboard, cross-track paste, target-only Undo/Redo, silent other 15 patterns.')
+print('PASS: TEST2.4.15 portable single-pattern clipboard, cross-track paste, target-only Undo/Redo, silent other patterns.')
 
 # TEST2.4.16 — accessible browser and multi-output audio routing.
 assert 'std::function<void()> onPresetLoaded' in (root/'Source/PresetBrowser.h').read_text()
@@ -808,7 +808,7 @@ assert 'result[separateOutputIndex (1)]' in param_cpp
 assert '"b1_separate_output"' in param_cpp and '"b2_separate_output"' in param_cpp
 assert '"Off", "Out 3/4"' in param_cpp and '"Off", "Out 5/6"' in param_cpp
 assert 'if (local == lb303::voiceMidiDisplayIndex + 1)' in editor
-assert 'lb303::separateOutputIndex (static_cast<size_t> (context))' in editor
+assert 'lb303::separateOutputIndex (static_cast<size_t> (lane))' in editor
 assert 'voiceGridParameterCount = voiceVisibleParameterCount + 3' in param_h
 assert 'std::array<std::pair<float, float>, basslineCount> dry' in fxheader
 assert 'std::pair<float, float> wet' in fxheader
@@ -825,7 +825,7 @@ assert 'b2L[nextSample] += fx.dry[1].first;' in processor
 assert 'const float mainDry = sharedFx.dryLevel();' in processor
 assert 'mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first' in processor
 assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
-assert 'LB-303-0.99.1-TEST2.4.56-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.1-TEST2.4.57-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.16 browser NVDA names + existing preview + 4 stereo buses + separate distortion stems + stable IDs (static).')
 
 # TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
@@ -882,7 +882,7 @@ assert 'osc += osc2GainSmooth * waveform (osc2Phase, secondaryDt);' in engine
 assert 'setOsc2Parameters (layerValues)' in processor
 assert 'lock.sliderNumber - 1 - static_cast<int> (lb303::osc2LocalBase)' in processor
 assert 'voiceParameterGlobalIndex' in step
-assert 'LB-303-0.99.1-TEST2.4.56-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.1-TEST2.4.57-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.19 two independent second oscillators, shared waveform/voice envelopes, cents detune, stable APVTS and lock slots.')
 
 # TEST2.4.20 — Ctrl+A selects only focused and active keyboard steps.
@@ -1010,14 +1010,14 @@ assert main_keys.index('changePatternFromGrid (code == juce::KeyPress::upKey ? 1
 assert 'current == Control::edit && editDirty && ! commitEdit()' in main_keys
 shortcuts = editor.split('void LB303AudioProcessorEditor::changePatternFromGrid (', 1)[1].split('bool LB303AudioProcessorEditor::handleKey', 1)[0]
 assert 'processor.currentPattern (static_cast<size_t> (lane))' in shortcuts
-assert 'juce::jlimit (0, 15, old + direction)' in shortcuts
+assert 'juce::jlimit (0, lb303::SequencerState::maximumSequences - 1, old + direction)' in shortcuts
 assert 'if (next == old) return;' in shortcuts
 assert 'parameter->beginChangeGesture();' in shortcuts and 'parameter->endChangeGesture();' in shortcuts
 assert 'processor.syncSelectedPatternPerformance();' in shortcuts
 assert 'selectParameter();' in shortcuts
 assert 'lb303::announceToActiveScreenReader (active,' in shortcuts
 assert 'lb303::editTrackIndex' in editor.split('int LB303AudioProcessorEditor::shortcutPatternLane()', 1)[1].split('void LB303AudioProcessorEditor::changePatternFromGrid', 1)[0]
-assert 'TEST2.4.56' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.57' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.24 Alt+M and Ctrl+Up/Down accessible across all four parameter grids.')
 
 # TEST2.4.25: Ctrl+Up/Down cannot require !Command on Windows because JUCE
@@ -1039,7 +1039,7 @@ assert 'presetBrowser->active()' in root_fallback_2425
 assert 'mods.isCtrlDown()' in root_fallback_2425
 assert 'return handleKey (key, control);' in root_fallback_2425
 assert '! mods.isCommandDown()' not in root_fallback_2425
-assert 'TEST2.4.56' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.57' in (root / '.github/workflows/build-windows.yml').read_text()
 # Explicitly model JUCE's Windows flags: both isCtrlDown and isCommandDown
 # are TRUE for the ctrlModifier bit. The fixed predicate must accept it.
 ctrl_pressed_windows = True
@@ -1061,7 +1061,7 @@ song_code_2426 = step.split('bool SequencerStepEditor::handleSongKey (', 1)[1].s
 assert song_code_2426.count('if (! selection.empty())') >= 3
 assert 'if (selection.size() > 1)' not in song_code_2426
 assert song_code_2426.index('code == juce::KeyPress::spaceKey && mods.isShiftDown()') < song_code_2426.index('if (mods.isCtrlDown())')
-assert 'TEST2.4.56' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.57' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.26 Shift+Space explicitly selects even one Song row; clipboard/delete honor singleton.')
 
 # TEST2.4.27 — explicit singleton selection is visible to NVDA everywhere.

@@ -21,7 +21,7 @@ void SongArrangement::restoreSnapshot (int lane, Snapshot snapshot) noexcept
 }
 void SongArrangement::replace (int lane, Column value)
 {
-    for (auto& p : value) p = juce::jlimit (0, 15, p);
+    for (auto& p : value) p = juce::jlimit (0, SequencerState::maximumSequences - 1, p);
     restoreSnapshot (lane, std::make_shared<const Column> (std::move (value)));
 }
 void SongArrangement::reset()

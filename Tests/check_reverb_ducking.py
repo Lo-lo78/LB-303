@@ -67,8 +67,8 @@ for fs in (44100,48000,96000):
   assert 0.17 < reduction < 0.19,(fs,ms,reduction)
  assert 10**(-18/20) < 0.127
 assert 'python Tests/check_reverb_ducking.py' in w
-assert 'TEST2.4.56-Windows-x64' in w
-assert 'TEST2.4.56' in read('README.md')
+assert 'TEST2.4.57-Windows-x64' in w
+assert 'TEST2.4.57' in read('README.md')
 manual=read('Help/LB303Help.html')
 assert manual.count('TEST2.4.56') >= 7
 for locale in ('en','it','es','fr','ru','zh','ja'):

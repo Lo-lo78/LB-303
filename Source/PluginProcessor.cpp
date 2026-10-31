@@ -94,7 +94,7 @@ void LB303AudioProcessor::auditionSongPattern (int lane, int pattern) noexcept
         requestSequencerPreview (false);
         return;
     }
-    auditionPattern.store (juce::jlimit (0, 15, pattern), std::memory_order_release);
+    auditionPattern.store (juce::jlimit (0, lb303::SequencerState::maximumSequences - 1, pattern), std::memory_order_release);
     auditionLane.store (juce::jlimit (0, 1, lane), std::memory_order_release);
     requestSequencerPreview (true);
     restartSongPreviewClock();
@@ -915,7 +915,7 @@ void LB303AudioProcessor::getStateInformation (juce::MemoryBlock& data)
     removeLegacyEditorProperties (snapshot);
     if (auto xml = snapshot.createXml())
     {
-        // Two independent banks, not 16 joint patterns. Save all 32 patterns.
+        // Two independent banks with 64 patterns each. Save all 128 patterns.
         // TEST2.4.22 marker: older builds treated the performance VST knobs
         // as lane-wide. Their values must be migrated into EACH old pattern.
         xml->createNewChildElement ("LB303PatternPerformancePerPattern")->setAttribute ("version", 1);
@@ -963,7 +963,7 @@ void LB303AudioProcessor::setStateInformation (const void* data, int size)
                 // Exactly preserve the sound of pre-TEST2.4.22 presets: their
                 // global sequencer controls applied equally to every pattern.
                 for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
-                    for (int patternIndex = 0; patternIndex < 16; ++patternIndex)
+                    for (int patternIndex = 0; patternIndex < 16; ++patternIndex) // old bank contains only 16
                         for (size_t control = 0; control < performanceConfigMap.size(); ++control)
                             sequenceBanks[lane].setConfigValue (patternIndex,
                                 performanceConfigMap[control],

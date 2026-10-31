@@ -116,6 +116,9 @@ private:
     int initialFocusTransferAttempts = 0;
 
     size_t globalIndex (int local) const;
+    size_t basslineParameterIndex (int lane, int displaySlot) const;
+    void copyBasslineParameters (Control);
+    void pasteBasslineParameters (Control);
     size_t globalIndex() const { return globalIndex (selected); }
     int currentParameterCount() const { return context < 2 ? static_cast<int> (lb303::voiceGridParameterCount)
         : context == 2 ? static_cast<int> (lb303::sequencerDisplayParameterCount)

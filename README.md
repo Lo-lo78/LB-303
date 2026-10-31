@@ -1,3 +1,13 @@
+# LB-303 0.99.1 — TEST2.4.57: Bassline Clipboard e 64 Pattern per Bassline
+
+**Alt+C / Alt+V (pagine Bassline 1 e Bassline 2).** Copia negli appunti di sistema l'intera configurazione mostrata nella pagina Bassline attiva; Ctrl+Tab fino all'altra bassline, quindi Alt+V per incollare. Copia 43 controlli della pagina (sintesi, inviluppi, oscillatore 2, LFO, pan, volume, Portamento Curve, MIDI Channel e Separate Output). È un formato versionato e portabile fra istanze LB-303. La copia non include pattern, step, Song, stato del sequencer, send e altri FX condivisi. Sulle pagine Sequencer e FX **Alt+C e Alt+V non cambiano nulla**. **Importante:** Alt+V ora è Incolla (non più la scorciatoia per il controllo Value); il controllo Value rimane raggiungibile con Tab. Gli annunci NVDA confermano copia e incolla. Alt+C nel pannello About conserva la funzione Chiudi.
+
+**64 Pattern per Bassline.** Ora Bassline 1 e 2 dispongono ciascuna di P1–P64 (128 pattern totali, ciascuno con 128 step). La selezione Ctrl+Su/Giù funziona tanto nella schermata principale quanto nell'editor Alt+Q; gli indicatori accessibili mostrano P1/64..P64/64. Il Song Editor consente di scegliere P1..P64 con Ctrl+Su/Giù, e di copiare/incollare righe che riferiscono anche P17..P64. La struttura Song continua ad avere due colonne indipendenti; la durata musicale è ancora calcolata dai singoli pattern, inclusi Repeat e Shuffle.
+
+**Retrocompatibilità:** il formato del banco LSQ2 diventa **v10**, e la lettura dei file LSQ2 v1–v9 recupera **esattamente i sedici pattern originari** negli slot P1–P16, inizializzando P17–P64 come pattern vuoti. Gli ID VST3 dei selettori P1/P2 restano identici, ma la loro gamma diventa 1–64; per prudenza ricontrollare eventuali automazioni REAPER dei selettori dei pattern create prima dell'espansione, dato che alcuni host registrano valori normalizzati. Note, Length 101, Send per step, Parameter Locks, Undo, preset e DSP degli effetti non sono modificati. Nessuna compilazione locale: la build VST3 resta su GitHub Actions.
+
+---
+
 # LB-303 0.99.1 — TEST2.4.56: fix accessibilità Reverb Ducking in FX
 
 **Correzione della TEST2.4.55:** in Alt+Q → pagina FX → colonna Reverb,
