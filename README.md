@@ -1,3 +1,19 @@
+# LB-303 0.99.1 — TEST2.4.51: reverbero con percorsi spaziali naturali
+
+**Correzione del carattere artificiale del Motion nella TEST2.4.50, senza nuovi parametri o ID VST3.**
+
+- `Left to Right` e `Right to Left` non effettuano più un attraversamento all'84% del ciclo e un ritorno accelerato nel 16% rimanente. Il movimento inverte dolcemente la direzione, senza ripartenza brusca. `Bounce` rimane un'oscillazione più ritmica; `Orbit` mantiene un'evoluzione circolare dei percorsi.
+- **Otto percorsi distinti**: la coda viene ascoltata attraverso ritardi aggiuntivi diversi (3,1–17,1 ms), con fasi sfalsate e un lento movimento secondario che impedisce alle riflessioni di ripetersi tutte insieme a ogni ciclo. Questi tap non modificano il feedback FDN.
+- **Ombra acustica stereo**: il percorso diretto verso un lato arriva un poco prima; il lato opposto riceve fino a 0,32 ms di ritardo aggiuntivo e parte delle alte frequenze attenuate. Non è un passa-basso sull'intero reverbero e non modifica la bassline dry. I bassi restano relativamente diffusi.
+- **Transizioni**: `Motion Depth` sfuma gradualmente fra decodifica originale e ambiente mobile. Cambiando `Motion Mode` verso Off/Expand/Contract il vecchio campo si dissolve senza salto di guadagno. `Expand` e `Contract` continuano a variare solo la larghezza della coda.
+- **Compatibilità**: parametri, default Reverb Bass Decay 0,50×, Early Reflections 15%, trim Wet −6 dB, Source Pan 1/2, LFO Pan 1/2, sequencer, automazioni e preset invariati. Con Motion Off o Depth 0 a regime, la somma delle otto linee FDN rimane quella storica.
+
+**Limite esplicito:** il motore FDN è ancora unico e condiviso: le riflessioni hanno tempi/percezioni differenti, ma due note sovrapposte non ricevono due reverberi matematicamente indipendenti. Servirebbe separare ulteriormente le reti, aumentando significativamente il DSP.
+
+La costruzione del VST3 si effettua solo tramite **GitHub Actions**; i test numerici e statici non sostituiscono il giudizio d'ascolto in REAPER.
+
+---
+
 # LB-303 0.99.1 — TEST2.4.50: coda del reverbero realmente in movimento
 
 **Correzione di Reverb Spatial Motion**, senza nuovi parametri VST3. Le modalità `Left to Right`, `Right to Left`, `Bounce` e `Orbit` ora controllano sia le rotazioni interne alle otto linee FDN, sia una **decodifica spaziale dinamica della coda diffusa**: il bilanciamento sinistra/destra della coda cambia in modo percepibile anche dopo il rilascio delle note, non soltanto il timbro delle riflessioni. La lettura avviene separatamente sulle otto linee con un peso differente per ogni percorso, prima della somma con le early reflections e prima del controllo Width. **Non viene applicato alcun autopan al segnale dry né al bus wet complessivo.**

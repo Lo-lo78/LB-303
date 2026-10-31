@@ -62,7 +62,7 @@ assert "stream.writeByte (static_cast<char> (juce::jlimit (0, 100, step.lengthBe
 assert "reset.noteBeforePause = 60; reset.lengthBeforeLegato = 50; reset.velocityBeforeMax = 100;" in e
 
 # Version number and original GitHub Actions build trigger both intact.
-assert "TEST2.4.50-Windows-x64" in workflow
+assert "TEST2.4.51-Windows-x64" in workflow
 assert "  push:" in workflow
 assert "python Tests/check_toggle_memory.py" in workflow
 print("PASS: TEST2.4.42 Note/Length/Velocity Enter remembers per-step values; no separate Accent or page changes.")

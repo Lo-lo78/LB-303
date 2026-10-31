@@ -80,9 +80,15 @@ void SharedEffects::prepare (double sampleRate)
     verbMotionDepthSmoothed = 0.0f;
     verbMotionRateSmoothed = 0.35f;
     verbMotionPhase = verbMotionAge = 0.0;
+    verbSpatialDriftPhase = 0.0;
     verbMotionSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.045 * fs)));
     verbTailMotionSmoothCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.030 * fs)));
-    verbTailPanSmoothed = verbTailSpreadSmoothed = 0.0f;
+    verbDirectionalBlendSmoothed = verbTailSpreadSmoothed = 0.0f;
+    verbLastDirectionalMode = 1;
+    verbFarEarLow.fill (0.0f);
+    verbFarEarLowCoeff = static_cast<float> (1.0 - std::exp (-2.0 * pi * 1600.0 / fs));
+    // Additional listening paths only: ~20 ms maximum, no extra FDN feedback.
+    for (auto& path : verbSpacePath) path.initialise (static_cast<int> (fs * .021) + 16);
     tapeTime.fill (0); tapeLow.fill (0); tapeHighX.fill (0); tapeHighY.fill (0);
     tapeWetX.fill (0); tapeWetY.fill (0);
     chorusRateSmoothed = chorusTail = 0;
@@ -125,7 +131,15 @@ void SharedEffects::clearTails() noexcept
     verbMotionDepthSmoothed = 0.0f;
     verbMotionRateSmoothed = 0.35f;
     verbMotionPhase = verbMotionAge = 0.0;
-    verbTailPanSmoothed = verbTailSpreadSmoothed = 0.0f;
+    verbSpatialDriftPhase = 0.0;
+    verbDirectionalBlendSmoothed = verbTailSpreadSmoothed = 0.0f;
+    verbLastDirectionalMode = 1;
+    verbFarEarLow.fill (0.0f);
+    for (auto& path : verbSpacePath)
+    {
+        std::fill (path.data.begin(), path.data.end(), 0.0f);
+        path.pos = 0;
+    }
     reverbPredelayReady = false;
     reverbPredelaySamples = 0.0;
     tapeTime.fill (0.0f); tapeLow.fill (0.0f); tapeHighX.fill (0.0f); tapeHighY.fill (0.0f);
@@ -589,6 +603,10 @@ std::pair<float, float> SharedEffects::reverb (float l, float r,
     verbMotionRateSmoothed += (targetRate - verbMotionRateSmoothed) * verbMotionSmoothCoeff;
     verbMotionPhase += (2.0 * pi * verbMotionRateSmoothed) / fs;
     if (verbMotionPhase >= 2.0 * pi) verbMotionPhase -= 2.0 * pi;
+    // Slow independent room drift: different FDN returns do not re-align at
+    // every nominal Motion Rate period. No pseudorandom steps or phase resets.
+    verbSpatialDriftPhase += (2.0 * pi * (0.063 + 0.037 * verbMotionRateSmoothed)) / fs;
+    if (verbSpatialDriftPhase >= 2.0 * pi) verbSpatialDriftPhase -= 2.0 * pi;
 
     // A new wet excitation begins a new spatial expansion/contraction.
     // Long tails keep progressing after the source has stopped, with no output
@@ -665,79 +683,92 @@ std::pair<float, float> SharedEffects::reverb (float l, float r,
         const float source = (((i & 1)==0 ? inL : inR) + spatialExcitationDelta[i]) * .18f;
         verb[i].push (bounded (source + feedback));
     }
-    // TEST2.4.50: Spatial Motion must steer the ALREADY REVERBERATING tail,
-    // not just change the feedback topology (which was almost inaudible as
-    // left/right motion once Householder diffusion had mixed the eight lines).
-    // Decode the eight individual FDN lines through a MOVING stereo field:
-    // each reflection path has its own slightly different listening geometry.
-    // This happens BEFORE early reflections, width and wet level -- not an
-    // autopan of the finished reverb bus and never a pan of the dry bassline.
-    // Feedback stays orthogonal and unaffected by these listening weights.
-    // Off or Depth=0 takes the exact original sample-by-sample output path.
+    // TEST2.4.51: Natural moving room, not a pan sweep of a mixed wet bus.
+    // Every line has a different acoustic travel time and direction history.
+    // Its far-ear path arrives slightly later and loses high frequencies,
+    // while low frequencies remain much more diffuse. As a result delayed
+    // reflections are not all forced into the same instantaneous L/R position.
+    // The one-way sweep of TEST2.4.50 (84% forward / 16% fast return) is gone:
+    // left/right modes now TURN AROUND smoothly without a perceptible reset.
+    // These OUTPUT-ONLY listening paths never alter the FDN feedback energy.
+    // Off and Depth=0 retain the exact historic signed summation.
     float wetL = current[0]-current[1]+current[2]-current[3]+current[4]-current[5]+current[6]-current[7];
     float wetR = current[0]+current[1]-current[2]-current[3]+current[4]+current[5]-current[6]-current[7];
-    float targetTailPan = 0.0f, targetTailSpread = 0.0f;
-    if (motionMode >= 1 && motionMode <= 4 && verbMotionDepthSmoothed > 1.0e-6f)
+    float targetTailSpread = 0.0f;
+    if (motionMode >= 1 && motionMode <= 4) verbLastDirectionalMode = motionMode;
+    const float desiredDirectionalBlend = motionMode >= 1 && motionMode <= 4
+        ? verbMotionDepthSmoothed : 0.0f;
+    verbDirectionalBlendSmoothed += (desiredDirectionalBlend - verbDirectionalBlendSmoothed)
+                                   * verbTailMotionSmoothCoeff;
+    if (verbDirectionalBlendSmoothed > 1.0e-6f)
     {
-        const float s = static_cast<float> (std::sin (verbMotionPhase));
-        const float q = static_cast<float> (std::cos (verbMotionPhase));
-        float position = 0.0f;
-        if (motionMode == 1 || motionMode == 2)
+        constexpr std::array<float, 8> leftSign {{ 1,-1, 1,-1, 1,-1, 1,-1 }};
+        constexpr std::array<float, 8> rightSign {{ 1, 1,-1,-1, 1, 1,-1,-1 }};
+        // Different phases and path lengths represent different arrival times
+        // within the same room, rather than eight synchronised pan copies.
+        constexpr std::array<float, 8> phaseLag {{ .04f, .19f, .32f, .49f,
+                                                     .63f, .78f, .92f, 1.05f }};
+        constexpr std::array<float, 8> pathDelayMs {{ 3.1f, 4.7f, 6.1f, 8.3f,
+                                                       10.2f, 12.7f, 14.6f, 17.1f }};
+        float movedL = 0.0f, movedR = 0.0f;
+        for (size_t i = 0; i < 8; ++i)
         {
-            // Mostly one-way travel, with a short, SMOOTH return: repeated
-            // L->R and R->L sweeps do not become identical to Bounce.
-            // Both endpoints have zero velocity, so the restart cannot click.
-            const float cycle = static_cast<float> (verbMotionPhase / (2.0 * pi));
-            const float part = cycle < 0.84f ? cycle / 0.84f
-                                              : (1.0f - cycle) / 0.16f;
-            const float t = clampf (part, 0.0f, 1.0f);
-            const float smooth = t * t * (3.0f - 2.0f * t);
-            position = (motionMode == 1 ? -1.0f : 1.0f) * (1.0f - 2.0f * smooth);
+            const float phase = static_cast<float> (verbMotionPhase) - phaseLag[i]
+                + 0.14f * std::sin (static_cast<float> (verbSpatialDriftPhase)
+                                   + static_cast<float> (i) * 1.93f);
+            float position;
+            switch (verbLastDirectionalMode)
+            {
+                // Clockwise phase motion: continuous, no short 16% retrace.
+                // Each return starts in a slightly different part of the room.
+                case 1: position = -std::cos (phase); break;
+                case 2: position =  std::cos (phase); break;
+                case 3: position = -std::cos (phase * 2.0f); break;
+                default: position = std::sin (phase); break; // Orbit
+            }
+            // Each return arrives with a different acoustic propagation delay.
+            // Direction-dependent extra delay approximates a small interaural
+            // time difference; no continuously resampled feedback delays.
+            const float shadow = std::abs (position);
+            const double baseSamples = pathDelayMs[i] * .001 * fs;
+            const double oppositeDelay = shadow * .00032 * fs;
+            const float nearSample = verbSpacePath[i].read (baseSamples);
+            const float farSample = verbSpacePath[i].read (baseSamples + oppositeDelay);
+            // Frequency-dependent sound shadow on the opposite side:
+            // the far ear receives less treble, NOT a low-pass on the whole wet
+            // reverb. The bass decay / damping inside the FDN are untouched.
+            float& low = verbFarEarLow[i];
+            low += (farSample - low) * verbFarEarLowCoeff;
+            const float shadedFar = farSample - .68f * shadow * (farSample - low);
+            // Restrained interaural level difference plus spectral/arrival cues.
+            // Energy remains reasonably constant as the room moves.
+            const float nearGain = std::sqrt (1.0f + .43f * shadow);
+            const float farGain  = std::sqrt (1.0f - .43f * shadow);
+            const float directedL = position < 0.0f ? nearSample * nearGain
+                                                     : shadedFar * farGain;
+            const float directedR = position > 0.0f ? nearSample * nearGain
+                                                     : shadedFar * farGain;
+            movedL += leftSign[i] * directedL;
+            movedR += rightSign[i] * directedR;
         }
-        else if (motionMode == 3)
-            position = -q; // symmetrical left/right bounce
-        else
-            position = s;  // orbit: transverse motion plus rotating FDN planes
-
-        // Constant-power, deliberately directional late-field decoder. At
-        // Depth=100 and either edge it has ~12 dB of interaural energy bias;
-        // Depth=60 is clearly audible but retains the ambience. The original
-        // FDN lines keep their individual decorrelation and spatial facets.
-        targetTailPan = 0.93f * verbMotionDepthSmoothed * position;
+        // Continuous crossfade with the original dry FDN decoding, so Depth
+        // automation and switching to Off never jump to the delayed taps.
+        const float blend = verbDirectionalBlendSmoothed;
+        wetL += (movedL - wetL) * blend;
+        wetR += (movedR - wetR) * blend;
     }
     else if (motionMode == 5 || motionMode == 6)
     {
-        // Expand/Contract alter diffuse-field width, NOT left/right balance.
+        // Expand/Contract retain the previous independent stereo-width mode.
         const float progress = clampf (static_cast<float> (verbMotionAge * verbMotionRateSmoothed), 0.0f, 1.0f);
         const float envelope = progress * progress * (3.0f - 2.0f * progress);
         targetTailSpread = (motionMode == 5 ? envelope : 1.0f - envelope)
                           * verbMotionDepthSmoothed;
     }
-    // Smoothing applies to mode changes as well as continuous movement:
-    // avoid a sudden left/right gain step when switching to Off or another mode.
-    verbTailPanSmoothed += (targetTailPan - verbTailPanSmoothed) * verbTailMotionSmoothCoeff;
+    // Keep output listening paths filled also while Off: enabling motion never
+    // exposes uninitialised history or interrupts an already playing tail.
+    for (size_t i = 0; i < 8; ++i) verbSpacePath[i].push (current[i]);
     verbTailSpreadSmoothed += (targetTailSpread - verbTailSpreadSmoothed) * verbTailMotionSmoothCoeff;
-    if (std::abs (verbTailPanSmoothed) > 1.0e-6f)
-    {
-        const float sweep = verbTailPanSmoothed;
-        const float gLeft = std::sqrt (std::max (0.01f, 1.0f - sweep));
-        const float gRight = std::sqrt (std::max (0.01f, 1.0f + sweep));
-        constexpr std::array<float, 8> leftSign {{ 1,-1, 1,-1, 1,-1, 1,-1 }};
-        constexpr std::array<float, 8> rightSign {{ 1, 1,-1,-1, 1, 1,-1,-1 }};
-        constexpr std::array<float, 8> facet {{ -.9f, .7f, -.4f, 1.0f,
-                                                  .5f, -.8f, .9f, -.6f }};
-        float directedL = 0.0f, directedR = 0.0f;
-        for (size_t i = 0; i < 8; ++i)
-        {
-            // Stagger the movement between the eight FDN paths instead of
-            // scaling the already-mixed two-channel tail as an autopanner.
-            const float path = sweep * (0.12f * facet[i]);
-            directedL += current[i] * leftSign[i] * (gLeft + path);
-            directedR += current[i] * rightSign[i] * (gRight - path);
-        }
-        wetL = directedL;
-        wetR = directedR;
-    }
     if (verbTailSpreadSmoothed > 1.0e-6f)
     {
         // The late field opens or closes while the first reflections keep

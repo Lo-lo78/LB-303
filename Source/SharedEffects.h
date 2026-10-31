@@ -96,11 +96,18 @@ private:
     std::array<float, 8> verbMotionAngles {};
     float verbMotionDepthSmoothed = 0.0f, verbMotionRateSmoothed = 0.35f;
     float verbMotionSmoothCoeff = 0.0f;
-    // Smoothed listening position of the diffuse tail; independent from the
-    // moving FDN feedback paths and from the two bassline source LFOs.
-    float verbTailPanSmoothed = 0.0f, verbTailSpreadSmoothed = 0.0f;
+    // TEST2.4.51: Each FDN return has its own small propagation delay and
+    // frequency-dependent far-ear shadow. The eight acoustic paths do NOT
+    // share one output pan envelope. Output-only buffers never feed back.
+    std::array<Ring, 8> verbSpacePath {};
+    std::array<float, 8> verbFarEarLow {};
+    float verbFarEarLowCoeff = 0.0f;
+    float verbDirectionalBlendSmoothed = 0.0f;
+    int verbLastDirectionalMode = 1;
+    float verbTailSpreadSmoothed = 0.0f;
     float verbTailMotionSmoothCoeff = 0.0f;
     double verbMotionPhase = 0.0, verbMotionAge = 0.0;
+    double verbSpatialDriftPhase = 0.0;
     std::array<float, 8> verbTimes {};
     int verbIndex = 0;
     float chorusRateSmoothed = 0, chorusHpCoefficient = 0, chorusTail = 0;

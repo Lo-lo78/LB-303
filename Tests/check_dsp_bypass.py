@@ -33,7 +33,7 @@ assert 'if (!enabledSharedWetFx)' in fx
 assert 'sharedFx.distortionActive (0)' in processor
 assert 'const auto distorted = distortionOn[voice]' in processor
 assert 'python Tests/check_dsp_bypass.py' in workflow
-assert 'TEST2.4.50-Windows-x64' in workflow
+assert 'TEST2.4.51-Windows-x64' in workflow
 print('PASS: dormant LFO, Osc2, distortions, shared wet FX and rate-dependent coefficients are routed outside expensive DSP.')
 
 compiler = (shutil.which('g++') or shutil.which('clang++')) if os.name != 'nt' else None
