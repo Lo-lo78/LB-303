@@ -48,5 +48,5 @@ assert 'verbBassSmoothCoeff' in fx and 'verbBassXoverSmoothed' in fx
 assert 'verbBassLow.fill (0.0f)' in fx and 'verbBassGainDeltaSmoothed.fill (0.0f)' in fx
 assert 'std::max (1.0, static_cast<double> (c[fx::reverbBassDecay]))' in fx
 assert 'std::clamp (wetGuardSeconds, .5, 240.0)' in fx
-assert 'TEST2.4.51-Windows-x64' in workflow
+assert 'TEST2.4.52-Windows-x64' in workflow
 print('PASS: TEST2.4.43 append-only bass RT60/XOver, per-line feedback, smoothing, dynamic UI, wet tails.')

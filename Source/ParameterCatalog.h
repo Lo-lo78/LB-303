@@ -58,7 +58,12 @@ constexpr size_t reverbLfoPan1Index = reverbSourcePan2Index + 1;
 constexpr size_t reverbLfoPan2Index = reverbLfoPan1Index + 1;
 // Separate early-reflection level: append-only, all older host IDs remain stable.
 constexpr size_t reverbEarlyLevelIndex = reverbLfoPan2Index + 1;
-constexpr size_t parameterCount = reverbEarlyLevelIndex + 1;
+// TEST2.4.52: independent per-bassline glide curves. Append ONLY: old VST3 IDs
+// and the 1-based sequencer Parameter Lock slots remain untouched.
+constexpr size_t portamentoCurve1Index = reverbEarlyLevelIndex + 1;
+constexpr size_t portamentoCurve2Index = portamentoCurve1Index + 1;
+constexpr size_t portamentoCurveIndex (size_t lane) { return portamentoCurve1Index + lane; }
+constexpr size_t parameterCount = portamentoCurve2Index + 1;
 constexpr size_t lfoParameterIndex (size_t lane, size_t control)
 { return lfoParameterBase + lane * lfoParameterCount + control; }
 namespace lfo
@@ -84,7 +89,7 @@ enum Control : size_t { bpmDivision, shuffle, legato, skipProbability, noteRando
 }
 constexpr size_t fxParameterIndex (size_t local) { return legacyParameterCount + local; }
 constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount; // old Level is hidden; Volume is first // voice parameters shown in parameter-lock picker
-constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 2; // MIDI channel + separate stereo output
+constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 3; // MIDI channel, separate output, Portamento Curve (GUI-only)
 constexpr int voiceMidiDisplayIndex = 5; // Volume, Waveform, Osc 2 Volume, Osc 2 Detune, Pan, MIDI, ...
 constexpr size_t classicDelayParameterCount = 14;
 constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1; // append-only reverb bass and spatial host params

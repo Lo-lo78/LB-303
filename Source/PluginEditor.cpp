@@ -398,6 +398,13 @@ size_t LB303AudioProcessorEditor::globalIndex (int local) const
         return visibleFxParameters.at (static_cast<size_t> (local));
     if (context < 2)
     {
+        // TEST2.4.52: GUI-only Portamento Curve immediately follows Time/Mode.
+        // Display slot 17 is virtual and NOT a sequencer lock slot. No old
+        // voiceDisplayOrder entries, MIDI indices or host IDs are shifted.
+        constexpr int curveDisplayIndex = 17;
+        if (local == curveDisplayIndex)
+            return lb303::portamentoCurveIndex (static_cast<size_t> (context));
+        if (local > curveDisplayIndex) --local;
         // Reuse the existing, automated MIDI channel ID in each voice grid,
         // without changing voice DSP local indices or the lock picker mapping.
         if (local == lb303::voiceMidiDisplayIndex)

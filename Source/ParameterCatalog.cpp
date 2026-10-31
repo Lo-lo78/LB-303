@@ -8,6 +8,7 @@ namespace
 {
 constexpr const char* waveChoices[] = { "Saw", "Square" };
 constexpr const char* portaChoices[] = { "Always", "Legato" };
+constexpr const char* portaCurveChoices[] = { "Original", "Linear", "Exponential", "Logarithmic", "S-Curve" };
 constexpr const char* transientChoices[] = { "Loose", "Neutral", "Tight" };
 constexpr const char* syncChoices[] = { "Off", "1/16", "1/12T", "1/8", "1/6T", "1/4", "1/3T", "1/2", "1/1" };
 constexpr const char* delayModeChoices[] = { "Normal", "Ping-Pong" };
@@ -299,6 +300,12 @@ const std::array<ParameterInfo, parameterCount>& catalog()
         // and edges. 100% remains available as a user-selected maximum.
         result[reverbEarlyLevelIndex] = { "fx_reverb_early_level", "Reverb Early Reflections Level",
             0, 100, 1, 15, "%" };
+        // Independent selectors for the two monosynths. Original uses the
+        // exact legacy one-pole DSP path (including 1x/2x/4x coefficients).
+        result[portamentoCurve1Index] = { "b1_portamento_curve", "Portamento Curve",
+            0, 4, 1, 0, "", portaCurveChoices, 5 };
+        result[portamentoCurve2Index] = { "b2_portamento_curve", "Portamento Curve",
+            0, 4, 1, 0, "", portaCurveChoices, 5 };
         result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
             0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
@@ -354,6 +361,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
             ? ("FX - " + p.name)
             : index == oversamplingIndex
             ? ("FX - " + p.name)
+            : index == portamentoCurve1Index || index == portamentoCurve2Index
+            ? ("Bassline " + juce::String (1 + index - portamentoCurve1Index)
+               + " - " + p.name)
             : index >= osc2ParameterBase
             ? ("Bassline " + juce::String (1 + (index - osc2ParameterBase) / osc2ParameterCount)
                + " - " + p.name)

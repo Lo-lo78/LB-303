@@ -217,10 +217,70 @@ void BassEngine::updateRateCoefficients() noexcept
     updateLpgCoefficient();
 }
 
+void BassEngine::setPortamentoCurveMode (int mode) noexcept
+{
+    mode = std::clamp (mode, 0, 4);
+    if (portamentoCurveMode == mode) return;
+    portamentoCurveMode = mode;
+    // When automating modes mid-note, continue from the current audible
+    // pitch instead of jumping to the previous glide start position.
+    curvedGlideActive = false;
+    if (mode != 0 && noteActive) beginCurvedGlide();
+}
+
+void BassEngine::beginCurvedGlide() noexcept
+{
+    curvedGlideActive = false;
+    // Original Always/Legato gating: no glide with Time 0, or on a fresh
+    // note while the historic Portamento Mode is Legato.
+    const double coefficient = legato ? glideLegatoCoeff : glideFreeCoeff;
+    if (coefficient >= 1.0 || freq <= 0.0 || targetFreq <= 0.0)
+    {
+        freq = targetFreq;
+        return;
+    }
+    if (std::abs (targetFreq - freq) < 1.0e-10) return;
+    curvedStartLog2 = std::log2 (freq);
+    curvedDeltaLog2 = std::log2 (targetFreq) - curvedStartLog2;
+    curvedElapsed = 0.0;
+    // Match the legacy one-pole's 99% arrival time, not a new independent
+    // time scale. Both sample rate and oversampling are accounted for by
+    // the already-prepared exponential coefficient.
+    curvedDuration = std::max (1.0, std::log (0.01) / std::log1p (-coefficient));
+    curvedGlideActive = std::isfinite (curvedDuration) && curvedDuration >= 1.0;
+    if (!curvedGlideActive) freq = targetFreq;
+}
+
+void BassEngine::updateCurvedPitch() noexcept
+{
+    if (!curvedGlideActive) return;
+    curvedElapsed += 1.0;
+    const double t = std::min (1.0, curvedElapsed / curvedDuration);
+    double shaped = t;
+    switch (portamentoCurveMode)
+    {
+        case 2: // fast opening, gradual arrival
+            shaped = -std::expm1 (-4.0*t) / -std::expm1 (-4.0); break;
+        case 3: // slow opening, accelerating arrival
+            shaped = t*t; break;
+        case 4: // zero slope at both endpoints
+            shaped = t*t*(3.0 - 2.0*t); break;
+        default: break; // Linear: uniform motion in musical semitones
+    }
+    freq = std::exp2 (curvedStartLog2 + shaped * curvedDeltaLog2);
+    if (t >= 1.0) { freq = targetFreq; curvedGlideActive = false; }
+}
+
 void BassEngine::setOversamplingFactor (int factor) noexcept
 {
     factor = factor == 2 || factor == 4 ? factor : 1;
     if (factor == oversamplingFactor) return;
+    if (curvedGlideActive)
+    {
+        const double ratio = static_cast<double> (factor) / oversamplingFactor;
+        curvedElapsed *= ratio;
+        curvedDuration *= ratio; // preserve musical time and progress
+    }
     oversamplingFactor = factor;
     parametersPrepared = false; // delay filter coefficients must follow fs
     fs = hostFs * factor;
@@ -236,6 +296,9 @@ void BassEngine::setOversamplingFactor (int factor) noexcept
 void BassEngine::reset()
 {
     freq = targetFreq = phase = pwmPhase = osc2Phase = osc2GainSmooth = 0;
+    curvedGlideActive = false;
+    curvedStartLog2 = curvedDeltaLog2 = curvedElapsed = 0;
+    curvedDuration = 1;
     osc2DetuneSmooth = 10;
     lfo = {};
     lastLfoSample = 0.0f;
@@ -255,6 +318,7 @@ void BassEngine::setParameters (const Values& values, double newBpm)
 {
     const double nextTempo = std::max (1.0, std::isfinite (newBpm) ? newBpm : 120.0);
     if (parametersPrepared && p == values && tempo == nextTempo) return;
+    const bool glideSettingsChanged = p[5] != values[5] || p[6] != values[6];
     parametersPrepared = true;
     p = values;
     tempo = nextTempo;
@@ -267,6 +331,8 @@ void BassEngine::setParameters (const Values& values, double newBpm)
         delayMs = (60000.0 / tempo) * 4.0 / divisions[sync];
     delayTargetSamples = std::min (10000.0, delayMs) * 0.001 * fs;
     updateRateCoefficients();
+    if (portamentoCurveMode != 0 && curvedGlideActive && glideSettingsChanged)
+        beginCurvedGlide(); // automation re-targets from the current pitch
 }
 
 void BassEngine::releaseNote() noexcept
@@ -312,6 +378,7 @@ void BassEngine::midi (const juce::MidiMessage& message)
         accentEnvelope = accent ? 1.0 : 0.0;
         legato = noteActive;
         noteActive = true;
+        if (portamentoCurveMode != 0) beginCurvedGlide();
         lastNote = message.getNoteNumber();
         if (! legato) envelopeStage = 0;
         return;
@@ -407,7 +474,10 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
 {
     // Oscillator, amplitude/LP envelopes and nonlinear filter track the JSFX.
     // Precomputed once per parameter block/quality change; no pow() per sample.
-    freq += (targetFreq - freq) * (legato ? glideLegatoCoeff : glideFreeCoeff);
+    if (portamentoCurveMode == 0)
+        freq += (targetFreq - freq) * (legato ? glideLegatoCoeff : glideFreeCoeff);
+    else
+        updateCurvedPitch();
     const auto modulation = lfoHasDestination ? nextLfoSample() : 0.0;
     lastLfoSample = static_cast<float> (modulation);
     const auto pitchDepth = lfoParameters[lb303::lfo::pitchDepth];

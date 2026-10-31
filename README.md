@@ -1310,3 +1310,8 @@ voice from keeping the oversampled engine awake after transport-stop MIDI.
 - Salvare un preset non cambia il riferimento all'ultimo preset caricato.
 - La preferenza rimane persistente anche tra istanze, progetti e riavvii.
 - L'eventuale cartella scelta per Salva con nome è distinta e non influenza il browser di caricamento.
+
+
+### TEST2.4.52 — Portamento Curve (per Bassline)
+
+In Bassline 1 e Bassline 2, vicino a Portamento Time e Portamento Mode, il nuovo selettore **Portamento Curve** consente: **Original** (default, esattamente il portamento storico), **Linear** (uniforme in semitoni), **Exponential** (partenza veloce, rallenta in arrivo), **Logarithmic** (partenza lenta, accelera), **S-Curve** (morbida all’inizio e alla fine). Le curve alternative conservano il tempo di arrivo al 99% del portamento originale e funzionano con Always, Legato e Length 101. Ogni bassline ha il suo selettore indipendente; 0/Original non modifica alcun preset già salvato. Gli ID VST3 precedenti e i Parameter Locks restano invariati.

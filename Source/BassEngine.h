@@ -17,6 +17,8 @@ public:
     void setOversamplingFactor (int factor) noexcept; // 1/2/4, no allocation
     void reset();
     void setParameters (const Values& values, double bpm);
+    // Append-only host selector; 0 preserves the original per-sample glide.
+    void setPortamentoCurveMode (int mode) noexcept;
     using LfoValues = std::array<float, lfoParameterCount>;
     void setLfoParameters (const LfoValues& values) noexcept;
     // One LFO generator per bassline shared by synth and reverb send source.
@@ -73,6 +75,12 @@ private:
     bool externalLfoDestination = false;
     float lastLfoSample = 0.0f;
     double glideFreeCoeff = 1.0, glideLegatoCoeff = 1.0;
+    int portamentoCurveMode = 0; // 0 Original, 1 Linear, 2 Exponential, 3 Logarithmic, 4 S-Curve
+    bool curvedGlideActive = false;
+    double curvedStartLog2 = 0, curvedDeltaLog2 = 0;
+    double curvedElapsed = 0, curvedDuration = 1;
+    void beginCurvedGlide() noexcept;
+    void updateCurvedPitch() noexcept;
     double lpgSpeedCoeff = 0.03, accentDecayCoeff = 0.0;
     double staticPitchRatio = 1.0;
     void updateRateCoefficients() noexcept;

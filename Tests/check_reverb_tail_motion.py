@@ -18,7 +18,8 @@ body = cpp.split('std::pair<float, float> SharedEffects::reverb (', 1)[1].split(
 # No new host IDs, preserved existing effects and previous wet gain staging.
 assert 'fxParameterCount = 35' in cat
 assert 'reverbEarlyLevelIndex = reverbLfoPan2Index + 1' in cat
-assert 'parameterCount = reverbEarlyLevelIndex + 1' in cat
+assert 'portamentoCurve1Index = reverbEarlyLevelIndex + 1' in cat
+assert 'parameterCount = portamentoCurve2Index + 1' in cat
 assert 'reverbWetOutputTrim6dB = 0.501187234f' in cpp
 assert 'verbBassGainDeltaSmoothed[i]' in body
 assert 'wetL += directionalEarlyReflections[0]' in body
@@ -49,7 +50,7 @@ assert body.index('verbSpacePath[i].push (current[i])') < body.index('wetL += di
 assert 'float wetL = current[0]-current[1]+current[2]-current[3]+current[4]-current[5]+current[6]-current[7];' in body
 assert 'float wetR = current[0]+current[1]-current[2]-current[3]+current[4]+current[5]-current[6]-current[7];' in body
 assert 'const float width = c[fx::reverbWidth]*.01f' in body
-assert 'TEST2.4.51-Windows-x64' in workflow
+assert 'TEST2.4.52-Windows-x64' in workflow
 assert 'python Tests/check_reverb_tail_motion.py' in workflow
 assert 'TEST2.4.51:' in read('README.md')
 help_text = read('Help/LB303Help.html')

@@ -499,6 +499,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         // 14 historic delay controls are routed to one shared classic FX bus.
         synth[31] = 100.0f; synth[32] = 0.0f;
         engines[voice].setParameters (synth, bpm);
+        engines[voice].setPortamentoCurveMode (juce::roundToInt (
+            value (lb303::portamentoCurveIndex (voice))));
         lb303::BassEngine::LfoValues voiceLfo {};
         for (size_t c = 0; c < voiceLfo.size(); ++c)
             voiceLfo[c] = value (lb303::lfoParameterIndex (voice, c));
