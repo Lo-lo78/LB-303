@@ -1,6 +1,8 @@
-# LB-303 0.99.1 — TEST2.4.51: reverbero con percorsi spaziali naturali
+# LB-303 0.99.1 — TEST2.4.54: Send per step 0–100%, stato con tasto corrente
 
-**Correzione del carattere artificiale del Motion nella TEST2.4.50, senza nuovi parametri o ID VST3.**
+**Novità TEST2.4.54:** nelle pagine Ctrl+1 e Ctrl+2, Normal ora ha un Send **reale 0–100% per singolo step**. Per cambiare Normal → Accent → Mute premi di nuovo il tasto dello step corrente, oppure Invio. La Velocity governa ancora Accent. Il riverbero spaziale delle versioni precedenti è preservato.
+
+**Storico TEST2.4.51:** correzione del movimento della coda nella TEST2.4.50.
 
 - `Left to Right` e `Right to Left` non effettuano più un attraversamento all'84% del ciclo e un ritorno accelerato nel 16% rimanente. Il movimento inverte dolcemente la direzione, senza ripartenza brusca. `Bounce` rimane un'oscillazione più ritmica; `Orbit` mantiene un'evoluzione circolare dei percorsi.
 - **Otto percorsi distinti**: la coda viene ascoltata attraverso ritardi aggiuntivi diversi (3,1–17,1 ms), con fasi sfalsate e un lento movimento secondario che impedisce alle riflessioni di ripetersi tutte insieme a ogni ciclo. Questi tap non modificano il feedback FDN.
@@ -1315,3 +1317,23 @@ voice from keeping the oversampled engine awake after transport-stop MIDI.
 ### TEST2.4.52 — Portamento Curve (per Bassline)
 
 In Bassline 1 e Bassline 2, vicino a Portamento Time e Portamento Mode, il nuovo selettore **Portamento Curve** consente: **Original** (default, esattamente il portamento storico), **Linear** (uniforme in semitoni), **Exponential** (partenza veloce, rallenta in arrivo), **Logarithmic** (partenza lenta, accelera), **S-Curve** (morbida all’inizio e alla fine). Le curve alternative conservano il tempo di arrivo al 99% del portamento originale e funzionano con Always, Legato e Length 101. Ogni bassline ha il suo selettore indipendente; 0/Original non modifica alcun preset già salvato. Gli ID VST3 precedenti e i Parameter Locks restano invariati.
+
+
+### TEST2.4.53 — Accent Send dinamico per step (Delay e Reverb)
+
+Dentro **Alt+Q** scegli **Ctrl+1: Delay Send Steps** oppure **Ctrl+2: Reverb Send Steps**. Le pagine originali **1–7** non cambiano. Usa Q–I/A–K per scegliere i sedici step visibili; **Enter** (o Freccia su) alterna **Normal → Accent → Mute**, Freccia giù inverte la sequenza, **Backspace** ripristina Normal. Funzionano anche selezioni multiple, Ctrl+A, copia/taglia/incolla degli step, Undo/Redo e copia dell'intero pattern. I due stati sono indipendenti per ogni step di ciascuna bassline, fino a 128 step per pattern.
+
+**Normal** mantiene il Send classico. **Accent** lo moltiplica in base alla Velocity programmata e al parametro **Accent Threshold** della rispettiva bassline, con effetto crescente da Threshold fino a Velocity 127; non crea un nuovo Accent sintetico. In **FX / Delay** trovi **Delay Accent Send**, in **FX / Reverb** trovi **Reverb Accent Send**, entrambi da -100% a +100%, default **+50%**, usati solo dagli step Accent. Valori negativi riducono il Send. Se Velocity non supera Threshold, Accent non aggiunge intensità. Con Send base a zero, anche Accent non genera nuove ripetizioni. **Mute** interrompe solo la nuova alimentazione dell'effetto: le code già presenti continuano. Il cambio di stato tra step è smussato in circa 6 ms, anche con Length 101 (nota legata e senza nuovo Note On).
+
+Nuovo salvataggio della banca sequencer **LSQ2 v8**: i preset legacy v1–v7 sono importati con tutti gli step **Normal**, conservando i vecchi dati, gli ID VST3 e i 32 Parameter Locks per step. Il classico delay e il reverbero sono motori condivisi, quindi le code già prodotte non possono essere separate retroattivamente per sorgente; il collegamento Delay → Reverb utilizza i Reverb Send attivi (con smoothing).
+
+
+### TEST2.4.54 — Normal: Send numerico per step, tasto ripetuto per lo stato
+
+Nelle pagine **Alt+Q, Ctrl+1 (Delay Send Steps)** e **Ctrl+2 (Reverb Send Steps)**, premi Q–I o A–K per scegliere uno step. Premendo **di nuovo lo stesso tasto dello step corrente**, lo stato passa **Normal → Accent → Mute → Normal**. **Invio** mantiene la stessa funzione e, se hai selezionato più step, può modificare tutti gli step selezionati. Nelle pagine di invio la doppia pressione non seleziona/deseleziona: per le selezioni multiple rimangono Ctrl+A, le altre funzioni di selezione e il tasto Delete. Le altre sette pagine conservano la propria gestione dei tasti.
+
+In **Normal**, **Freccia su/giù** modifica soltanto il Send di quello step da **0% a 100%**, e **PageUp/PageDown** usa il passo impostato; **0% non invia nuovo segnale**, come Mute, ma rimane programmabile come Normal. Il primo movimento parte dal Send FX generale della rispettiva bassline. Un valore per-step esplicito può diventare maggiore del Send FX generale e funziona anche se quest'ultimo è 0. La schermata NVDA mostra lo stato e la percentuale; prima della modifica riporta **(FX default)** perché eredita dinamicamente il Send FX generale. **Backspace** ripristina Normal e l'ereditarietà del Send. In **Accent** e **Mute** le frecce non modificano nulla. Il livello Normal salvato rimane memorizzato passando temporaneamente ad Accent o Mute.
+
+Accent conserva il guadagno sensibile a Velocity e Accent Threshold, applicato al Send FX di riferimento, con il parametro **Delay Accent Send / Reverb Accent Send**. Le code già presenti non vengono eliminate. Per i Send espliciti, la transizione audio verso il livello programmato viene smussata (6 ms), senza applicare un fader dopo l'effetto.
+
+Il salvataggio **LSQ2 v9** contiene due valori per-step aggiuntivi, uno per Delay e uno per Reverb. I preset **v1–v8** mantengono i propri stati e invii, perché i nuovi livelli partono in **eredita FX**. Sono conservati Undo/Redo, copia/taglia/incolla e i 32 Parameter Locks per step. Gli indici VST3 non cambiano.

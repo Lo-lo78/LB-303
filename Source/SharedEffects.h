@@ -18,6 +18,10 @@ public:
     void prepare (double newSampleRate);
     void clearTails() noexcept; // no allocation: reset FX after Alt+I
     void setParameters (const Controls&, const ClassicParameters&, double newTempo);
+    void setStepSendGains (const std::array<float, basslineCount>& delay,
+                           const std::array<float, basslineCount>& reverb) noexcept;
+    void setStepSendOverrides (const std::array<float, basslineCount>& delay,
+                               const std::array<float, basslineCount>& reverb) noexcept;
     float dryLevel() const noexcept { return classicDryLevel; }
     bool wetEffectsEnabled() const noexcept { return enabledSharedWetFx; }
     double wetTailGuardSeconds() const noexcept { return wetGuardSeconds; }
@@ -65,6 +69,20 @@ private:
     Controls c {};
     ClassicParameters lastClassicParameters {};
     bool settingsPrepared = false;
+    std::array<float, basslineCount> delayStepSendTarget {{ 1.0f, 1.0f }};
+    std::array<float, basslineCount> reverbStepSendTarget {{ 1.0f, 1.0f }};
+    std::array<float, basslineCount> delayStepSendSmoothed {{ 1.0f, 1.0f }};
+    std::array<float, basslineCount> reverbStepSendSmoothed {{ 1.0f, 1.0f }};
+    // 0 blend: exact historic global Send path. 1: real per-step 0..100 Send.
+    std::array<float, basslineCount> delayAbsoluteTarget {{ 0.0f, 0.0f }};
+    std::array<float, basslineCount> reverbAbsoluteTarget {{ 0.0f, 0.0f }};
+    std::array<float, basslineCount> delayAbsoluteSmoothed {{ 0.0f, 0.0f }};
+    std::array<float, basslineCount> reverbAbsoluteSmoothed {{ 0.0f, 0.0f }};
+    std::array<float, basslineCount> delayOverrideMixTarget {{ 0.0f, 0.0f }};
+    std::array<float, basslineCount> reverbOverrideMixTarget {{ 0.0f, 0.0f }};
+    std::array<float, basslineCount> delayOverrideMixSmoothed {{ 0.0f, 0.0f }};
+    std::array<float, basslineCount> reverbOverrideMixSmoothed {{ 0.0f, 0.0f }};
+    float stepSendSmoothingCoeff = 0.0f;
     double wetGuardSeconds = 0.5;
     double fs = 44100.0, bpm = 120.0;
     // Smoothed fractional read position for the shared reverb pre-delay.

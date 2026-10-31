@@ -14,7 +14,7 @@ workflow = (root / ".github/workflows/build-windows.yml").read_text(encoding="ut
 
 # No per-step Accent and no change to the original seven-page Alt+Q scheme.
 assert '"Note", "Length", "Velocity", "Repeat", "Shift", "Launch Step", "Parameters"' in e
-assert '"Accent"' not in e
+assert '"Accent", "Note"' not in e  # no obsolete synth Accent step page
 assert "SequencerLayer::accent" not in s
 assert 'int accent =' not in h
 assert "else if (page == 6) openParameterPicker();" in e
@@ -48,11 +48,11 @@ assert "result.velocityBeforeMax = loadRelaxed (step.velocityBeforeMax);" in s
 assert "source.noteBeforePause" in s and "source.lengthBeforeLegato" in s
 assert "destinationStep.noteBeforePause" in s and "destinationStep.lengthBeforeLegato" in s
 assert "destinationStep.velocityBeforeMax" in s
-assert "stream.writeInt (7);" in s
+assert "stream.writeInt (9);" in s
 assert "formatVersion == 4 || formatVersion == 5" in s  # consume legacy abandoned Accent byte
 assert "formatVersion >= 5" in s
 assert "formatVersion >= 7" in s
-assert "formatVersion > 7" in s
+assert "formatVersion > 9" in s
 assert "if (requestedVelocity < 127)" in s
 assert "stream.writeByte (static_cast<char> (juce::jlimit (0, 126, step.velocityBeforeMax)))" in s
 assert "step.velocityBeforeMax.store (source.velocity < 127" in s
@@ -62,7 +62,7 @@ assert "stream.writeByte (static_cast<char> (juce::jlimit (0, 100, step.lengthBe
 assert "reset.noteBeforePause = 60; reset.lengthBeforeLegato = 50; reset.velocityBeforeMax = 100;" in e
 
 # Version number and original GitHub Actions build trigger both intact.
-assert "TEST2.4.52-Windows-x64" in workflow
+assert "TEST2.4.54-Windows-x64" in workflow
 assert "  push:" in workflow
 assert "python Tests/check_toggle_memory.py" in workflow
 print("PASS: TEST2.4.42 Note/Length/Velocity Enter remembers per-step values; no separate Accent or page changes.")

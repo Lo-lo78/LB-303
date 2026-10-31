@@ -475,6 +475,7 @@ void LB303AudioProcessorEditor::updateFxColumns()
     {
         addFx (4, lb303::fx::delaySend1);
         addFx (4, lb303::fx::delaySend2);
+        add (4, lb303::delayAccentSendIndex);
         if (delayType == 1)
         {
             // Retain original (Bassline 1) Classic IDs; slider032 is Dry Level
@@ -513,6 +514,7 @@ void LB303AudioProcessorEditor::updateFxColumns()
         add (5, lb303::reverbLfoPan1Index);
         add (5, lb303::reverbLfoPan2Index);
         add (5, lb303::reverbEarlyLevelIndex);
+        add (5, lb303::reverbAccentSendIndex);
     }
     // Historical fx::effectOrder deliberately absent from this view.
 }

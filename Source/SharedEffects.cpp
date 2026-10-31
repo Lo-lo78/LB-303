@@ -40,6 +40,13 @@ void SharedEffects::prepare (double sampleRate)
 {
     fs = std::max (8000.0, sampleRate);
     classic.prepare (fs);
+    stepSendSmoothingCoeff = static_cast<float> (1.0 - std::exp (-1.0 / (0.006 * fs)));
+    delayStepSendTarget.fill (1.0f); reverbStepSendTarget.fill (1.0f);
+    delayStepSendSmoothed.fill (1.0f); reverbStepSendSmoothed.fill (1.0f);
+    delayAbsoluteTarget.fill (0.0f); reverbAbsoluteTarget.fill (0.0f);
+    delayAbsoluteSmoothed.fill (0.0f); reverbAbsoluteSmoothed.fill (0.0f);
+    delayOverrideMixTarget.fill (0.0f); reverbOverrideMixTarget.fill (0.0f);
+    delayOverrideMixSmoothed.fill (0.0f); reverbOverrideMixSmoothed.fill (0.0f);
     settingsPrepared = false;
     wetGuardSeconds = 0.5;
     insertOversamplingFactor = 1;
@@ -106,6 +113,12 @@ void SharedEffects::prepare (double sampleRate)
 void SharedEffects::clearTails() noexcept
 {
     classic.reset();
+    delayStepSendTarget.fill (1.0f); reverbStepSendTarget.fill (1.0f);
+    delayStepSendSmoothed.fill (1.0f); reverbStepSendSmoothed.fill (1.0f);
+    delayAbsoluteTarget.fill (0.0f); reverbAbsoluteTarget.fill (0.0f);
+    delayAbsoluteSmoothed.fill (0.0f); reverbAbsoluteSmoothed.fill (0.0f);
+    delayOverrideMixTarget.fill (0.0f); reverbOverrideMixTarget.fill (0.0f);
+    delayOverrideMixSmoothed.fill (0.0f); reverbOverrideMixSmoothed.fill (0.0f);
     for (auto* line : { &tapeL, &tapeR, &preL, &preR })
     {
         std::fill (line->data.begin(), line->data.end(), 0.0f);
@@ -151,6 +164,28 @@ void SharedEffects::clearTails() noexcept
     for (auto& distortion : distortions) distortion = {};
     lastDelayMode = 0;
     settingsPrepared = false;
+}
+void SharedEffects::setStepSendGains (const std::array<float, basslineCount>& delay,
+                                     const std::array<float, basslineCount>& reverb) noexcept
+{
+    for (size_t v = 0; v < basslineCount; ++v)
+    {
+        delayStepSendTarget[v] = clampf (delay[v], 0.0f, 2.0f);
+        reverbStepSendTarget[v] = clampf (reverb[v], 0.0f, 2.0f);
+    }
+}
+void SharedEffects::setStepSendOverrides (const std::array<float, basslineCount>& delay,
+                                          const std::array<float, basslineCount>& reverb) noexcept
+{
+    for (size_t lane = 0; lane < basslineCount; ++lane)
+    {
+        delayOverrideMixTarget[lane] = delay[lane] < 0.0f ? 0.0f : 1.0f;
+        reverbOverrideMixTarget[lane] = reverb[lane] < 0.0f ? 0.0f : 1.0f;
+        if (delay[lane] >= 0.0f)
+            delayAbsoluteTarget[lane] = clampf (delay[lane], 0.0f, 100.0f);
+        if (reverb[lane] >= 0.0f)
+            reverbAbsoluteTarget[lane] = clampf (reverb[lane], 0.0f, 100.0f);
+    }
 }
 void SharedEffects::setParameters (const Controls& settings,
                                    const ClassicParameters& original, double tempo)
@@ -835,30 +870,53 @@ SharedEffects::Output SharedEffects::processPostDistortion (float axL, float axR
         ch1L = first.first; ch1R = first.second;
         ch2L = second.first; ch2R = second.second;
     }
+    // 6ms smoothing applies to the independent source sends, NEVER to the
+    // internal feedback or the pre-existing echo/reverb tails.
+    for (size_t v = 0; v < basslineCount; ++v)
+    {
+        delayStepSendSmoothed[v] += (delayStepSendTarget[v] - delayStepSendSmoothed[v]) * stepSendSmoothingCoeff;
+        reverbStepSendSmoothed[v] += (reverbStepSendTarget[v] - reverbStepSendSmoothed[v]) * stepSendSmoothingCoeff;
+        delayAbsoluteSmoothed[v] += (delayAbsoluteTarget[v] - delayAbsoluteSmoothed[v]) * stepSendSmoothingCoeff;
+        reverbAbsoluteSmoothed[v] += (reverbAbsoluteTarget[v] - reverbAbsoluteSmoothed[v]) * stepSendSmoothingCoeff;
+        delayOverrideMixSmoothed[v] += (delayOverrideMixTarget[v] - delayOverrideMixSmoothed[v]) * stepSendSmoothingCoeff;
+        reverbOverrideMixSmoothed[v] += (reverbOverrideMixTarget[v] - reverbOverrideMixSmoothed[v]) * stepSendSmoothingCoeff;
+    }
     // The wet chorus is part of the sound being sent to later effects;
     // Dry Level still attenuates only the DIRECT bassline stems.
     const float composed1L = axL + ch1L, composed1R = axR + ch1R;
     const float composed2L = bxL + ch2L, composed2R = bxR + ch2R;
-    const auto send = [&] (size_t one, size_t two)
+    const auto effectiveSend = [] (float normalPercent, float gain,
+                                   float absolutePercent, float mix) noexcept
     {
-        const float s1 = c[one] * .01f, s2 = c[two] * .01f;
-        return std::pair<float,float> { composed1L * s1 + composed2L * s2,
-                                        composed1R * s1 + composed2R * s2 };
+        // With mix=0 this is exactly the legacy multiplier; the override
+        // interpolates the REAL send in percent, not a post-FX wet fader.
+        const float inherited = normalPercent * .01f * gain;
+        return inherited * (1.0f - mix) + absolutePercent * .01f * mix;
     };
-    const auto delayStem = send (fx::delaySend1, fx::delaySend2);
-    const float verbS1 = c[fx::reverbSend1] * .01f;
-    const float verbS2 = c[fx::reverbSend2] * .01f;
+    const float delayS1 = effectiveSend (c[fx::delaySend1], delayStepSendSmoothed[0],
+        delayAbsoluteSmoothed[0], delayOverrideMixSmoothed[0]);
+    const float delayS2 = effectiveSend (c[fx::delaySend2], delayStepSendSmoothed[1],
+        delayAbsoluteSmoothed[1], delayOverrideMixSmoothed[1]);
+    const auto delayStem = std::pair<float, float> {
+        composed1L * delayS1 + composed2L * delayS2,
+        composed1R * delayS1 + composed2R * delayS2 };
+    const float verbS1 = effectiveSend (c[fx::reverbSend1], reverbStepSendSmoothed[0],
+        reverbAbsoluteSmoothed[0], reverbOverrideMixSmoothed[0]);
+    const float verbS2 = effectiveSend (c[fx::reverbSend2], reverbStepSendSmoothed[1],
+        reverbAbsoluteSmoothed[1], reverbOverrideMixSmoothed[1]);
     const std::array<std::pair<float, float>, basslineCount> reverbVoiceSends {{
         { composed1L * verbS1, composed1R * verbS1 },
         { composed2L * verbS2, composed2R * verbS2 }
     }};
     // Preserve the original floating-point summation order of the reverb send.
-    const auto reverbStem = send (fx::reverbSend1, fx::reverbSend2);
+    const auto reverbStem = std::pair<float, float> {
+        composed1L * verbS1 + composed2L * verbS2,
+        composed1R * verbS1 + composed2R * verbS2 };
     const int delayMode = juce::jlimit (0, 2, juce::roundToInt (c[fx::delayType]));
     const bool verbEnabled = c[fx::reverbType] > .5f;
     // Master links respect destination send controls: both Reverb Sends at
     // zero must silence new reverb excitation, even in serial FX routing.
-    const float reverbLink = std::max (c[fx::reverbSend1], c[fx::reverbSend2]) * .01f;
+    const float reverbLink = std::max (verbS1, verbS2);
 
     const auto runDelay = [&] (float l, float r) -> std::pair<float, float>
     {

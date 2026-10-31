@@ -62,7 +62,7 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     fxParameterIndex (fx::dualGlide), fxParameterIndex (fx::dualFeedback1),
     fxParameterIndex (fx::dualFeedback2), fxParameterIndex (fx::dualTone1),
     fxParameterIndex (fx::dualTone2), fxParameterIndex (fx::dualSpread),
-    fxParameterIndex (fx::dualDrive),
+    fxParameterIndex (fx::dualDrive), delayAccentSendIndex,
     fxParameterIndex (fx::reverbType), fxParameterIndex (fx::reverbSend1),
     fxParameterIndex (fx::reverbSend2), fxParameterIndex (fx::reverbPredelay),
     fxParameterIndex (fx::reverbDecay), fxParameterIndex (fx::reverbDamping),
@@ -70,7 +70,7 @@ constexpr std::array<size_t, fxDisplayParameterCount> fxDisplayOrder {{
     reverbBassDecayIndex, reverbBassXoverIndex,
     reverbMotionModeIndex, reverbMotionDepthIndex, reverbMotionRateIndex,
     reverbSourcePan1Index, reverbSourcePan2Index,
-    reverbLfoPan1Index, reverbLfoPan2Index, reverbEarlyLevelIndex
+    reverbLfoPan1Index, reverbLfoPan2Index, reverbEarlyLevelIndex, reverbAccentSendIndex
 }};
 // All indices are relative to audioParameterCount, including append-only
 // performance controls located AFTER the shared FX parameters.
@@ -306,6 +306,10 @@ const std::array<ParameterInfo, parameterCount>& catalog()
             0, 4, 1, 0, "", portaCurveChoices, 5 };
         result[portamentoCurve2Index] = { "b2_portamento_curve", "Portamento Curve",
             0, 4, 1, 0, "", portaCurveChoices, 5 };
+        result[delayAccentSendIndex] = { "fx_delay_accent_send", "Delay Accent Send",
+            -100, 100, 1, 50, "%" };
+        result[reverbAccentSendIndex] = { "fx_reverb_accent_send", "Reverb Accent Send",
+            -100, 100, 1, 50, "%" };
         result[oversamplingIndex] = { "fx_oversampling", "Oversampling Basslines and Distortions",
             0, 2, 1, 0, "", oversamplingChoices, 3 };
         return result;
@@ -357,7 +361,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                || index == reverbMotionRateIndex
                                || index == reverbSourcePan1Index || index == reverbSourcePan2Index
                                || index == reverbLfoPan1Index || index == reverbLfoPan2Index
-                               || index == reverbEarlyLevelIndex)
+                               || index == reverbEarlyLevelIndex
+                               || index == delayAccentSendIndex || index == reverbAccentSendIndex)
             ? ("FX - " + p.name)
             : index == oversamplingIndex
             ? ("FX - " + p.name)

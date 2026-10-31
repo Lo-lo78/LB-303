@@ -11,7 +11,7 @@ namespace
 constexpr std::array<int, 9> coarseSteps { 1, 5, 10, 15, 20, 25, 30, 35, 40 };
 constexpr std::array<char, 8> topKeys { 'q','w','e','r','t','y','u','i' };
 constexpr std::array<char, 8> lowerKeys { 'a','s','d','f','g','h','j','k' };
-const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift", "Launch Step", "Parameters" };
+const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift", "Launch Step", "Parameters", "Delay Send Steps", "Reverb Send Steps" };
 constexpr int maxUndo = 50;
 // Versioned clipboard marker prevents pasting ordinary text as a sequencer.
 const juce::String patternClipboardHeader = "LB303-PATTERN-V1:";
@@ -28,7 +28,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose page. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
+    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose original pages; Ctrl+1 Delay Send Steps, Ctrl+2 Reverb Send Steps; press the focused step key again or Enter to cycle Normal Accent Mute. In Normal, Up and Down set that step Send from 0 to 100 percent; the others ignore arrows. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -38,7 +38,7 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
     track = juce::jlimit (0, 1, selectedTrack);
     // Preserve the visited page only in this live processor instance.
     // Opening another instance or loading a project starts at Note.
-    page = juce::jlimit (0, 6, processor.editorSession.sequencerPage);
+    page = juce::jlimit (0, 8, processor.editorSession.sequencerPage);
     returnControl = focus;
     opened = true;
     lastStepKey = -1;
@@ -93,6 +93,14 @@ void SequencerStepEditor::announce (const juce::String& msg)
 juce::String SequencerStepEditor::valueText (int index) const
 {
     const auto step = bank().getStep (pattern(), index);
+    const auto sendName = [this] (int state, int level) -> juce::String
+    {
+        if (state == 1) return "Accent";
+        if (state == 2) return "Mute";
+        const int shown = level < 0 ? inheritedSendLevel() : level;
+        return "Normal, Send " + juce::String (shown) + "%"
+            + (level < 0 ? " (FX default)" : "");
+    };
     switch (page)
     {
         case 0: return step.note >= 128 ? "Pause" : juce::String (step.note);
@@ -100,10 +108,20 @@ juce::String SequencerStepEditor::valueText (int index) const
         case 2: return juce::String (step.velocity);
         case 3: return juce::String (step.repeat);
         case 4: return juce::String ((step.shift - 0.5f) * 2.0f, 2);
+        case 7: return sendName (step.delaySendState, step.delaySendLevel);
+        case 8: return sendName (step.reverbSendState, step.reverbSendLevel);
         case 6: return index == currentStep ? currentLockText()
                          : juce::String (step.parameterLockCount) + " parameter locks";
         default: return "";
     }
+}
+int SequencerStepEditor::inheritedSendLevel() const
+{
+    const size_t fxSend = page == 7
+        ? (track == 0 ? lb303::fx::delaySend1 : lb303::fx::delaySend2)
+        : (track == 0 ? lb303::fx::reverbSend1 : lb303::fx::reverbSend2);
+    return juce::jlimit (0, 100, juce::roundToInt (
+        processor.value (lb303::fxParameterIndex (fxSend))));
 }
 std::pair<int, int> SequencerStepEditor::activeStepBounds() const
 {
@@ -147,11 +165,12 @@ void SequencerStepEditor::refresh()
     const auto config = bank().getConfig (pat);
     juce::String text;
     text << "LB-303 SEQUENCER — BASSLINE " << (track + 1)
-         << " — PATTERN " << (pat + 1) << "/16 — PAGE " << (page + 1)
+         << " — PATTERN " << (pat + 1) << "/16 — PAGE " << (page == 7 ? juce::String ("Ctrl+1")
+                         : page == 8 ? juce::String ("Ctrl+2") : juce::String (page + 1))
          << " " << pageName() << "\n\n";
     if (page == 5)
         text << "Launch Step " << config.launchStep << "\n"
-             << "Up/Down: change launch step. Page 1–5, 7: select page.\n";
+             << "Up/Down: change launch step. 1–7: original pages; Ctrl+1/2: FX Send pages.\n";
     else
     {
         text << "STEPS " << juce::jmax (firstActive + 1, block * 16 + 1)
@@ -177,6 +196,11 @@ void SequencerStepEditor::refresh()
             text << "\nEnter: 101 Legato / last length of this step.\n";
         if (page == 2)
             text << "\nEnter: 127 maximum velocity / last velocity of this step.\n";
+        if (page == 7 || page == 8)
+            text << "\nPress focused step key again or Enter: Normal / Accent / Mute."
+                 << " Up/Down: real Send 0..100% in Normal only; PgUp/PgDown: coarse steps."
+                 << " Backspace: Normal, inherit FX Send."
+                 << "\nAccent uses Velocity and Accent Threshold; Mute blocks new effect input.\n";
         if (page == 6)
             text << "\nEnter: select a synth parameter, Up/Down: edit current lock. "
                  << "Alt+Home/End: previous/next lock. Delete clears selected steps first; with no selected steps it removes the current lock. Alt+Delete: remove all."
@@ -185,7 +209,7 @@ void SequencerStepEditor::refresh()
     text << "\nStart " << config.startStep << "  End " << config.endStep
          << "  Division " << juce::String (config.bpmDivision, 4)
          << "  Step " << coarseSteps[static_cast<size_t> (valueStepIndex)]
-         << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Tab: active blocks"
+         << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Ctrl+1: Delay Send  |  Ctrl+2: Reverb Send  |  Tab: active blocks"
          << "\nZ/X: Start Step -/+  |  C/V: End Step -/+"
          << "\nCtrl+A: select visible 16 steps  |  Delete: deselect all  |  Ctrl+C/V/X: steps  |  Ctrl+Shift+C/X/V: current pattern only"
          << "  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
@@ -215,7 +239,23 @@ void SequencerStepEditor::selectStep (int inBlock)
     const auto now = juce::Time::getMillisecondCounterHiRes();
     const bool doublePress = index == lastStepKey && now - lastPressTime >= 40.0
                           && now - lastPressTime <= 350.0;
+    // On Send pages, a repeated press on the ALREADY focused step cycles
+    // that step's state. No double-press timer is involved; do not alter the
+    // selection shortcuts on the seven original pages.
+    if ((page == 7 || page == 8) && index == currentStep)
+    {
+        editSendState (1, true);
+        return;
+    }
     currentStep = index;
+    if (page == 7 || page == 8)
+    {
+        lastStepKey = -1;
+        lastRevision = 0;
+        refresh();
+        announceCurrent();
+        return;
+    }
     if (doublePress)
     {
         auto& item = selectedSteps[static_cast<size_t> (index)];
@@ -384,6 +424,7 @@ void SequencerStepEditor::undo (bool redo)
 void SequencerStepEditor::modifyValue (int direction, int amount)
 {
     if (page == 5) { changeLaunch (direction, amount); return; }
+    if (page == 7 || page == 8) { editSendLevel (direction, amount); return; }
     if (page == 6) { editSelectedLock (direction, amount); return; }
     Action action; action.track = track; action.pattern = pattern();
     const auto layer = static_cast<lb303::SequencerLayer> (page);
@@ -436,6 +477,27 @@ void SequencerStepEditor::resetCurrent()
         return;
     }
     if (page == 6) { resetSelectedLock(); return; }
+    if (page == 7 || page == 8)
+    {
+        Action action; action.track = track; action.pattern = pattern();
+        for (int i : editingSteps())
+        {
+            StepChange change; change.index = i;
+            change.before = bank().getStep (pattern(), i);
+            auto updated = change.before;
+            if (page == 7) { updated.delaySendState = 0; updated.delaySendLevel = -1; }
+            else { updated.reverbSendState = 0; updated.reverbSendLevel = -1; }
+            if (updated.delaySendState == change.before.delaySendState
+                && updated.reverbSendState == change.before.reverbSendState
+                && updated.delaySendLevel == change.before.delaySendLevel
+                && updated.reverbSendLevel == change.before.reverbSendLevel) continue;
+            bank().replaceStep (pattern(), i, updated);
+            change.after = bank().getStep (pattern(), i);
+            action.changes.push_back (std::move (change));
+        }
+        if (! action.changes.empty()) { commitAction (std::move (action)); announceCurrent(); }
+        return;
+    }
     Action action; action.track = track; action.pattern = pattern();
     for (int i : editingSteps())
     {
@@ -451,6 +513,56 @@ void SequencerStepEditor::resetCurrent()
     }
     commitAction (std::move (action));
     announce ("Reset. Step " + juce::String (currentStep + 1));
+}
+void SequencerStepEditor::editSendState (int direction, bool focusedOnly)
+{
+    Action action; action.track = track; action.pattern = pattern();
+    const auto steps = focusedOnly ? std::vector<int> { currentStep } : editingSteps();
+    for (int index : steps)
+    {
+        StepChange change; change.index = index;
+        change.before = bank().getStep (pattern(), index);
+        auto updated = change.before;
+        auto& state = page == 7 ? updated.delaySendState : updated.reverbSendState;
+        // Focused step key or Enter cycles Normal -> Accent -> Mute -> Normal.
+        state = (state + (direction >= 0 ? 1 : 2)) % 3;
+        bank().replaceStep (pattern(), index, updated);
+        change.after = bank().getStep (pattern(), index);
+        action.changes.push_back (std::move (change));
+    }
+    commitAction (std::move (action));
+    if (steps.size() > 1) announce (juce::String (steps.size()) + " selected steps changed, " + pageName());
+    else announceCurrent();
+}
+void SequencerStepEditor::editSendLevel (int direction, int amount)
+{
+    // Only Normal has an editable value. Never accidentally cycle Accent/Mute
+    // when using Up/Down or PageUp/PageDown.
+    const auto focused = bank().getStep (pattern(), currentStep);
+    if ((page == 7 ? focused.delaySendState : focused.reverbSendState) != 0) return;
+    Action action; action.track = track; action.pattern = pattern();
+    const int initial = inheritedSendLevel();
+    for (int index : editingSteps())
+    {
+        StepChange change; change.index = index;
+        change.before = bank().getStep (pattern(), index);
+        auto updated = change.before;
+        const int state = page == 7 ? updated.delaySendState : updated.reverbSendState;
+        if (state != 0) continue;
+        auto& level = page == 7 ? updated.delaySendLevel : updated.reverbSendLevel;
+        const int previous = level < 0 ? initial : level;
+        const int next = juce::jlimit (0, 100, previous + direction * amount);
+        if (next == previous) continue;
+        level = next;
+        bank().replaceStep (pattern(), index, updated);
+        change.after = bank().getStep (pattern(), index);
+        action.changes.push_back (std::move (change));
+    }
+    if (action.changes.empty()) return;
+    const int changed = static_cast<int> (action.changes.size());
+    commitAction (std::move (action));
+    if (changed > 1) announce (juce::String (changed) + " Normal sends changed, " + pageName());
+    else announceCurrent();
 }
 void SequencerStepEditor::toggleCurrentNote()
 {
@@ -1380,6 +1492,18 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
     // so focus cannot escape to REAPER or the underlying parameter grids.
     if (mods.isCtrlDown())
     {
+        // Ctrl+1/Ctrl+2 select the per-step send pages without changing focus.
+        if (! mods.isAltDown() && ! mods.isShiftDown()
+            && (code == '1' || code == '2' || ch == '1' || ch == '2'))
+        {
+            page = (code == '1' || ch == '1') ? 7 : 8;
+            processor.editorSession.sequencerPage = page;
+            lastRevision = 0;
+            refresh();
+            announce (pageName() + ", Step " + juce::String (currentStep + 1)
+                      + ", " + valueText (currentStep));
+            return true;
+        }
         if (! mods.isAltDown() && ! mods.isShiftDown()
             && (letter ('a') || code == 'a' || key.getTextCharacter() == 1))
         { selectVisibleSteps(); return true; }
@@ -1420,6 +1544,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         else if (page == 1) toggleCurrentLength();
         else if (page == 2) toggleCurrentVelocity();
         else if (page == 6) openParameterPicker();
+        else if (page == 7 || page == 8) editSendState (1);
         return true;
     }
     if (code == juce::KeyPress::backspaceKey) { resetCurrent(); return true; }

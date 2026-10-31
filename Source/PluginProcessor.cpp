@@ -588,9 +588,46 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         }
         sharedFx.setParameters (fxControls, legacy, bpm);
     };
+    const auto updateStepSendGains = [&]
+    {
+        std::array<float, lb303::basslineCount> delay {{ 1.0f, 1.0f }};
+        std::array<float, lb303::basslineCount> reverb {{ 1.0f, 1.0f }};
+        std::array<float, lb303::basslineCount> delayAbsolute {{ -1.0f, -1.0f }};
+        std::array<float, lb303::basslineCount> reverbAbsolute {{ -1.0f, -1.0f }};
+        for (size_t lane = 0; lane < lb303::basslineCount; ++lane)
+        {
+            if (activeLockStep[lane] < 0 || activeLockPattern[lane] < 0) continue;
+            const auto step = sequenceBanks[lane].getStep (activeLockPattern[lane], activeLockStep[lane]);
+            float threshold = value (lb303::parameterIndex (lane, 15));
+            // Match synth Accent Threshold, including its existing per-step lock.
+            for (int i = 0; i < step.parameterLockCount; ++i)
+                if (step.parameterLocks[static_cast<size_t> (i)].sliderNumber == 16)
+                    threshold = step.parameterLocks[static_cast<size_t> (i)].value;
+            threshold = std::clamp (threshold, 80.0f, 120.0f);
+            const float accent = std::clamp (
+                (static_cast<float> (step.velocity) - threshold) / (127.0f - threshold), 0.0f, 1.0f);
+            const auto gain = [accent] (int state, float amount)
+            {
+                if (state == 2) return 0.0f; // Mute only new excitation
+                if (state == 1) return std::clamp (1.0f + accent * amount * .01f, 0.0f, 2.0f);
+                return 1.0f; // Normal preserves historic Send
+            };
+            delay[lane] = gain (step.delaySendState, value (lb303::delayAccentSendIndex));
+            reverb[lane] = gain (step.reverbSendState, value (lb303::reverbAccentSendIndex));
+            // Explicit Normal levels are absolute sends, independent of the
+            // global FX Send. Accent/Mute continue using their old rules.
+            if (step.delaySendState == 0 && step.delaySendLevel >= 0)
+                delayAbsolute[lane] = static_cast<float> (step.delaySendLevel);
+            if (step.reverbSendState == 0 && step.reverbSendLevel >= 0)
+                reverbAbsolute[lane] = static_cast<float> (step.reverbSendLevel);
+        }
+        sharedFx.setStepSendGains (delay, reverb);
+        sharedFx.setStepSendOverrides (delayAbsolute, reverbAbsolute);
+    };
     for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
         applyVoiceParameters (voice);
     applyFxParameters();
+    updateStepSendGains();
     // The reverb takes its LFO from the SAME per-voice generator used for
     // pitch/filter/pan: BPM sync, One Shot, Trigger, wave and step locks agree.
     for (size_t voice = 0; voice < lb303::basslineCount; ++voice)
@@ -600,7 +637,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         const size_t sendIndex = voice == 0 ? lb303::fx::reverbSend1
                                             : lb303::fx::reverbSend2;
         const bool connected = value (lb303::fxParameterIndex (lb303::fx::reverbType)) > .5f
-            && value (lb303::fxParameterIndex (sendIndex)) > 0.0f
+            && (value (lb303::fxParameterIndex (sendIndex)) > 0.0f
+                || (activeLockStep[voice] >= 0 && activeLockPattern[voice] >= 0
+                    && sequenceBanks[voice].getStep (activeLockPattern[voice], activeLockStep[voice]).reverbSendLevel > 0))
             && value (depthIndex) != 0.0f;
         engines[voice].setExternalLfoDestination (connected);
     }
@@ -785,6 +824,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             activeLockPattern[lane] = event.pattern;
             applyVoiceParameters (lane);
             applyFxParameters();
+            updateStepSendGains();
         }
         renderSamplesTo (end);
     };

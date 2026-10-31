@@ -42,7 +42,7 @@ private:
     juce::Component::SafePointer<juce::Component> returnControl;
     bool opened = false;
     int track = 0;
-    int page = 0; // 0..4 steps; 5 Launch Step; 6 Parameter Locks (TEST2.3)
+    int page = 0; // 0..6 original; 7 Delay Send Steps; 8 Reverb Send Steps
     int currentStep = 0;
     int valueStepIndex = 0;
     int lastStepKey = -1;
@@ -100,6 +100,9 @@ private:
     void toggleCurrentNote();
     void toggleCurrentLength();
     void toggleCurrentVelocity();
+    void editSendState (int direction, bool focusedOnly = false);
+    void editSendLevel (int direction, int amount);
+    int inheritedSendLevel() const;
     std::vector<int> editingSteps() const;
     void commitAction (Action&&);
     void applyAction (const Action&, bool backwards);

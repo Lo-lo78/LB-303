@@ -95,6 +95,10 @@ void SequencerState::reset()
             storeRelaxed (step.velocityBeforeMax, 100);
             storeRelaxed (step.repeat, 1);
             storeRelaxed (step.shift, 0.5f);
+            storeRelaxed (step.delaySendState, 0);
+            storeRelaxed (step.reverbSendState, 0);
+            storeRelaxed (step.delaySendLevel, -1);
+            storeRelaxed (step.reverbSendLevel, -1);
             storeRelaxed (step.parameterLockCount, 0);
             for (auto& lock : step.parameterLocks)
             {
@@ -118,6 +122,10 @@ void SequencerState::resetStep (int sequenceIndex, int stepIndex) noexcept
     storeRelaxed (step.velocityBeforeMax, 100);
     storeRelaxed (step.repeat, 1);
     storeRelaxed (step.shift, 0.5f);
+    storeRelaxed (step.delaySendState, 0);
+    storeRelaxed (step.reverbSendState, 0);
+    storeRelaxed (step.delaySendLevel, -1);
+    storeRelaxed (step.reverbSendLevel, -1);
     storeRelaxed (step.parameterLockCount, 0);
     for (auto& lock : step.parameterLocks)
     {
@@ -163,6 +171,10 @@ void SequencerState::resetSequence (int sequenceIndex) noexcept
         storeRelaxed (step.velocityBeforeMax, 100);
         storeRelaxed (step.repeat, 1);
         storeRelaxed (step.shift, 0.5f);
+        storeRelaxed (step.delaySendState, 0);
+        storeRelaxed (step.reverbSendState, 0);
+    storeRelaxed (step.delaySendLevel, -1);
+    storeRelaxed (step.reverbSendLevel, -1);
         storeRelaxed (step.parameterLockCount, 0);
         for (auto& lock : step.parameterLocks)
         {
@@ -433,6 +445,10 @@ SequencerStep SequencerState::getStep (int sequenceIndex, int stepIndex) const n
     result.velocityBeforeMax = loadRelaxed (step.velocityBeforeMax);
     result.repeat = loadRelaxed (step.repeat);
     result.shift = loadRelaxed (step.shift);
+    result.delaySendState = loadRelaxed (step.delaySendState);
+    result.reverbSendState = loadRelaxed (step.reverbSendState);
+    result.delaySendLevel = loadRelaxed (step.delaySendLevel);
+    result.reverbSendLevel = loadRelaxed (step.reverbSendLevel);
     result.parameterLockCount = juce::jlimit (0, SequencerStep::maximumParameterLocks,
                                               loadRelaxed (step.parameterLockCount));
     for (int i = 0; i < result.parameterLockCount; ++i)
@@ -534,6 +550,10 @@ void SequencerState::replaceStep (int sequenceIndex, int stepIndex,
     step.repeat.store (juce::roundToInt (clampLayerValue (
         SequencerLayer::repeat, static_cast<float> (source.repeat))), std::memory_order_relaxed);
     step.shift.store (clampLayerValue (SequencerLayer::shift, source.shift), std::memory_order_relaxed);
+    step.delaySendState.store (juce::jlimit (0, 2, source.delaySendState), std::memory_order_relaxed);
+    step.reverbSendState.store (juce::jlimit (0, 2, source.reverbSendState), std::memory_order_relaxed);
+    step.delaySendLevel.store (juce::jlimit (-1, 100, source.delaySendLevel), std::memory_order_relaxed);
+    step.reverbSendLevel.store (juce::jlimit (-1, 100, source.reverbSendLevel), std::memory_order_relaxed);
     const int count = juce::jlimit (0, SequencerStep::maximumParameterLocks, source.parameterLockCount);
     for (int i = 0; i < SequencerStep::maximumParameterLocks; ++i)
     {
@@ -697,6 +717,10 @@ void SequencerState::copySequenceFrom (const SequencerState& source, int sourceS
         storeRelaxed (destinationStep.velocityBeforeMax, loadRelaxed (sourceStep.velocityBeforeMax));
         storeRelaxed (destinationStep.repeat, loadRelaxed (sourceStep.repeat));
         storeRelaxed (destinationStep.shift, loadRelaxed (sourceStep.shift));
+        storeRelaxed (destinationStep.delaySendState, loadRelaxed (sourceStep.delaySendState));
+        storeRelaxed (destinationStep.reverbSendState, loadRelaxed (sourceStep.reverbSendState));
+        storeRelaxed (destinationStep.delaySendLevel, loadRelaxed (sourceStep.delaySendLevel));
+        storeRelaxed (destinationStep.reverbSendLevel, loadRelaxed (sourceStep.reverbSendLevel));
         const auto count = juce::jlimit (0, SequencerStep::maximumParameterLocks,
                                          loadRelaxed (sourceStep.parameterLockCount));
         storeRelaxed (destinationStep.parameterLockCount, count);
@@ -725,9 +749,9 @@ juce::String SequencerState::serialiseToBase64 (bool includeSelectedSequence) co
     juce::MemoryOutputStream stream;
     stream.writeInt (0x4c535132); // LSQ2
     // v3 = original TEST2.4.29; v4/5 included a now-discarded Accent field.
-    // v6 stores Note and Length memories; v7 adds the Velocity-before-127 memory.
+    // v6 stores Note and Length memories; v7 adds Velocity memory; v8 adds two send states.
     // No separate Accent per-step is introduced.
-    stream.writeInt (7);
+    stream.writeInt (9);
     stream.writeInt (getRoutingMode());
     stream.writeInt (includeSelectedSequence ? getSelectedSequence() : 0);
 
@@ -768,6 +792,11 @@ juce::String SequencerState::serialiseToBase64 (bool includeSelectedSequence) co
             stream.writeByte (static_cast<char> (juce::jlimit (0, 127, step.noteBeforePause)));
             stream.writeByte (static_cast<char> (juce::jlimit (0, 100, step.lengthBeforeLegato)));
             stream.writeByte (static_cast<char> (juce::jlimit (0, 126, step.velocityBeforeMax)));
+            stream.writeByte (static_cast<char> (juce::jlimit (0, 2, step.delaySendState)));
+            stream.writeByte (static_cast<char> (juce::jlimit (0, 2, step.reverbSendState)));
+            // 255 is the inherit-FX-send sentinel, 0..100 are real percentages.
+            stream.writeByte (static_cast<char> (step.delaySendLevel < 0 ? 255 : juce::jlimit (0, 100, step.delaySendLevel)));
+            stream.writeByte (static_cast<char> (step.reverbSendLevel < 0 ? 255 : juce::jlimit (0, 100, step.reverbSendLevel)));
             stream.writeByte (static_cast<char> (juce::jlimit (0, SequencerStep::maximumParameterLocks,
                                                                step.parameterLockCount)));
             for (int lockIndex = 0; lockIndex < step.parameterLockCount; ++lockIndex)
@@ -798,7 +827,7 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
     if (stream.readInt() != 0x4c535132)
         return false;
     const auto formatVersion = stream.readInt();
-    if (formatVersion < 1 || formatVersion > 7)
+    if (formatVersion < 1 || formatVersion > 9)
         return false;
 
     // Silence the generator while its atomic fields are replaced.
@@ -867,6 +896,21 @@ bool SequencerState::restoreFromBase64 (const juce::String& encoded)
             step.velocityBeforeMax.store (formatVersion >= 7
                 ? juce::jlimit (0, 126, static_cast<int> (static_cast<unsigned char> (stream.readByte())))
                 : (loadedVelocity < 127 ? loadedVelocity : 100), std::memory_order_relaxed);
+            step.delaySendState.store (formatVersion >= 8
+                ? juce::jlimit (0, 2, static_cast<int> (static_cast<unsigned char> (stream.readByte())))
+                : 0, std::memory_order_relaxed);
+            step.reverbSendState.store (formatVersion >= 8
+                ? juce::jlimit (0, 2, static_cast<int> (static_cast<unsigned char> (stream.readByte())))
+                : 0, std::memory_order_relaxed);
+            // v1..v8 had no per-step send value. All inherit the FX rack.
+            const auto readSendLevel = [&stream, formatVersion] () -> int
+            {
+                if (formatVersion < 9) return -1;
+                const int raw = static_cast<unsigned char> (stream.readByte());
+                return raw == 255 ? -1 : juce::jlimit (0, 100, raw);
+            };
+            step.delaySendLevel.store (readSendLevel(), std::memory_order_relaxed);
+            step.reverbSendLevel.store (readSendLevel(), std::memory_order_relaxed);
             step.parameterLockCount.store (0, std::memory_order_relaxed);
             for (auto& lock : step.parameterLocks)
             {

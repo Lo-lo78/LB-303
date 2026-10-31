@@ -63,7 +63,10 @@ constexpr size_t reverbEarlyLevelIndex = reverbLfoPan2Index + 1;
 constexpr size_t portamentoCurve1Index = reverbEarlyLevelIndex + 1;
 constexpr size_t portamentoCurve2Index = portamentoCurve1Index + 1;
 constexpr size_t portamentoCurveIndex (size_t lane) { return portamentoCurve1Index + lane; }
-constexpr size_t parameterCount = portamentoCurve2Index + 1;
+// Per-effect velocity response, applied only to steps whose Send is Accent.
+constexpr size_t delayAccentSendIndex = portamentoCurve2Index + 1;
+constexpr size_t reverbAccentSendIndex = delayAccentSendIndex + 1;
+constexpr size_t parameterCount = reverbAccentSendIndex + 1;
 constexpr size_t lfoParameterIndex (size_t lane, size_t control)
 { return lfoParameterBase + lane * lfoParameterCount + control; }
 namespace lfo
@@ -92,7 +95,7 @@ constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2Param
 constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 3; // MIDI channel, separate output, Portamento Curve (GUI-only)
 constexpr int voiceMidiDisplayIndex = 5; // Volume, Waveform, Osc 2 Volume, Osc 2 Detune, Pan, MIDI, ...
 constexpr size_t classicDelayParameterCount = 14;
-constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1; // append-only reverb bass and spatial host params
+constexpr size_t fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1 + 2; // append-only reverb bass and spatial host params
 constexpr size_t fxContextIndex = basslineCount + 1;
 size_t fxDisplayGlobalIndex (size_t displayIndex) noexcept;
 namespace fx

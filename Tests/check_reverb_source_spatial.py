@@ -31,9 +31,10 @@ assert 'reverbLfoPan1Index = reverbSourcePan2Index + 1' in h
 assert 'reverbLfoPan2Index = reverbLfoPan1Index + 1' in h
 assert 'reverbEarlyLevelIndex = reverbLfoPan2Index + 1' in h
 assert 'portamentoCurve1Index = reverbEarlyLevelIndex + 1' in h
-assert 'parameterCount = portamentoCurve2Index + 1' in h
+assert 'portamentoCurve2Index = portamentoCurve1Index + 1' in h
+assert 'parameterCount = reverbAccentSendIndex + 1' in h
 assert 'std::array<float, fxParameterCount + 10>' in fxh
-assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1' in h
+assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1 + 2' in h
 for index, identity, label in [
     ('reverbSourcePan1Index', 'fx_reverb_source_pan1', 'Reverb Source Pan 1'),
     ('reverbSourcePan2Index', 'fx_reverb_source_pan2', 'Reverb Source Pan 2'),
@@ -81,7 +82,7 @@ assert 'engines[0].currentLfoSample(), engines[1].currentLfoSample()' in p
 assert 'sharedFx.processPostDistortion (stems[0].first' in p
 assert 'sharedFx.process (stems[0].first' in p
 assert 'engines[voice].setExternalLfoDestination (connected)' in p
-assert 'TEST2.4.52-Windows-x64' in wf
+assert 'TEST2.4.54-Windows-x64' in wf
 assert 'python Tests/check_reverb_source_spatial.py' in wf
 for language in ('en', 'it', 'es', 'fr', 'ru', 'zh', 'ja'):
     html = read('Help/LB303Help.html')

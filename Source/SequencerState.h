@@ -25,6 +25,8 @@ struct SequencerParameterLock
     float value = 0.0f;
 };
 
+enum class StepSendState : int { normal = 0, accent = 1, mute = 2 };
+
 struct SequencerStep
 {
     int note = 128;
@@ -36,6 +38,12 @@ struct SequencerStep
     int velocityBeforeMax = 100;
     int repeat = 1;
     float shift = 0.5f;
+    int delaySendState = 0; // Normal, velocity-sensitive Accent, Mute
+    int reverbSendState = 0;
+    // -1 inherits the FX rack Send; 0..100 is an absolute per-step percentage.
+    // Used ONLY in Normal mode. Accent/Mute leave the stored value intact.
+    int delaySendLevel = -1;
+    int reverbSendLevel = -1;
     static constexpr int maximumParameterLocks = 32;
     int parameterLockCount = 0;
     std::array<SequencerParameterLock, maximumParameterLocks> parameterLocks {};
@@ -153,6 +161,10 @@ private:
         std::atomic<int> velocityBeforeMax { 100 };
         std::atomic<int> repeat { 1 };
         std::atomic<float> shift { 0.5f };
+        std::atomic<int> delaySendState { 0 };
+        std::atomic<int> reverbSendState { 0 };
+        std::atomic<int> delaySendLevel { -1 };
+        std::atomic<int> reverbSendLevel { -1 };
         std::atomic<int> parameterLockCount { 0 };
         std::array<AtomicParameterLock, SequencerStep::maximumParameterLocks> parameterLocks;
     };
