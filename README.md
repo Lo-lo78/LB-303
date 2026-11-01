@@ -1,3 +1,7 @@
+## TEST2.4.58 — Alt+Q: Parameters su 6, Launch Step come parametro
+
+In Alt+Q, **1–5** continuano a selezionare Note, Length, Velocity, Repeat e Shift. **6** seleziona la pagina **Parameters** (prima sul 7). **7** focalizza **Launch Step** come parametro globale del pattern, **senza cambiare la pagina step corrente**: Su/Giù e PagSu/PagGiù modificano Launch Step, Backspace lo riporta a 1. I tasti Q–I/A–K o Tab riportano alla pagina step precedente (anche se è Ctrl+1 Delay Send o Ctrl+2 Reverb Send); il primo tasto step al ritorno non altera lo stato Accent/Mute. Il parametro non viene più annunciato come “Page Launch Step”. Song, 64 pattern, DSP e formato preset restano invariati.
+
 # LB-303 0.99.1 — TEST2.4.57: Bassline Clipboard e 64 Pattern per Bassline
 
 **Alt+C / Alt+V (pagine Bassline 1 e Bassline 2).** Copia negli appunti di sistema l'intera configurazione mostrata nella pagina Bassline attiva; Ctrl+Tab fino all'altra bassline, quindi Alt+V per incollare. Copia 43 controlli della pagina (sintesi, inviluppi, oscillatore 2, LFO, pan, volume, Portamento Curve, MIDI Channel e Separate Output). È un formato versionato e portabile fra istanze LB-303. La copia non include pattern, step, Song, stato del sequencer, send e altri FX condivisi. Sulle pagine Sequencer e FX **Alt+C e Alt+V non cambiano nulla**. **Importante:** Alt+V ora è Incolla (non più la scorciatoia per il controllo Value); il controllo Value rimane raggiungibile con Tab. Gli annunci NVDA confermano copia e incolla. Alt+C nel pannello About conserva la funzione Chiudi.

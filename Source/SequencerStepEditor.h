@@ -42,7 +42,8 @@ private:
     juce::Component::SafePointer<juce::Component> returnControl;
     bool opened = false;
     int track = 0;
-    int page = 0; // 0..6 original; 7 Delay Send Steps; 8 Reverb Send Steps
+    int page = 0; // 0..5 step pages; 7 Delay Send; 8 Reverb Send; 6 unused
+    bool launchControlSelected = false; // key 7 focuses Launch Step WITHOUT changing page
     int currentStep = 0;
     int valueStepIndex = 0;
     int lastStepKey = -1;

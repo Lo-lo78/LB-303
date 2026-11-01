@@ -11,7 +11,7 @@ namespace
 constexpr std::array<int, 9> coarseSteps { 1, 5, 10, 15, 20, 25, 30, 35, 40 };
 constexpr std::array<char, 8> topKeys { 'q','w','e','r','t','y','u','i' };
 constexpr std::array<char, 8> lowerKeys { 'a','s','d','f','g','h','j','k' };
-const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift", "Launch Step", "Parameters", "Delay Send Steps", "Reverb Send Steps" };
+const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift", "Parameters", "Reserved", "Delay Send Steps", "Reverb Send Steps" };
 constexpr int maxUndo = 50;
 // Versioned clipboard marker prevents pasting ordinary text as a sequencer.
 const juce::String patternClipboardHeader = "LB303-PATTERN-V1:";
@@ -28,7 +28,7 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 7 choose original pages; Ctrl+1 Delay Send Steps, Ctrl+2 Reverb Send Steps; press the focused step key again or Enter to cycle Normal Accent Mute. In Normal, Up and Down set that step Send from 0 to 100 percent; the others ignore arrows. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
+    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 6 choose step pages; 7 focuses the Launch Step parameter without leaving the current step page; Ctrl+1 Delay Send Steps, Ctrl+2 Reverb Send Steps; press the focused step key again or Enter to cycle Normal Accent Mute. In Normal, Up and Down set that step Send from 0 to 100 percent; the others ignore arrows. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview.");
     setVisible (false);
 }
 
@@ -39,6 +39,9 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
     // Preserve the visited page only in this live processor instance.
     // Opening another instance or loading a project starts at Note.
     page = juce::jlimit (0, 8, processor.editorSession.sequencerPage);
+    // Prior versions used internal page 6 for Parameters; map to page 5.
+    if (page == 6) page = 5;
+    launchControlSelected = false;
     returnControl = focus;
     opened = true;
     lastStepKey = -1;
@@ -61,6 +64,7 @@ void SequencerStepEditor::close()
 {
     if (! opened) return;
     processor.editorSession.sequencerPage = page;
+    launchControlSelected = false;
     opened = false;
     pickerOpen = false;
     // Preview stays active when Alt+Q/Esc closes this editing overlay.
@@ -168,10 +172,9 @@ void SequencerStepEditor::refresh()
          << " — PATTERN " << (pat + 1) << "/" << lb303::SequencerState::maximumSequences << " — PAGE " << (page == 7 ? juce::String ("Ctrl+1")
                          : page == 8 ? juce::String ("Ctrl+2") : juce::String (page + 1))
          << " " << pageName() << "\n\n";
-    if (page == 5)
-        text << "Launch Step " << config.launchStep << "\n"
-             << "Up/Down: change launch step. 1–7: original pages; Ctrl+1/2: FX Send pages.\n";
-    else
+    if (launchControlSelected)
+        text << "Focused parameter: Launch Step " << config.launchStep
+             << " (Up/Down to edit, a step key returns to " << pageName() << ")\n";
     {
         text << "STEPS " << juce::jmax (firstActive + 1, block * 16 + 1)
              << "–" << juce::jmin (lastActive + 1, block * 16 + 16) << "\n";
@@ -201,7 +204,7 @@ void SequencerStepEditor::refresh()
                  << " Up/Down: real Send 0..100% in Normal only; PgUp/PgDown: coarse steps."
                  << " Backspace: Normal, inherit FX Send."
                  << "\nAccent uses Velocity and Accent Threshold; Mute blocks new effect input.\n";
-        if (page == 6)
+        if (page == 5 && ! launchControlSelected)
             text << "\nEnter: select a synth parameter, Up/Down: edit current lock. "
                  << "Alt+Home/End: previous/next lock. Delete clears selected steps first; with no selected steps it removes the current lock. Alt+Delete: remove all."
                  << "\nPlayback of locks: enabled.\n";
@@ -220,11 +223,9 @@ void SequencerStepEditor::refresh()
 }
 void SequencerStepEditor::announceCurrent()
 {
-    if (page == 5)
+    if (launchControlSelected)
     {
-        announce ("Bassline " + juce::String (track + 1) + ", Pattern "
-            + juce::String (pattern() + 1) + ", Launch Step "
-            + juce::String (bank().getConfig (pattern()).launchStep));
+        announce ("Launch Step " + juce::String (bank().getConfig (pattern()).launchStep));
         return;
     }
     announce ("Step " + juce::String (currentStep + 1)
@@ -236,6 +237,18 @@ void SequencerStepEditor::selectStep (int inBlock)
     const int index = currentStep / 16 * 16 + juce::jlimit (0, 15, inBlock);
     const auto [firstActive, lastActive] = activeStepBounds();
     if (index < firstActive || index > lastActive) return; // silent inactive cells
+    // When a global parameter is focused, the first step key only returns
+    // to the old step page. In particular it MUST NOT cycle Accent/Mute.
+    if (launchControlSelected)
+    {
+        launchControlSelected = false;
+        currentStep = index;
+        lastStepKey = -1;
+        lastRevision = 0;
+        refresh();
+        announceCurrent();
+        return;
+    }
     const auto now = juce::Time::getMillisecondCounterHiRes();
     const bool doublePress = index == lastStepKey && now - lastPressTime >= 40.0
                           && now - lastPressTime <= 350.0;
@@ -423,9 +436,9 @@ void SequencerStepEditor::undo (bool redo)
 }
 void SequencerStepEditor::modifyValue (int direction, int amount)
 {
-    if (page == 5) { changeLaunch (direction, amount); return; }
+    if (launchControlSelected) { changeLaunch (direction, amount); return; }
     if (page == 7 || page == 8) { editSendLevel (direction, amount); return; }
-    if (page == 6) { editSelectedLock (direction, amount); return; }
+    if (page == 5) { editSelectedLock (direction, amount); return; }
     Action action; action.track = track; action.pattern = pattern();
     const auto layer = static_cast<lb303::SequencerLayer> (page);
     const float delta = page == 4 ? 0.01f * direction * amount : static_cast<float> (direction * amount);
@@ -470,13 +483,13 @@ void SequencerStepEditor::changeLaunch (int direction, int amount)
 }
 void SequencerStepEditor::resetCurrent()
 {
-    if (page == 5)
+    if (launchControlSelected)
     {
         const int before = bank().getConfig (pattern()).launchStep;
         if (before != 1) changeLaunch (-1, before - 1);
         return;
     }
-    if (page == 6) { resetSelectedLock(); return; }
+    if (page == 5) { resetSelectedLock(); return; }
     if (page == 7 || page == 8)
     {
         Action action; action.track = track; action.pattern = pattern();
@@ -786,7 +799,7 @@ juce::String SequencerStepEditor::currentLockText() const
 }
 void SequencerStepEditor::openParameterPicker()
 {
-    if (page != 6 || pickerOpen) return;
+    if (page != 5 || pickerOpen) return;
     pickerOpen = true;
     // Restore the last cursor for THIS bassline, even across editor open/close.
     pickerIndex = lastPickerPosition[static_cast<size_t> (track)];
@@ -1473,19 +1486,19 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             announce ("All steps deselected");
             return true;
         }
-        if (page != 6) return true; // Nothing to deselect: no step data is deleted.
+        if (page != 5 || launchControlSelected) return true; // Silent unless Parameters is focused.
     }
     const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
     const auto letter = [code, ch] (juce::juce_wchar c)
     { return ch == c || code == juce::CharacterFunctions::toUpperCase (c); };
     if (code == juce::KeyPress::escapeKey) { close(); return true; }
-    if (page == 6 && mods.isAltDown())
+    if (page == 5 && ! launchControlSelected && mods.isAltDown())
     {
         if (code == juce::KeyPress::homeKey) { changeSelectedLock (-1); return true; }
         if (code == juce::KeyPress::endKey) { changeSelectedLock (1); return true; }
         if (code == juce::KeyPress::deleteKey) { deleteSelectedLock (true); return true; }
     }
-    if (page == 6 && code == juce::KeyPress::deleteKey)
+    if (page == 5 && ! launchControlSelected && code == juce::KeyPress::deleteKey)
     { deleteSelectedLock (false); return true; }
     // In the step editor Ctrl+Tab is intentionally unassigned, as are other
     // unhandled Ctrl combinations; the Ctrl catch-all below consumes them
@@ -1497,6 +1510,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             && (code == '1' || code == '2' || ch == '1' || ch == '2'))
         {
             page = (code == '1' || ch == '1') ? 7 : 8;
+            launchControlSelected = false;
             processor.editorSession.sequencerPage = page;
             lastRevision = 0;
             refresh();
@@ -1535,15 +1549,18 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         if (letter ('v')) { changeActiveRange (false, 1); return true; }
     }
     if (code == juce::KeyPress::tabKey)
-    { changeBlock (mods.isShiftDown() ? -1 : 1); return true; }
+    { launchControlSelected = false; changeBlock (mods.isShiftDown() ? -1 : 1); return true; }
     if (code == juce::KeyPress::homeKey) { changeTrack (-1); return true; }
     if (code == juce::KeyPress::endKey) { changeTrack (1); return true; }
     if (code == juce::KeyPress::returnKey)
     {
+        // Launch Step is focused as a parameter: Enter must not edit the
+        // retained musical step page behind it.
+        if (launchControlSelected) return true;
         if (page == 0) toggleCurrentNote();
         else if (page == 1) toggleCurrentLength();
         else if (page == 2) toggleCurrentVelocity();
-        else if (page == 6) openParameterPicker();
+        else if (page == 5 && ! launchControlSelected) openParameterPicker();
         else if (page == 7 || page == 8) editSendState (1);
         return true;
     }
@@ -1569,17 +1586,26 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         }
         return true;
     }
-    if (ch >= '1' && ch <= '7' && ! mods.isAltDown())
+    if (ch == '7' && ! mods.isAltDown())
+    {
+        launchControlSelected = true; // a parameter, NOT a page switch
+        lastRevision = 0;
+        refresh();
+        announce ("Launch Step " + juce::String (bank().getConfig (pattern()).launchStep));
+        return true;
+    }
+    if (ch >= '1' && ch <= '6' && ! mods.isAltDown())
     {
         const int target = static_cast<int> (ch - '1');
-        if (page != target)
+        if (page != target || launchControlSelected)
         {
+            launchControlSelected = false;
             page = target;
             processor.editorSession.sequencerPage = page;
             lastRevision = 0;
             refresh();
         }
-        announce ("Page " + pageName() + (page == 6 ? ". Enter opens parameter selection" : ""));
+        announce ("Page " + pageName() + (page == 5 ? ". Enter opens parameter selection" : ""));
         return true;
     }
     for (int i = 0; i < 8; ++i)

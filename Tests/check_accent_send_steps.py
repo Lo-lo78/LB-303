@@ -36,7 +36,7 @@ assert 'source.noteBeforePause' in s and 'source.lengthBeforeLegato' in s
 assert 'stream.writeInt (0x4c535132)' in s
 
 # 1..7 stay the original pages. Ctrl chords land in the newly appended pages.
-assert '"Launch Step", "Parameters", "Delay Send Steps", "Reverb Send Steps"' in ui
+assert '"Parameters", "Reserved", "Delay Send Steps", "Reverb Send Steps"' in ui
 assert 'page = juce::jlimit (0, 8, processor.editorSession.sequencerPage)' in ui
 assert 'page = (code == \'1\' || ch == \'1\') ? 7 : 8;' in ui
 assert ui.index('page = (code ==') < ui.index('if (letter (\'c\')) { copySteps')
@@ -94,5 +94,5 @@ for language in ['en','it','es','fr','ru','zh','ja']:
     assert manual.count('TEST2.4.53 —') >= 6
 assert 'TEST2.4.53' in read('README.md')
 assert 'Tests/check_accent_send_steps.py' in workflow
-assert 'TEST2.4.57-Windows-x64' in workflow
+assert 'TEST2.4.58-Windows-x64' in workflow
 print('PASS: TEST2.4.53 velocity-dependent Delay/Reverb step sends, v8 migration, Alt+Q accessible pages and DSP smoothing')

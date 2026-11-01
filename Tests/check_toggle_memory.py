@@ -13,11 +13,11 @@ eh = (root / "Source/SequencerStepEditor.h").read_text(encoding="utf-8")
 workflow = (root / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
 
 # No per-step Accent and no change to the original seven-page Alt+Q scheme.
-assert '"Note", "Length", "Velocity", "Repeat", "Shift", "Launch Step", "Parameters"' in e
+assert '"Note", "Length", "Velocity", "Repeat", "Shift", "Parameters", "Reserved"' in e
 assert '"Accent", "Note"' not in e  # no obsolete synth Accent step page
 assert "SequencerLayer::accent" not in s
 assert 'int accent =' not in h
-assert "else if (page == 6) openParameterPicker();" in e
+assert "else if (page == 5 && ! launchControlSelected) openParameterPicker();" in e
 assert "else if (page == 1) toggleCurrentLength();" in e
 assert "void toggleCurrentLength();" in eh
 assert "void SequencerStepEditor::toggleCurrentNote()" in e
@@ -62,7 +62,7 @@ assert "stream.writeByte (static_cast<char> (juce::jlimit (0, 100, step.lengthBe
 assert "reset.noteBeforePause = 60; reset.lengthBeforeLegato = 50; reset.velocityBeforeMax = 100;" in e
 
 # Version number and original GitHub Actions build trigger both intact.
-assert "TEST2.4.57-Windows-x64" in workflow
+assert "TEST2.4.58-Windows-x64" in workflow
 assert "  push:" in workflow
 assert "python Tests/check_toggle_memory.py" in workflow
 print("PASS: TEST2.4.42 Note/Length/Velocity Enter remembers per-step values; no separate Accent or page changes.")
