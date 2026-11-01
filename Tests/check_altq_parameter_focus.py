@@ -19,5 +19,5 @@ assert 'announce ("Launch Step " + juce::String (bank().getConfig (pattern()).la
 assert 'announce ("Page Launch Step' not in cpp
 assert 'const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift", "Parameters"' in cpp
 assert 'page = target;' in cpp
-assert 'TEST2.4.62-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.64-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: LB TEST2.4.58 Launch Step parameter and page 6 Parameters')

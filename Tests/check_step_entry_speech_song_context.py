@@ -10,12 +10,13 @@ assert 'End of Pattern. MIDI Step Entry Off' in ed
 assert 'Step announcements On. Step ' in ed
 assert 'Step announcements Off' in ed
 assert 'midiEntrySpeak = false;' in ed
-assert 'if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1), true);' in ed
-assert 'stopMidiEntry();\n        // Completion must always be spoken' in ed
+assert 'else if (midiEntrySpeak)' in ed  # MIDI-only automatic speech
+assert 'Computer keyboard navigation is ALWAYS spoken' in ed
+assert 'finishMidiEntry (false);\n        // Completion must always be spoken' in ed
 assert 'NotificationProcessing_ImportantAll' in acc
 assert 'preserveOrder' in acc
 assert 'processor.songs.setSongMode (songView);' in ed
 assert 'processor.songs.setSongMode (false);' in ed
 assert 'processor.restartSongPreviewClock();' in ed
-assert 'TEST2.4.62-Windows-x64' in wf
+assert 'TEST2.4.64-Windows-x64' in wf
 print('PASS: LB303 MIDI speech, guaranteed end, UIA and automatic preview context')

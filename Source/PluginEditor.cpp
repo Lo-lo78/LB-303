@@ -1,4 +1,4 @@
-// TEST2.4.62: packaged after TEST2.4.61 to provide a separately versioned GitHub Actions artifact; DSP unchanged.
+// TEST2.4.63: MIDI Step Entry speech and computer-keyboard focus update; DSP unchanged.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginEditor.h"
 #include "ScreenReaderAnnouncer.h"

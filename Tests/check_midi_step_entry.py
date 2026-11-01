@@ -20,5 +20,5 @@ assert 'std::atomic<bool> enabled' in queue
 assert 'heldCount == 0' in queue
 assert 'message.isNoteOff()' in queue
 assert 'finish() noexcept' in queue
-assert 'TEST2.4.62-Windows-x64' in (r/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
+assert 'TEST2.4.64-Windows-x64' in (r/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
 print('PASS: LB303 MIDI Step Entry, silent default, gate and undo')

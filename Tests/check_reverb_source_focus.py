@@ -32,7 +32,7 @@ assert 'portamentoCurve2Index = portamentoCurve1Index + 1' in params
 assert 'parameterCount = reverbDuckRecoveryIndex + 1' in params
 assert 'fxParameterCount = 35' in params
 assert 'python Tests/check_reverb_source_focus.py' in workflow
-assert 'TEST2.4.62-Windows-x64' in workflow
+assert 'TEST2.4.64-Windows-x64' in workflow
 for lang in ('en', 'it', 'es', 'fr', 'ru', 'zh', 'ja'):
     block = re.search(r'<article class="manual" id="' + lang + r'".*?</article>',
                       read('Help/LB303Help.html'), re.S)

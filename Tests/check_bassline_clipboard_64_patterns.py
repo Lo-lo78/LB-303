@@ -57,7 +57,7 @@ assert 'juce::jlimit (info.minimum, info.maximum' in e
 assert 'param->beginChangeGesture();' in e and 'param->endChangeGesture();' in e
 assert 'Tab' in e and 'setDescription ("Alt+V")' not in e
 assert 'song->setAttribute ("data", songs.serialise())' in processor
-assert 'TEST2.4.62-Windows-x64' in w
+assert 'TEST2.4.64-Windows-x64' in w
 assert 'python Tests/check_bassline_clipboard_64_patterns.py' in w
 manual=read('Help/LB303Help.html')
 for lang in ('en','it','es','fr','ru','zh','ja'):

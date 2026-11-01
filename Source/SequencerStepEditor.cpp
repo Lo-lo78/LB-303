@@ -28,17 +28,48 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 6 choose step pages; 7 focuses the Launch Step parameter without leaving the current step page; Ctrl+1 Delay Send Steps, Ctrl+2 Reverb Send Steps; press the focused step key again or Enter to cycle Normal Accent Mute. In Normal, Up and Down set that step Send from 0 to 100 percent; the others ignore arrows. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview. Ctrl K toggles monophonic MIDI Step Entry inside Alt Q. MIDI notes store Note and Velocity, Space stores Pause, and step keys move the insertion cursor without editing. Ctrl M enables Step announcements (off by default). Step Entry auto-stops at End Step, or manually with Ctrl K.");
+    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. 1 to 6 choose step pages; 7 focuses the Launch Step parameter without leaving the current step page; Ctrl+1 Delay Send Steps, Ctrl+2 Reverb Send Steps; press the focused step key again or Enter to cycle Normal Accent Mute. In Normal, Up and Down set that step Send from 0 to 100 percent; the others ignore arrows. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview. Ctrl K toggles monophonic MIDI Step Entry inside Alt Q. MIDI notes store Note and Velocity, Space stores Pause, and step keys move the insertion cursor without editing. Ctrl M controls automatic MIDI-note step announcements (off by default); computer step keys and Space always announce their destination. Ctrl K always announces the starting step. Step Entry auto-stops at End Step and Ctrl K commits. Escape cancels all notes and pauses written since Ctrl K started, restoring earlier values, and stays in Alt Q.");
     setVisible (false);
 }
 
-SequencerStepEditor::~SequencerStepEditor() { stopMidiEntry(); }
+SequencerStepEditor::~SequencerStepEditor() { finishMidiEntry (false); stopMidiEntry(); }
 void SequencerStepEditor::stopMidiEntry() noexcept
 {
     midiEntryActive = false;
+    ++midiEntryGeneration;
     processor.midiStepEntry.finish();
     stopTimer();
     midiEntrySpeak = false;
+}
+void SequencerStepEditor::finishMidiEntry (bool cancel)
+{
+    if (! midiEntryActive) return;
+    // First stop the producer and timer: a late MIDI event must not undo a cancellation.
+    stopMidiEntry();
+    auto& destination = processor.patternBank (static_cast<size_t> (midiEntryTrack));
+    if (cancel)
+    {
+        for (const auto& change : midiEntryChanges)
+            destination.replaceStep (midiEntryPattern, change.index, change.before);
+        lastRevision = 0;
+        refresh();
+    }
+    else
+    {
+        Action action;
+        action.track = midiEntryTrack;
+        action.pattern = midiEntryPattern;
+        for (auto& change : midiEntryChanges)
+        {
+            const auto& a = change.before;
+            const auto& b = change.after;
+            if (a.note != b.note || a.noteBeforePause != b.noteBeforePause
+                || a.velocity != b.velocity || a.velocityBeforeMax != b.velocityBeforeMax)
+                action.changes.push_back (std::move (change));
+        }
+        commitAction (std::move (action)); // One Undo for this Ctrl+K session.
+    }
+    midiEntryChanges.clear();
 }
 void SequencerStepEditor::timerCallback() { drainMidiEntry(); }
 void SequencerStepEditor::drainMidiEntry()
@@ -68,16 +99,18 @@ void SequencerStepEditor::writeMidiStep (int pitch, int velocity, bool pause)
         || after.noteBeforePause != before.noteBeforePause
         || after.velocityBeforeMax != before.velocityBeforeMax)
     {
-        Action action;
-        action.track = track;
-        action.pattern = pattern();
-        action.changes.push_back ({ currentStep, before, after });
-        bank().replaceStep (pattern(), currentStep, after);
-        commitAction (std::move (action));
+        // Save the original value once, even when the player rewrites this step.
+        const auto existing = std::find_if (midiEntryChanges.begin(), midiEntryChanges.end(),
+            [this] (const StepChange& c) { return c.index == currentStep; });
+        if (existing == midiEntryChanges.end())
+            midiEntryChanges.push_back ({ currentStep, before, after });
+        else
+            existing->after = after;
+        bank().replaceStep (midiEntryPattern, currentStep, after);
     }
     if (currentStep >= last)
     {
-        stopMidiEntry();
+        finishMidiEntry (false);
         // Completion must always be spoken, including when Ctrl+M is Off.
         announce ("End of Pattern. MIDI Step Entry Off", true);
     }
@@ -87,14 +120,29 @@ void SequencerStepEditor::writeMidiStep (int pitch, int velocity, bool pause)
         lastStepKey = -1;
         lastRevision = 0;
         refresh();
-        if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1), true);
+        if (pause)
+            announce ("Step " + juce::String (currentStep + 1), true); // Computer Space always speaks.
+        else if (midiEntrySpeak)
+        {
+            // MIDI arrives from a timer. Deliver the UIA notification after
+            // Windows has finished dispatching the original input event.
+            const int stepToSpeak = currentStep + 1;
+            const auto generation = midiEntryGeneration;
+            juce::Component::SafePointer<SequencerStepEditor> safe (this);
+            juce::Timer::callAfterDelay (75, [safe, generation, stepToSpeak]()
+            {
+                if (safe != nullptr && safe->midiEntryActive && safe->midiEntrySpeak
+                    && safe->midiEntryGeneration == generation)
+                    safe->announce ("Step " + juce::String (stepToSpeak), true);
+            });
+        }
     }
 }
 
 void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
 {
     if (opened) return;
-    stopMidiEntry();
+    finishMidiEntry (false);
     track = juce::jlimit (0, 1, selectedTrack);
     // Preserve the visited page only in this live processor instance.
     // Opening another instance or loading a project starts at Note.
@@ -127,7 +175,7 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
 void SequencerStepEditor::close()
 {
     if (! opened) return;
-    stopMidiEntry();
+    finishMidiEntry (false);
     processor.editorSession.sequencerPage = page;
     launchControlSelected = false;
     opened = false;
@@ -311,7 +359,9 @@ void SequencerStepEditor::selectStep (int inBlock)
         lastStepKey = -1;
         lastRevision = 0;
         refresh();
-        if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1), true);
+        // Computer keyboard navigation is ALWAYS spoken; Ctrl+M gates only
+        // the automatic advance caused by incoming MIDI notes.
+        announce ("Step " + juce::String (currentStep + 1), true);
         return; // Never toggle selection or Send states during MIDI entry.
     }
     // When a global parameter is focused, the first step key only returns
@@ -1498,17 +1548,31 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             drainMidiEntry();
             if (midiEntryActive)
             {
-                stopMidiEntry();
+                finishMidiEntry (false);
                 announce ("MIDI Step Entry Off", true);
             }
         }
         else
         {
             midiEntrySpeak = false;
+            midiEntryChanges.clear();
+            midiEntryTrack = track;
+            midiEntryPattern = pattern();
             midiEntryActive = true;
+            ++midiEntryGeneration;
             processor.midiStepEntry.begin();
             startTimerHz (60);
-            announce ("MIDI Step Entry On. Step " + juce::String (currentStep + 1), true);
+            // Defer the entry announcement until the Ctrl+K keystroke has
+            // finished, so NVDA does not lose it to the keyboard event.
+            const auto generation = midiEntryGeneration;
+            const int startStep = currentStep + 1;
+            juce::Component::SafePointer<SequencerStepEditor> safe (this);
+            juce::Timer::callAfterDelay (90, [safe, generation, startStep]()
+            {
+                if (safe != nullptr && safe->midiEntryActive
+                    && safe->midiEntryGeneration == generation)
+                    safe->announce ("MIDI Step Entry On. Step " + juce::String (startStep), true);
+            });
         }
         return true;
     }
@@ -1516,6 +1580,14 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
     {
         drainMidiEntry();
         if (! midiEntryActive) return true;
+        // Escape cancels the entire current recording session (including pauses
+        // and repeated overwrites). Ctrl+K and End Step commit instead.
+        if (code == juce::KeyPress::escapeKey && ! mods.isAnyModifierKeyDown())
+        {
+            finishMidiEntry (true);
+            announce ("MIDI Step Entry Cancelled", true);
+            return true;
+        }
         if (ctrlOnly && (pressedLower == 'm' || code == 'M' || code == 'm'
                          || key.getTextCharacter() == 13))
         {
@@ -1534,7 +1606,8 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             currentStep = juce::jlimit (first, last, block * 16 + currentStep % 16);
             lastRevision = 0;
             refresh();
-            if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1), true);
+            // Tab / Shift+Tab are computer-keyboard moves: always speak.
+            announce ("Step " + juce::String (currentStep + 1), true);
             return true;
         }
         if (! mods.isAnyModifierKeyDown())

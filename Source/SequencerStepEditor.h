@@ -44,8 +44,12 @@ private:
     bool opened = false;
     bool midiEntryActive = false;
     bool midiEntrySpeak = false;
+    unsigned int midiEntryGeneration = 0; // Invalidate pending speech on exit/restart.
     void timerCallback() override;
     void stopMidiEntry() noexcept;
+    void finishMidiEntry (bool cancel);
+    std::vector<StepChange> midiEntryChanges; // Original values per touched step, recorded only once.
+    int midiEntryTrack = 0, midiEntryPattern = 0;
     void writeMidiStep (int pitch, int velocity, bool pause);
     void drainMidiEntry();
     int track = 0;
