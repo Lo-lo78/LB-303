@@ -4,5 +4,5 @@
 
 namespace lb303
 {
-void announceToActiveScreenReader (juce::Component&, const juce::String&);
+void announceToActiveScreenReader (juce::Component&, const juce::String&, bool preserveOrder = false);
 }

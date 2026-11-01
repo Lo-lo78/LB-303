@@ -1401,3 +1401,18 @@ from the first key depressed in a chord are stored, until all keys are released.
 Length, Repeat, Shift, locks, and effect sends are preserved. No sequencer
 state format or VST parameter IDs are changed. Note input requires REAPER to
 route MIDI from the hardware keyboard into this plugin instance.
+
+
+## TEST2.4.60 — Accessible MIDI Step Entry and automatic Pattern/Song preview
+
+In Alt+Q, Ctrl+K always announces `MIDI Step Entry On. Step N` and a manual
+Ctrl+K exit announces `MIDI Step Entry Off`. The default Ctrl+M state is Off:
+there are no spoken updates for individual notes, pauses or cursor moves. Ctrl+M
+turns on ordered `Step N` announcements for each recorded note, pause and cursor
+move, and announces its own On/Off state. On completing the last active step,
+`End of Pattern. MIDI Step Entry Off` is always spoken, even if Ctrl+M is Off.
+
+Opening Steps or switching Song -> Steps with Alt+S defaults the preview to
+Pattern; switching Steps -> Song defaults it to Song. Alt+M still changes the
+preview target manually until the next context switch. Existing step recording,
+pattern values, transport selection and saving are unchanged.

@@ -94,7 +94,7 @@ private:
     const lb303::SequencerState& bank() const noexcept { return processor.patternBank (static_cast<size_t> (track)); }
     juce::String pageName() const;
     juce::String valueText (int step) const;
-    void announce (const juce::String&);
+    void announce (const juce::String&, bool preserveOrder = false);
     void announceCurrent();
     void selectStep (int inBlock);
     void selectVisibleSteps();

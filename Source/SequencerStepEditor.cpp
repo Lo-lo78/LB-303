@@ -77,10 +77,9 @@ void SequencerStepEditor::writeMidiStep (int pitch, int velocity, bool pause)
     }
     if (currentStep >= last)
     {
-        // Silence is intentional with Ctrl+M off, including at End Step.
-        const bool speak = midiEntrySpeak;
         stopMidiEntry();
-        if (speak) announce ("End of Pattern");
+        // Completion must always be spoken, including when Ctrl+M is Off.
+        announce ("End of Pattern. MIDI Step Entry Off", true);
     }
     else
     {
@@ -88,7 +87,7 @@ void SequencerStepEditor::writeMidiStep (int pitch, int velocity, bool pause)
         lastStepKey = -1;
         lastRevision = 0;
         refresh();
-        if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1));
+        if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1), true);
     }
 }
 
@@ -111,6 +110,10 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
     lastRevision = 0;
     lastPattern = -1;
     songView = false;
+    // Opening Steps is a context transition: default preview to Pattern.
+    processor.endSongAudition();
+    processor.songs.setSongMode (false);
+    processor.restartSongPreviewClock();
     setVisible (true);
     toFront (false);
     refresh();
@@ -152,9 +155,9 @@ void SequencerStepEditor::focusGained (FocusChangeType cause)
     if (opened) refresh();
 }
 juce::String SequencerStepEditor::pageName() const { return pageNames[page]; }
-void SequencerStepEditor::announce (const juce::String& msg)
+void SequencerStepEditor::announce (const juce::String& msg, bool preserveOrder)
 {
-    if (opened) lb303::announceToActiveScreenReader (*this, msg);
+    if (opened) lb303::announceToActiveScreenReader (*this, msg, preserveOrder);
 }
 juce::String SequencerStepEditor::valueText (int index) const
 {
@@ -308,7 +311,7 @@ void SequencerStepEditor::selectStep (int inBlock)
         lastStepKey = -1;
         lastRevision = 0;
         refresh();
-        if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1));
+        if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1), true);
         return; // Never toggle selection or Send states during MIDI entry.
     }
     // When a global parameter is focused, the first step key only returns
@@ -1490,13 +1493,22 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         && (pressedLower == 'k' || code == 'K' || code == 'k'
             || key.getTextCharacter() == 11))
     {
-        if (midiEntryActive) stopMidiEntry();
+        if (midiEntryActive)
+        {
+            drainMidiEntry();
+            if (midiEntryActive)
+            {
+                stopMidiEntry();
+                announce ("MIDI Step Entry Off", true);
+            }
+        }
         else
         {
             midiEntrySpeak = false;
             midiEntryActive = true;
             processor.midiStepEntry.begin();
             startTimerHz (60);
+            announce ("MIDI Step Entry On. Step " + juce::String (currentStep + 1), true);
         }
         return true;
     }
@@ -1508,7 +1520,8 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
                          || key.getTextCharacter() == 13))
         {
             midiEntrySpeak = ! midiEntrySpeak;
-            if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1));
+            announce (midiEntrySpeak ? "Step announcements On. Step " + juce::String (currentStep + 1)
+                                     : "Step announcements Off", true);
             return true;
         }
         if (code == juce::KeyPress::spaceKey && ! mods.isAnyModifierKeyDown())
@@ -1521,7 +1534,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             currentStep = juce::jlimit (first, last, block * 16 + currentStep % 16);
             lastRevision = 0;
             refresh();
-            if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1));
+            if (midiEntrySpeak) announce ("Step " + juce::String (currentStep + 1), true);
             return true;
         }
         if (! mods.isAnyModifierKeyDown())
@@ -1567,11 +1580,11 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         songView = ! songView;
         songConfirmClear = false;
         pickerOpen = false;
-        if (songView)
-        {
-            processor.songs.setSongMode (true);
-            processor.restartSongPreviewClock();
-        }
+        // Each editor context selects its own preview by default. Alt+M
+        // may still override it manually until the next context switch.
+        processor.endSongAudition();
+        processor.songs.setSongMode (songView);
+        processor.restartSongPreviewClock();
         lastRevision = 0;
         refresh();
         announce (songView ? "Song editor. Bassline " + juce::String (track + 1)
