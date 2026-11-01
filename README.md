@@ -1450,3 +1450,7 @@ Opening Steps or switching Song -> Steps with Alt+S defaults the preview to
 Pattern; switching Steps -> Song defaults it to Song. Alt+M still changes the
 preview target manually until the next context switch. Existing step recording,
 pattern values, transport selection and saving are unchanged.
+
+## TEST2.4.66 – Alt+Q track BPM Division shortcut
+
+Inside Alt+Q Steps, Ctrl+Page Up/Down changes the current track’s existing BPM Division in 0.0625 increments. NVDA announces the track and value. Available for the two LB-303 basslines or the three LJuno layers; also works during Ctrl+K MIDI Step Entry. REAPER’s master tempo remains unchanged.

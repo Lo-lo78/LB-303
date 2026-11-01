@@ -94,5 +94,5 @@ for language in ['en','it','es','fr','ru','zh','ja']:
     assert manual.count('TEST2.4.53 —') >= 6
 assert 'TEST2.4.53' in read('README.md')
 assert 'Tests/check_accent_send_steps.py' in workflow
-assert 'TEST2.4.65-Windows-x64' in workflow
+assert 'TEST2.4.66-Windows-x64' in workflow
 print('PASS: TEST2.4.53 velocity-dependent Delay/Reverb step sends, v8 migration, Alt+Q accessible pages and DSP smoothing')

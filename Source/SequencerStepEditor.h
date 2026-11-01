@@ -109,6 +109,7 @@ private:
     void changeActiveRange (bool editStart, int direction);
     void changeTrack (int direction);
     void changePattern (int direction);
+    void changeBpmDivision (int direction); // Ctrl+Page Up/Down, selected bassline
     void modifyValue (int direction, int amount);
     void resetCurrent();
     void toggleCurrentNote();
