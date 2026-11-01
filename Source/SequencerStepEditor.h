@@ -54,7 +54,9 @@ private:
     void drainMidiEntry();
     int track = 0;
     int page = 0; // 0..5 step pages; 7 Delay Send; 8 Reverb Send; 6 unused
-    bool launchControlSelected = false; // key 7 focuses Launch Step WITHOUT changing page
+    // -1: focused musical step page; 0: Launch Step; 1/2: existing Bassline 1/2
+    // Sequencer enable parameters. Keys 7/8/9 never change the step page.
+    int focusedGlobalParameter = -1;
     int currentStep = 0;
     int valueStepIndex = 0;
     int lastStepKey = -1;
@@ -126,6 +128,9 @@ private:
     static juce::String makePatternSnapshot (const lb303::SequencerState&, int pattern);
     static bool restorePatternSnapshot (lb303::SequencerState&, int pattern, const juce::String&);
     void changeLaunch (int direction, int amount);
+    void changeSequencerEnabled (int direction);
+    void resetSequencerEnabled();
+    juce::String globalParameterText() const;
     juce::String currentLockText() const;
     void openParameterPicker();
     void closeParameterPicker();

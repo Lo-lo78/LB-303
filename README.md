@@ -1,3 +1,15 @@
+## TEST2.4.65 — Alt+Q: Bassline Sequencer On/Off on 8 and 9
+
+In Alt+Q, **6** is still the Parameters step page, **7** focuses Launch Step,
+**8** focuses Bassline 1 Sequencer (Off/On), and **9** focuses Bassline 2
+Sequencer (Off/On). Keys 7/8/9 are **parameters, not step pages**: the selected
+Note/Length/Velocity/Repeat/Shift/Parameters or Ctrl+1/Ctrl+2 Send step page
+is retained. Up switches the selected sequencer On, Down switches it Off;
+PageUp/PageDown do the same. Backspace resets the focused switch to Off;
+Enter cannot accidentally edit the underlying step. Q–I/A–K or Tab returns
+to the old step page. No new VST3 parameters, preset fields, or DSP changes:
+existing `seq_b1_enable` and `seq_b2_enable` IDs are reused.
+
 ## TEST2.4.64 — Esc cancels MIDI Step Entry
 
 **Ctrl+K** starts the session. MIDI notes and computer Space write Note/Velocity
