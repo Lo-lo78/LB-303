@@ -1382,3 +1382,22 @@ In **Normal**, **Freccia su/giù** modifica soltanto il Send di quello step da *
 Accent conserva il guadagno sensibile a Velocity e Accent Threshold, applicato al Send FX di riferimento, con il parametro **Delay Accent Send / Reverb Accent Send**. Le code già presenti non vengono eliminate. Per i Send espliciti, la transizione audio verso il livello programmato viene smussata (6 ms), senza applicare un fader dopo l'effetto.
 
 Il salvataggio **LSQ2 v9** contiene due valori per-step aggiuntivi, uno per Delay e uno per Reverb. I preset **v1–v8** mantengono i propri stati e invii, perché i nuovi livelli partono in **eredita FX**. Sono conservati Undo/Redo, copia/taglia/incolla e i 32 Parameter Locks per step. Gli indici VST3 non cambiano.
+
+
+## TEST2.4.59 — MIDI Step Entry (monophonic)
+
+Inside Alt+Q, Ctrl+K starts or stops MIDI Step Entry on the selected pattern and
+step. Each incoming MIDI Note On writes pitch and Velocity, overwriting only those
+fields, then advances to the next active step; MIDI Note Off is ignored. Space
+writes a Pause without starting the host transport. The Q–I and A–K step keys
+can jump freely within the selected 16-step block, including back to previously
+recorded steps for correction. Tab moves to the next active block.
+
+Ctrl+M is available **only** while recording: it enables or disables short
+`Step N` announcements. The initial state is off, with no automatic speech even
+at End Step; when enabled, the last entry announces `End of Pattern`. Ctrl+K
+can exit early without changing the normal Alt+Q step page. Only MIDI notes
+from the first key depressed in a chord are stored, until all keys are released.
+Length, Repeat, Shift, locks, and effect sends are preserved. No sequencer
+state format or VST parameter IDs are changed. Note input requires REAPER to
+route MIDI from the hardware keyboard into this plugin instance.

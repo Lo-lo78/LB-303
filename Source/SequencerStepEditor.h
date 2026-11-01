@@ -10,10 +10,11 @@
 
 // Keyboard-centric overlay derived from the LJuno step editor. Its 16-key
 // matrix is an accessible focused Label, not 128 focusable buttons.
-class SequencerStepEditor final : public juce::Label
+class SequencerStepEditor final : public juce::Label, private juce::Timer
 {
 public:
     explicit SequencerStepEditor (LB303AudioProcessor&);
+    ~SequencerStepEditor() override;
     void open (int track, juce::Component* returnFocus);
     void close();
     bool isOpen() const noexcept { return opened; }
@@ -41,6 +42,12 @@ private:
     LB303AudioProcessor& processor;
     juce::Component::SafePointer<juce::Component> returnControl;
     bool opened = false;
+    bool midiEntryActive = false;
+    bool midiEntrySpeak = false;
+    void timerCallback() override;
+    void stopMidiEntry() noexcept;
+    void writeMidiStep (int pitch, int velocity, bool pause);
+    void drainMidiEntry();
     int track = 0;
     int page = 0; // 0..5 step pages; 7 Delay Send; 8 Reverb Send; 6 unused
     bool launchControlSelected = false; // key 7 focuses Launch Step WITHOUT changing page

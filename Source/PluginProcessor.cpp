@@ -387,6 +387,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         generateSegment (previousSample, offset);
         previousSample = offset;
         const auto& message = entry.getMessage();
+        if (midiStepEntry.consume (message))
+            continue; // Physical note is step data, not a bassline trigger.
         const int midiChannel = message.getChannel();
         bool matched = false;
         bool directReceiver = false;

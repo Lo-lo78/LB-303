@@ -53,6 +53,7 @@ target_sources(LB303 PRIVATE
     Source/SequencerPlayback.h
     Source/SequencerPlayback.cpp
     Source/PluginProcessor.h
+    Source/MidiStepEntryQueue.h
     Source/PluginProcessor.cpp
     Source/SequencerStepEditor.h
     Source/SequencerStepEditor.cpp

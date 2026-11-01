@@ -8,6 +8,7 @@
 #include "SequencerPlayback.h"
 #include "SongArrangement.h"
 #include "PresetManager.h"
+#include "MidiStepEntryQueue.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -54,6 +55,7 @@ public:
     };
     EditorSessionState editorSession;
 
+    MidiStepEntryQueue midiStepEntry; // transient editor mode, never serialised
     juce::AudioProcessorValueTreeState parameters;
     lb303::PresetManager presetManager;
     lb303::SongArrangement songs;
