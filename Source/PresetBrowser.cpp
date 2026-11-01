@@ -443,7 +443,7 @@ bool PresetBrowser::listKey (const juce::KeyPress& k)
     {
         if (! manager.instrument().spaceControlsSequencerPreview()) return false;
         const bool nowPlaying = manager.instrument().toggleSequencerPreview();
-        announce (nowPlaying ? "Both basslines preview playing" : "Both basslines preview stopped");
+        juce::ignoreUnused (nowPlaying);
         return true;
     }
     if (code == juce::KeyPress::returnKey) { activateRow (entries.getSelectedRow()); return true; }

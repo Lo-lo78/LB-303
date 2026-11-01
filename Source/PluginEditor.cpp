@@ -1,3 +1,4 @@
+// TEST2.4.62: packaged after TEST2.4.61 to provide a separately versioned GitHub Actions artifact; DSP unchanged.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginEditor.h"
 #include "ScreenReaderAnnouncer.h"
@@ -1280,8 +1281,7 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         auto* active = current == Control::grid ? static_cast<juce::Component*> (&parameterGrid)
                      : current == Control::value ? static_cast<juce::Component*> (&parameterValue)
                                                   : static_cast<juce::Component*> (&numericEdit);
-        lb303::announceToActiveScreenReader (*active,
-            running ? "Both basslines preview playing" : "Both basslines preview stopped");
+        juce::ignoreUnused (running, active);
         return true;
     }
     // TEST2.4.24: share the same Song/Pattern state as Alt+Q, but keep Alt+P

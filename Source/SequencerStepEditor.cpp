@@ -1553,7 +1553,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         if (! processor.spaceControlsSequencerPreview())
             return false; // leave Space to REAPER in default DAW mode
         const bool running = processor.toggleSequencerPreview();
-        announce (running ? "Both basslines preview playing" : "Both basslines preview stopped");
+        juce::ignoreUnused (running);
         return true;
     }
     // Alt+M always chooses between Pattern and Song preview, regardless of

@@ -1,3 +1,11 @@
+## TEST2.4.62 — Aggiornamento artefatto GitHub Actions
+
+Consulta `Doc/TEST2.4.62_GITHUB_ACTIONS_REPACKAGE.md` per l’estrazione nel repository e il nuovo identificativo della build. Il comportamento sonoro rimane quello della versione precedente.
+
+## TEST2.4.61 — Silent sequencer preview Space
+
+When Alt+P selects sequencer preview, Space still starts/stops both basslines in the main interface, Alt+Q Steps/Song and preset browser, but no longer speaks “Both basslines preview playing/stopped”. Alt+P and Alt+M keep their normal accessible announcements. Nothing else about playback or MIDI routing changes.
+
 ## TEST2.4.58 — Alt+Q: Parameters su 6, Launch Step come parametro
 
 In Alt+Q, **1–5** continuano a selezionare Note, Length, Velocity, Repeat e Shift. **6** seleziona la pagina **Parameters** (prima sul 7). **7** focalizza **Launch Step** come parametro globale del pattern, **senza cambiare la pagina step corrente**: Su/Giù e PagSu/PagGiù modificano Launch Step, Backspace lo riporta a 1. I tasti Q–I/A–K o Tab riportano alla pagina step precedente (anche se è Ctrl+1 Delay Send o Ctrl+2 Reverb Send); il primo tasto step al ritorno non altera lo stato Accent/Mute. Il parametro non viene più annunciato come “Page Launch Step”. Song, 64 pattern, DSP e formato preset restano invariati.
