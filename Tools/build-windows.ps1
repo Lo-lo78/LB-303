@@ -15,3 +15,11 @@ $line = '"{0}" -arch=x64 && cmake -S "{1}" -B "{2}" -G "NMake Makefiles" -DCMAKE
 & cmd.exe /d /s /c $line
 if ($LASTEXITCODE -ne 0) { throw "LB-303 compilation failed: $LASTEXITCODE" }
 Write-Host "Built: $build\LB303_artefacts\Release\VST3\LB-303.vst3"
+
+$searchTest = Join-Path $build 'LB303SearchTest.exe'
+if (-not (Test-Path -LiteralPath $searchTest)) {
+    throw "Incremental search test missing: $searchTest"
+}
+& $searchTest
+if ($LASTEXITCODE -ne 0) { throw "Incremental search test failed: $LASTEXITCODE" }
+Write-Host "PASS: LB-303 incremental parameter search test"

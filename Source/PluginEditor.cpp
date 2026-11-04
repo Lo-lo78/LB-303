@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginEditor.h"
 #include "ScreenReaderAnnouncer.h"
+#include "ParameterSearchKey.h"
 #include "SequencerStepEditor.h"
 #include <BinaryData.h>
 #include <algorithm>
@@ -10,8 +11,8 @@
 
 namespace
 {
-constexpr auto lb303Version = "0.99.1";
-constexpr auto lb303ReleaseDate = "27 October 2026";
+constexpr auto lb303Version = "0.99.2";
+constexpr auto lb303ReleaseDate = "4 November 2026";
 constexpr auto lb303ProjectUrl = "https://github.com/Lo-lo78/LB-303";
 constexpr auto lb303ContactEmail = "vmanolo301@gmail.com";
 constexpr auto lb303License = "GNU Affero General Public License v3 or later (AGPL-3.0-or-later)";
@@ -214,6 +215,7 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
 
     const auto aboutText = juce::String ("LB-303\nVersion: ") + lb303Version
         + "\nRelease date: " + lb303ReleaseDate
+        + "\nNew: progressive parameter search, Shift backwards, Shift+digits and word prefixes (Grid, Value and Alt+Q Parameter Locks)"
         + "\nLicense: " + lb303License
         + "\nProject: " + lb303ProjectUrl
         + "\nContact: " + lb303ContactEmail;
@@ -559,6 +561,7 @@ void LB303AudioProcessorEditor::syncFxColumns()
     const auto oldCell = fxCell (selected);
     updateFxColumns();
     if (oldIndices == visibleFxParameters) return;
+    parameterSearch.reset();
 
     // Retain the same parameter when possible. When it becomes hidden (FX Off
     // or switched Classic/Dual), keep the selection in that column's Type picker.
@@ -583,6 +586,7 @@ void LB303AudioProcessorEditor::syncFxColumns()
 
 void LB303AudioProcessorEditor::populateContext()
 {
+    parameterSearch.reset();
     changingParameter = true;
     valueAttachment.reset();
     if (context == static_cast<int> (lb303::fxContextIndex)) updateFxColumns();
@@ -1240,6 +1244,10 @@ void LB303AudioProcessorEditor::pasteBasslineParameters (Control current)
 
 bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control current)
 {
+    // Arrow/shortcut/navigation keys end the preceding incremental prefix.
+    // Normal typing in Edit remains native, not type-ahead.
+    if (lb303ParameterSearchCharacter (key) == 0 || current == Control::edit)
+        parameterSearch.reset();
     const auto code = key.getKeyCode();
     const auto mods = key.getModifiers();
     const auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
@@ -1385,38 +1393,33 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         return true;
     }
     if (code == juce::KeyPress::backspaceKey) { resetParameter(); return true; }
-    // Character search works identically from Grid AND Value. Repeated
-    // characters cycle forward; Shift+character cycles backward. Do not
-    // steal typing from the native numeric Edit field.
-    if ((current == Control::grid || current == Control::value)
-        && ! mods.isCtrlDown() && ! mods.isAltDown() && ! mods.isCommandDown())
+    // TEST2.4.67: use the same incremental type-ahead as LSampler TEST165
+    // and LJuno TEST120, including word starts and Shift+digits backwards.
+    // Name-only: never match the parameter VALUE displayed in the Grid line.
+    if (current == Control::grid || current == Control::value)
     {
-        auto needle = juce::CharacterFunctions::toLowerCase (ch);
-        // Shift+digit may produce punctuation as the text character; search
-        // by the underlying numeric key to preserve reverse alphanumeric cycling.
-        if (mods.isShiftDown() && code >= '0' && code <= '9')
-            needle = static_cast<juce::juce_wchar> (code);
-        if (juce::CharacterFunctions::isLetterOrDigit (needle))
+        if (const auto character = lb303ParameterSearchCharacter (key); character != 0)
         {
             const int count = currentParameterCount();
-            const int delta = mods.isShiftDown() ? -1 : 1;
-            for (int offset = 1; offset <= count; ++offset)
-            {
-                const int candidate = (selected + delta * offset + count * 2) % count;
-                const auto& name = lb303::catalog()[globalIndex (candidate)].name;
-                if (name.isNotEmpty() && juce::CharacterFunctions::toLowerCase (name[0]) == needle)
+            const int found = parameterSearch.next (
+                static_cast<wchar_t> (character), selected, count,
+                mods.isShiftDown() ? -1 : 1, juce::Time::getMillisecondCounter(),
+                [this] (int index)
                 {
-                    changeSelection (candidate);
-                    if (current == Control::value)
-                    {
-                        // Keep the Value slider focused while changing parameter.
-                        parameterValue.setLineReadingMode();
-                        lb303::announceToActiveScreenReader (parameterValue, labelFor (candidate));
-                    }
-                    return true;
+                    return std::wstring (lb303::catalog()[globalIndex (index)].name
+                                             .trimStart().toWideCharPointer());
+                });
+            if (found >= 0 && found != selected)
+            {
+                changeSelection (found);
+                if (current == Control::value)
+                {
+                    // Keep Value focused, with the selected item spoken by NVDA.
+                    parameterValue.setLineReadingMode();
+                    lb303::announceToActiveScreenReader (parameterValue, labelFor (found));
                 }
             }
-            return true; // consume unmatched keys: silence rather than popup
+            return true; // suppress native one-letter ComboBox fallback
         }
     }
     if (current == Control::value)

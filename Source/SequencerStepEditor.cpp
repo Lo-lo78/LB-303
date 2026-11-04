@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "SequencerStepEditor.h"
 #include "ScreenReaderAnnouncer.h"
+#include "ParameterSearchKey.h"
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -154,6 +155,7 @@ void SequencerStepEditor::open (int selectedTrack, juce::Component* focus)
     opened = true;
     lastStepKey = -1;
     pickerOpen = false;
+    pickerSearch.reset();
     selectedLockIndex = 0;
     lastRevision = 0;
     lastPattern = -1;
@@ -180,6 +182,7 @@ void SequencerStepEditor::close()
     focusedGlobalParameter = -1;
     opened = false;
     pickerOpen = false;
+    pickerSearch.reset();
     // Preview stays active when Alt+Q/Esc closes this editing overlay.
     // Only Space in preview mode, Alt+P back to DAW or Alt+I stops it.
     setVisible (false);
@@ -996,6 +999,7 @@ juce::String SequencerStepEditor::currentLockText() const
 void SequencerStepEditor::openParameterPicker()
 {
     if (page != 5 || pickerOpen) return;
+    pickerSearch.reset();
     pickerOpen = true;
     // Restore the last cursor for THIS bassline, even across editor open/close.
     pickerIndex = lastPickerPosition[static_cast<size_t> (track)];
@@ -1003,6 +1007,7 @@ void SequencerStepEditor::openParameterPicker()
     announce ("Select Parameter. Bassline " + juce::String (track + 1)
         + ", Step " + juce::String (currentStep + 1) + ". "
         + "Use arrows, Enter to assign and close, Alt+Enter to toggle and stay, Escape to return. "
+        + "Incremental typing searches parameter names; Shift searches backward, including digits. "
         + pickerItemText (pickerIndex));
 }
 void SequencerStepEditor::closeParameterPicker()
@@ -1010,6 +1015,7 @@ void SequencerStepEditor::closeParameterPicker()
     if (! pickerOpen) return;
     lastPickerPosition[static_cast<size_t> (track)] = pickerIndex;
     pickerOpen = false;
+    pickerSearch.reset();
     lastRevision = 0;
     refresh();
     announce ("Parameters. Step " + juce::String (currentStep + 1) + ", "
@@ -1168,6 +1174,8 @@ void SequencerStepEditor::resetSelectedLock()
 }
 bool SequencerStepEditor::handlePickerKey (const juce::KeyPress& key)
 {
+    if (lb303ParameterSearchCharacter (key) == 0)
+        pickerSearch.reset();
     const int code = key.getKeyCode();
     const auto mods = key.getModifiers();
     if (code == juce::KeyPress::escapeKey) { closeParameterPicker(); return true; }
@@ -1192,25 +1200,21 @@ bool SequencerStepEditor::handlePickerKey (const juce::KeyPress& key)
     else if (code == juce::KeyPress::downKey) target = juce::jmin (lastInColumn, pickerIndex + 1);
     else if (code == juce::KeyPress::leftKey) target = juce::jmax (0, pickerIndex - 8);
     else if (code == juce::KeyPress::rightKey) target = juce::jmin (count - 1, pickerIndex + 8);
-    else if (! mods.isAltDown() && ! mods.isCtrlDown())
+    else if (const auto character = lb303ParameterSearchCharacter (key); character != 0)
     {
-        auto ch = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
-        if (mods.isShiftDown() && code >= '0' && code <= '9')
-            ch = static_cast<juce::juce_wchar> (code);
-        if (juce::CharacterFunctions::isLetterOrDigit (ch))
-        {
-            const int delta = mods.isShiftDown() ? -1 : 1;
-            for (int i = 1; i <= count; ++i)
+        const int found = pickerSearch.next (
+            static_cast<wchar_t> (character), pickerIndex, count,
+            mods.isShiftDown() ? -1 : 1, juce::Time::getMillisecondCounter(),
+            [this] (int index)
             {
-                const int candidate = (pickerIndex + delta * i + count * 2) % count;
-                const auto index = lb303::voiceParameterGlobalIndex (static_cast<size_t> (track),
-                    lb303::displayToLocal (static_cast<size_t> (track),
-                                           static_cast<size_t> (candidate)));
-                const auto& name = lb303::catalog()[index].name;
-                if (name.isNotEmpty() && juce::CharacterFunctions::toLowerCase (name[0]) == ch)
-                { target = candidate; break; }
-            }
-        }
+                const auto local = lb303::displayToLocal (
+                    static_cast<size_t> (track), static_cast<size_t> (index));
+                const auto global = lb303::voiceParameterGlobalIndex (
+                    static_cast<size_t> (track), local);
+                // The spoken "selected " prefix is not part of the search name.
+                return std::wstring (lb303::catalog()[global].name.trimStart().toWideCharPointer());
+            });
+        if (found >= 0) target = found;
     }
     if (target != pickerIndex)
     {
@@ -1730,6 +1734,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         songView = ! songView;
         songConfirmClear = false;
         pickerOpen = false;
+    pickerSearch.reset();
         // Each editor context selects its own preview by default. Alt+M
         // may still override it manually until the next context switch.
         processor.endSongAudition();

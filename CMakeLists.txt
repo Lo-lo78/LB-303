@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(LB303 VERSION 0.99.1 LANGUAGES C CXX)
+project(LB303 VERSION 0.99.2 LANGUAGES C CXX)
 
 # Same JUCE 8 and static Windows CRT policy as LJuno-116 TEST95.
 if(MSVC)
@@ -62,6 +62,8 @@ target_sources(LB303 PRIVATE
     Source/PresetBrowser.h
     Source/PresetBrowser.cpp
     Source/PluginEditor.h
+    Source/IncrementalParameterSearch.h
+    Source/ParameterSearchKey.h
     Source/PluginEditor.cpp
     Source/ScreenReaderAnnouncer.h
     Source/ScreenReaderAnnouncer.cpp
@@ -81,4 +83,12 @@ target_link_libraries(LB303 PRIVATE
 )
 if(WIN32)
     target_link_libraries(LB303 PRIVATE Uiautomationcore OleAut32)
+endif()
+
+# TEST2.4.67: small stand-alone C++ regression target; Win32 Unicode and
+# NOMINMAX are validated by this test during the actual GitHub Actions build.
+add_executable(LB303SearchTest Tests/IncrementalParameterSearchTests.cpp)
+target_compile_features(LB303SearchTest PRIVATE cxx_std_20)
+if(WIN32)
+    target_link_libraries(LB303SearchTest PRIVATE User32)
 endif()

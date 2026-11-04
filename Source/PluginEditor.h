@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+#include "IncrementalParameterSearch.h"
 #include "PresetBrowser.h"
 #include <memory>
 #include <array>
@@ -103,6 +104,7 @@ private:
     int context = 0; // 0 = Bassline 1, 1 = Bassline 2, 2 = Sequencer, 3 = FX
     std::array<int, lb303::basslineCount + 2> lastSelected { 0, 0, 0, 0 };
     int selected = 0; // per-context, not global parameter index
+    lb303::IncrementalParameterSearch parameterSearch;
     // Runtime FX display only: no changes to the stable AudioProcessor parameter IDs.
     // One column per effect; hidden options are still stored in presets/automation.
     std::vector<size_t> visibleFxParameters;

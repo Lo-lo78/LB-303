@@ -2,6 +2,7 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "PluginProcessor.h"
+#include "IncrementalParameterSearch.h"
 #include <array>
 #include <functional>
 #include <vector>
@@ -89,6 +90,7 @@ private:
     void songUndoRedo (bool redo);
     bool handleSongKey (const juce::KeyPress&);
     bool pickerOpen = false;
+    lb303::IncrementalParameterSearch pickerSearch;
     int pickerIndex = 0; // display position 0..36 (mapped to stable DSP IDs)
     std::array<int, lb303::basslineCount> lastPickerPosition {{ 0, 0 }};
     int selectedLockIndex = 0; // current step's lock slot, 0..31

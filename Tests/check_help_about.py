@@ -7,12 +7,12 @@ cm=(root/'CMakeLists.txt').read_text(encoding='utf-8')
 h=(root/'Source/PluginEditor.h').read_text(encoding='utf-8')
 editor=(root/'Source/PluginEditor.cpp').read_text(encoding='utf-8')
 help=(root/'Help/LB303Help.html').read_text(encoding='utf-8')
-assert 'project(LB303 VERSION 0.99.1' in cm
+assert 'project(LB303 VERSION 0.99.2' in cm
 assert 'juce_add_binary_data(LB303HelpData' in cm
 assert 'Help/LB303Help.html' in cm and 'LB303HelpData' in cm
 assert 'BinaryData::getNamedResource ("LB303Help_html"' in editor
-assert 'lb303ReleaseDate = "27 October 2026"' in editor
-assert 'lb303Version = "0.99.1"' in editor
+assert 'lb303ReleaseDate = "4 November 2026"' in editor
+assert 'lb303Version = "0.99.2"' in editor
 assert 'lb303ProjectUrl = "https://github.com/Lo-lo78/LB-303"' in editor
 assert 'lb303ContactEmail = "vmanolo301@gmail.com"' in editor
 assert 'setDescription ("Alt+H")' in editor and 'setDescription ("Alt+A")' in editor
@@ -36,11 +36,11 @@ for code in codes:
  assert f'id="{code}"' in help
  assert f'href="#{code}"' in help
 assert "const supported=['en','it','es','fr','ru','zh','ja'];" in help
-for term in ['0.99.1','27 October 2026','Alt+H','Alt+A','Alt+Q','Alt+B','101','Oversampling']:
+for term in ['0.99.2','4 November 2026','Alt+H','Alt+A','Alt+Q','Alt+B','101','Oversampling']:
  assert help.count(term)>=7,term
 wf=(root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
 assert 'python Tests/check_help_about.py' in wf
-assert 'LB-303-0.99.1-TEST2.4.66-Windows-x64' in wf
+assert 'LB-303-0.99.2-TEST2.4.67-Windows-x64' in wf
 assert (root/'.gitignore').exists()
 # Regression: Esc returns native keyboard *and* UIA focus to all three controls.
 assert 'void LB303AudioProcessorEditor::restoreFocusAfterHelpMenu (Control original)' in editor

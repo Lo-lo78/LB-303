@@ -1,3 +1,12 @@
+## LB-303 0.99.2 — TEST2.4.67: ricerca incrementale dei parametri (4 novembre 2026)
+
+- **Grid Alt+L e Value** in Bassline 1, Bassline 2, Sequencer e FX: digitando lettere/cifre consecutive si cerca per prefisso progressivo; vengono riconosciute anche le parole interne del nome. La ricerca preferisce l'inizio del nome e, ripetendo un singolo carattere, gira fra le corrispondenze in avanti.
+- **Shift+lettera / Shift+numero** cerca in direzione inversa, mantenendo la cifra originale anche con una tastiera che produce simboli premendo Shift.
+- Dopo **1 secondo** o una freccia/tasto di navigazione, il prefisso viene azzerato. Nel campo Edit non cambia la normale digitazione dei valori.
+- **Alt+Q > Parameters > Invio (Parameter Locks):** stessa ricerca incrementale sui nomi effettivi dei parametri, non sulla voce pronunciata `selected` per i lock già attivati. Finestra e controlli dei lock immutati.
+- Algoritmo condiviso con LSampler-24 TEST165 e LJuno-116 TEST120: Unicode, ricerca ciclica, protezione Win32 `NOMINMAX`/`min`/`max`. Test C++ standalone integrato nella build di GitHub Actions.
+- **About 0.99.2**, data 4 November 2026; manuale HTML in sette lingue aggiornato. Motore DSP, IDs VST3, preset, MIDI, 64 pattern, Song, transport e scorciatoie di Alt+Q invariati.
+
 ## TEST2.4.65 — Alt+Q: Bassline Sequencer On/Off on 8 and 9
 
 In Alt+Q, **6** is still the Parameters step page, **7** focuses Launch Step,
