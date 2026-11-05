@@ -21,6 +21,9 @@ public:
     void setPortamentoCurveMode (int mode) noexcept;
     using LfoValues = std::array<float, lfoParameterCount>;
     void setLfoParameters (const LfoValues& values) noexcept;
+    // Only Free mode (Mode=0) restarts on the host transport Stop -> Play edge.
+    // Resets phase, delay/smoothing, One Shot and S&H seed; never the voice.
+    void restartFreeLfoFromHostTransport() noexcept;
     // One LFO generator per bassline shared by synth and reverb send source.
     void setExternalLfoDestination (bool enabled) noexcept;
     float currentLfoSample() const noexcept { return lastLfoSample; }

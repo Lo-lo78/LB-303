@@ -1,3 +1,9 @@
+## LB-303 0.99.2 — TEST2.4.68: LFO Free deterministico a ogni Play (5 novembre 2026)
+
+A ogni passaggio **Stop → Play** comunicato da REAPER o da un altro host VST3, gli LFO delle due Bassline con **Mode = Free** ripartono da una fase definita (il parametro Phase resta applicato). Vengono riallineati anche smoothing, delay, One Shot e il seme di Sample & Hold: due esecuzioni dallo stesso punto non ereditano più fasi Free diverse. **Mode = Triggered** conserva il comportamento MIDI Note On originale. Non vengono resettati oscillatori audio, inviluppi, sequencer, FX, preset o altri componenti. Parametri e scorciatoie invariati. Il normale bypass CPU degli LFO inattivi rimane attivo; non si tratta di una sincronizzazione PPQ continua.
+
+Dettagli e test: `Doc/TEST2.4.68_FREE_LFO_HOST_START.md`.
+
 ## LB-303 0.99.2 — TEST2.4.67: ricerca incrementale dei parametri (4 novembre 2026)
 
 - **Grid Alt+L e Value** in Bassline 1, Bassline 2, Sequencer e FX: digitando lettere/cifre consecutive si cerca per prefisso progressivo; vengono riconosciute anche le parole interne del nome. La ricerca preferisce l'inizio del nome e, ripetendo un singolo carattere, gira fra le corrispondenze in avanti.

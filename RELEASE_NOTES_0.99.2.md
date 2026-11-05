@@ -1,3 +1,14 @@
+# LB-303 0.99.2 (TEST2.4.68)
+
+**5 November 2026**
+
+- Free LFOs in Bassline 1 and 2 restart at the host's Stop-to-Play transition, including Sample & Hold and One Shot.
+- Triggered LFOs still follow MIDI Note On. Synthesis voices, sequencer, shared effects and preview remain untouched.
+- No new parameters or shortcuts; native C++ regression test in GitHub Actions.
+- Full VST3 compilation and audible DAW verification remain required.
+
+---
+
 # LB-303 0.99.2 (TEST2.4.67)
 
 **4 November 2026**

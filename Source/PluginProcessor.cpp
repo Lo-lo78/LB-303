@@ -106,6 +106,7 @@ void LB303AudioProcessor::prepareToPlay (double sampleRate, int)
     fallbackPpq = 0.0;
     previewPpq = 0.0;
     previousPreview = false;
+    previousHostPlaying = false;
     consumedPreviewRestartEpoch = previewRestartEpoch.load (std::memory_order_acquire);
     previewOriginPpq = 0.0;
     heldKeys = {};
@@ -177,6 +178,7 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         sequencerPlayback.reset();
         fallbackPpq = previewPpq = previewOriginPpq = 0.0;
         previousPreview = false;
+    previousHostPlaying = false;
         auditionLane.store (-1, std::memory_order_release);
         heldKeys = {};
         heldKeyCount = {};
@@ -194,13 +196,23 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     double bpm = 120.0;
     double ppq = fallbackPpq;
     bool playing = false;
+    bool hostTransportAvailable = false;
     if (auto* playhead = getPlayHead())
         if (const auto position = playhead->getPosition())
         {
             if (const auto hostBpm = position->getBpm()) bpm = *hostBpm;
             if (const auto hostPpq = position->getPpqPosition()) ppq = *hostPpq;
             playing = position->getIsPlaying();
+            hostTransportAvailable = true;
         }
+    // Detect a real host Stop -> Play transition only with valid transport data.
+    // A transient missing playhead must not invent a Stop/Play edge.
+    bool hostPlaybackStarted = false;
+    if (hostTransportAvailable)
+    {
+        hostPlaybackStarted = playing && ! previousHostPlaying;
+        previousHostPlaying = playing;
+    }
     if (! std::isfinite (bpm) || bpm <= 0.0) bpm = 120.0;
     if (! std::isfinite (ppq)) ppq = 0.0;
     const bool activePreview = previewEnabled.load (std::memory_order_relaxed);
@@ -632,6 +644,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         applyVoiceParameters (voice);
     applyFxParameters();
     updateStepSendGains();
+    // Internal pattern preview has its own transport and must not restart on host Play.
+    if (hostPlaybackStarted && ! activePreview)
+        for (auto& engine : engines) engine.restartFreeLfoFromHostTransport();
     // The reverb takes its LFO from the SAME per-voice generator used for
     // pitch/filter/pan: BPM sync, One Shot, Trigger, wave and step locks agree.
     for (size_t voice = 0; voice < lb303::basslineCount; ++voice)

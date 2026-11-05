@@ -23,3 +23,11 @@ if (-not (Test-Path -LiteralPath $searchTest)) {
 & $searchTest
 if ($LASTEXITCODE -ne 0) { throw "Incremental search test failed: $LASTEXITCODE" }
 Write-Host "PASS: LB-303 incremental parameter search test"
+
+$freeLfoTest = Join-Path $build 'LB303FreeLfoTest.exe'
+if (-not (Test-Path -LiteralPath $freeLfoTest)) {
+    throw "Free LFO host-start test missing: $freeLfoTest"
+}
+& $freeLfoTest
+if ($LASTEXITCODE -ne 0) { throw "Free LFO host-start test failed: $LASTEXITCODE" }
+Write-Host "PASS: LB-303 host transport Free LFO start test"

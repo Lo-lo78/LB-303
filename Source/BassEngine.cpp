@@ -177,6 +177,15 @@ void BassEngine::setLfoParameters (const LfoValues& values) noexcept
     // that phase; its oscillator is not evaluated in the meantime.
 }
 
+void BassEngine::restartFreeLfoFromHostTransport() noexcept
+{
+    // Triggered mode still follows MIDI Note On; do not touch it on Play.
+    if (lfoParameters[lb303::lfo::mode] >= .5f) return;
+    lfo = LfoState {}; // deterministic phase, One Shot, delay, smoothing and S&H seed
+    lfo.previousPhase = 1.0; // initialise S&H on its first post-Play sample
+    lastLfoSample = 0.0f;
+}
+
 void BassEngine::setExternalLfoDestination (bool enabled) noexcept
 {
     externalLfoDestination = enabled;

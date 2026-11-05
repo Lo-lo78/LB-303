@@ -125,6 +125,7 @@ private:
     double fallbackPpq = 0.0;
     double previewPpq = 0.0;
     bool previousPreview = false;
+    bool previousHostPlaying = false; // processBlock only: Stop -> Play edge
     double previewOriginPpq = 0.0;
     // Physical MIDI keys are only triggers when the corresponding sequencer
     // switch is On; the notes themselves must never reach that bassline.

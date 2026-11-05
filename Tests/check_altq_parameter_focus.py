@@ -18,5 +18,5 @@ assert 'announce (globalParameterText());' in cpp
 assert 'announce ("Page Launch Step' not in cpp
 assert 'const juce::String pageNames[] { "Note", "Length", "Velocity", "Repeat", "Shift", "Parameters"' in cpp
 assert 'page = target;' in cpp
-assert 'TEST2.4.67-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
+assert 'TEST2.4.68-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
 print('PASS: Alt+Q 6 Parameters; 7 Launch Step; 8/9 Sequencer On/Off parameters')

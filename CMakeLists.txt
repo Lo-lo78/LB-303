@@ -92,3 +92,8 @@ target_compile_features(LB303SearchTest PRIVATE cxx_std_20)
 if(WIN32)
     target_link_libraries(LB303SearchTest PRIVATE User32)
 endif()
+
+# TEST2.4.68: native regression against the actual LFO engine, with lightweight JUCE test shim.
+add_executable(LB303FreeLfoTest Source/BassEngine.cpp Tests/FreeLfoHostStartTests.cpp)
+target_include_directories(LB303FreeLfoTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303FreeLfoTest PRIVATE cxx_std_20)
