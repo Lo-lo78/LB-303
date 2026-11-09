@@ -29,18 +29,18 @@ assert 'lb303ParameterSearchCharacter (key)' in editor and 'lb303ParameterSearch
 assert 'lb303::catalog()[globalIndex (index)].name' in editor
 assert 'lb303::catalog()[global].name' in picker
 assert 'pickerItemText' in picker and 'selected ' in picker
-assert '0.99.2' in editor and '4 November 2026' in editor
+assert '0.99.3' in editor and '9 November 2026' in editor
 assert 'New: progressive parameter search' in editor
-assert 'project(LB303 VERSION 0.99.2' in cmake
+assert 'project(LB303 VERSION 0.99.3' in cmake
 assert 'LB303SearchTest' in cmake and 'Tests/IncrementalParameterSearchTests.cpp' in cmake
 assert 'LB303SearchTest.exe' in read('Tools/build-windows.ps1')
 assert 'check_incremental_search_test2467.py' in workflow
-assert 'LB-303-0.99.2-TEST2.4.68-Windows-x64' in workflow
+assert 'LB-303-0.99.3-TEST2.4.68-Windows-x64' in workflow
 assert 'TEST2.4.67' in read('README.md') and 'TEST2.4.67' in read('RELEASE_NOTES_0.99.2.md')
 assert 'TEST2.4.67' in read('Doc/TEST2.4.67_INCREMENTAL_PARAMETER_SEARCH.md')
 for lang in ('en','it','es','fr','ru','zh','ja'):
     block=help_html.split(f'<article class="manual" id="{lang}"',1)[1].split('</article>',1)[0]
-    assert 'TEST2.4.67' in block and '0.99.2' in block and 'Shift' in block,lang
+    assert 'TEST2.4.67' in block and '0.99.3' in block and 'Shift' in block,lang
 for untouched in ('Source/BassEngine.cpp','Source/PluginProcessor.cpp','Source/ParameterCatalog.cpp','Source/SequencerState.cpp','Source/SequencerPlayback.cpp'):
     assert 'TEST2.4.67' not in read(untouched),untouched
 print('PASS TEST2.4.67: name-only incremental search in Grid/Value and Alt+Q picker, CI, 7 languages, About, no DSP edits')

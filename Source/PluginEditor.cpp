@@ -11,8 +11,8 @@
 
 namespace
 {
-constexpr auto lb303Version = "0.99.2";
-constexpr auto lb303ReleaseDate = "4 November 2026";
+constexpr auto lb303Version = "0.99.3";
+constexpr auto lb303ReleaseDate = "9 November 2026";
 constexpr auto lb303ProjectUrl = "https://github.com/Lo-lo78/LB-303";
 constexpr auto lb303ContactEmail = "vmanolo301@gmail.com";
 constexpr auto lb303License = "GNU Affero General Public License v3 or later (AGPL-3.0-or-later)";

@@ -1,3 +1,15 @@
+# LB-303 v0.99.3 — Release 9 November 2026
+
+This publication packages the current TEST2.4.68 source with updated About, seven-language Help, CMake version, and Windows x64 GitHub Actions artifact name. No changes to synthesis DSP, MIDI behavior, VST3 parameter IDs, presets, patterns, Song, controls or shortcuts are introduced by this version update.
+
+**Included TEST2.4.68:** deterministic Free-mode LFO restart at host Stop-to-Play (both basslines), including smoothing, delay, One Shot and Sample & Hold state. Triggered mode remains MIDI Note On-driven.
+
+**Included TEST2.4.67:** incremental keyboard parameter search in Grid/Value and Alt+Q Parameter Lock picker, with backward search using Shift.
+
+Full VST3 compilation and REAPER/NVDA verification are performed separately after uploading the sources to GitHub Actions.
+
+---
+
 ## LB-303 0.99.2 — TEST2.4.68: LFO Free deterministico a ogni Play (5 novembre 2026)
 
 A ogni passaggio **Stop → Play** comunicato da REAPER o da un altro host VST3, gli LFO delle due Bassline con **Mode = Free** ripartono da una fase definita (il parametro Phase resta applicato). Vengono riallineati anche smoothing, delay, One Shot e il seme di Sample & Hold: due esecuzioni dallo stesso punto non ereditano più fasi Free diverse. **Mode = Triggered** conserva il comportamento MIDI Note On originale. Non vengono resettati oscillatori audio, inviluppi, sequencer, FX, preset o altri componenti. Parametri e scorciatoie invariati. Il normale bypass CPU degli LFO inattivi rimane attivo; non si tratta di una sincronizzazione PPQ continua.
@@ -11,7 +23,7 @@ Dettagli e test: `Doc/TEST2.4.68_FREE_LFO_HOST_START.md`.
 - Dopo **1 secondo** o una freccia/tasto di navigazione, il prefisso viene azzerato. Nel campo Edit non cambia la normale digitazione dei valori.
 - **Alt+Q > Parameters > Invio (Parameter Locks):** stessa ricerca incrementale sui nomi effettivi dei parametri, non sulla voce pronunciata `selected` per i lock già attivati. Finestra e controlli dei lock immutati.
 - Algoritmo condiviso con LSampler-24 TEST165 e LJuno-116 TEST120: Unicode, ricerca ciclica, protezione Win32 `NOMINMAX`/`min`/`max`. Test C++ standalone integrato nella build di GitHub Actions.
-- **About 0.99.2**, data 4 November 2026; manuale HTML in sette lingue aggiornato. Motore DSP, IDs VST3, preset, MIDI, 64 pattern, Song, transport e scorciatoie di Alt+Q invariati.
+- **About 0.99.2** (versione storica), data 4 November 2026; manuale HTML in sette lingue aggiornato. Motore DSP, IDs VST3, preset, MIDI, 64 pattern, Song, transport e scorciatoie di Alt+Q invariati.
 
 ## TEST2.4.65 — Alt+Q: Bassline Sequencer On/Off on 8 and 9
 

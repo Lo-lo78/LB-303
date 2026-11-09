@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(LB303 VERSION 0.99.2 LANGUAGES C CXX)
+project(LB303 VERSION 0.99.3 LANGUAGES C CXX)
 
 # Same JUCE 8 and static Windows CRT policy as LJuno-116 TEST95.
 if(MSVC)
