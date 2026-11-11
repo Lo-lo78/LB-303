@@ -230,7 +230,7 @@ juce::String SequencerStepEditor::valueText (int index) const
         case 4: return juce::String ((step.shift - 0.5f) * 2.0f, 2);
         case 7: return sendName (step.delaySendState, step.delaySendLevel);
         case 8: return sendName (step.reverbSendState, step.reverbSendLevel);
-        case 6: return index == currentStep ? currentLockText()
+        case 5: return index == currentStep ? currentLockText()
                          : juce::String (step.parameterLockCount) + " parameter locks";
         default: return "";
     }
@@ -1121,7 +1121,13 @@ void SequencerStepEditor::editSelectedLock (int direction, int amount)
     change.after = bank().getStep (pattern(), currentStep);
     action.changes.push_back (std::move (change));
     commitAction (std::move (action));
-    announceCurrent();
+    // Like LJuno-116, value nudges announce the parameter name and value,
+    // without the ordinal used when selecting a step or another lock.
+    const auto catalogIndex = lb303::voiceParameterGlobalIndex (
+        static_cast<size_t> (track), static_cast<size_t> (local));
+    announce ("Step " + juce::String (currentStep + 1)
+              + ", Parameters, " + lb303::catalog()[catalogIndex].name + " "
+              + lb303::parameterText (catalogIndex, next));
 }
 void SequencerStepEditor::changeSelectedLock (int direction)
 {
@@ -1902,7 +1908,11 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
             lastRevision = 0;
             refresh();
         }
-        announce ("Page " + pageName() + (page == 5 ? ". Enter opens parameter selection" : ""));
+        // Expose the current step's lock as soon as Parameters is opened.
+        if (page == 5)
+            announceCurrent();
+        else
+            announce ("Page " + pageName());
         return true;
     }
     for (int i = 0; i < 8; ++i)
