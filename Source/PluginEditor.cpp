@@ -11,8 +11,8 @@
 
 namespace
 {
-constexpr auto lb303Version = "0.99.3";
-constexpr auto lb303ReleaseDate = "9 November 2026";
+constexpr auto lb303Version = "0.99.4";
+constexpr auto lb303ReleaseDate = "12 November 2026";
 constexpr auto lb303ProjectUrl = "https://github.com/Lo-lo78/LB-303";
 constexpr auto lb303ContactEmail = "vmanolo301@gmail.com";
 constexpr auto lb303License = "GNU Affero General Public License v3 or later (AGPL-3.0-or-later)";
@@ -215,7 +215,7 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
 
     const auto aboutText = juce::String ("LB-303\nVersion: ") + lb303Version
         + "\nRelease date: " + lb303ReleaseDate
-        + "\nNew: progressive parameter search, Shift backwards, Shift+digits and word prefixes (Grid, Value and Alt+Q Parameter Locks)"
+        + "\nNew: accessible step parameter announcements in Alt+Q Parameters (page 6), including value changes and Alt+Home/Alt+End navigation"
         + "\nLicense: " + lb303License
         + "\nProject: " + lb303ProjectUrl
         + "\nContact: " + lb303ContactEmail;

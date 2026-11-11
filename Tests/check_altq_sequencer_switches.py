@@ -22,5 +22,5 @@ assert 'result[sequencer1EnabledIndex] = { "seq_b1_enable"' in cat
 assert 'result[sequencer2EnabledIndex] = { "seq_b2_enable"' in cat
 assert 'value (lb303::sequencer1EnabledIndex) > 0.5f' in proc
 assert 'value (lb303::sequencer2EnabledIndex) > 0.5f' in proc
-assert 'TEST2.4.68-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
+assert 'TEST2.4.69-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
 print('PASS: Alt+Q 8/9 use existing host-automatable Sequencer switches; step page persists')

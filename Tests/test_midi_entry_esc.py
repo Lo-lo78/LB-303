@@ -21,7 +21,7 @@ assert "End of Pattern. MIDI Step Entry Off" in cpp
 assert "midiEntrySpeak = ! midiEntrySpeak;" in cpp
 if is_lb:
     assert "if (code == juce::KeyPress::escapeKey) { close(); return true; }" in mode[ctrl_m:]
-    assert "TEST2.4.68-Windows-x64" in (root / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
+    assert "TEST2.4.69-Windows-x64" in (root / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
 else:
     assert "closeSequencerEditor();" in mode[ctrl_m:]
     assert "TEST118-MIDI-Step-Entry-Speech-Windows-VST3" in (root / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
