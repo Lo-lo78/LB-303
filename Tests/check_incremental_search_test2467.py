@@ -35,7 +35,7 @@ assert 'project(LB303 VERSION 0.99.5' in cmake
 assert 'LB303SearchTest' in cmake and 'Tests/IncrementalParameterSearchTests.cpp' in cmake
 assert 'LB303SearchTest.exe' in read('Tools/build-windows.ps1')
 assert 'check_incremental_search_test2467.py' in workflow
-assert 'LB-303-0.99.5-TEST2.4.70-Windows-x64' in workflow
+assert 'LB-303-0.99.5-TEST2.4.72-Windows-x64' in workflow
 assert 'TEST2.4.67' in read('README.md') and 'TEST2.4.67' in read('RELEASE_NOTES_0.99.2.md')
 assert 'TEST2.4.67' in read('Doc/TEST2.4.67_INCREMENTAL_PARAMETER_SEARCH.md')
 for lang in ('en','it','es','fr','ru','zh','ja'):

@@ -17,7 +17,7 @@ if (ROOT / 'Source' / 'SequencerStepEditor.cpp').exists():
     assert editor.index('changeBpmDivision (code == juce::KeyPress::pageUpKey ? 1 : -1)') < editor.index('if (midiEntryActive)\n    {\n        drainMidiEntry();', editor.index('changeBpmDivision (code == juce::KeyPress::pageUpKey ? 1 : -1)'))
     assert 'addSeq (seqPerformance::bpmDivision' in catalog
     assert 'python Tests/check_altq_bpm_division.py' in workflow
-    assert 'TEST2.4.70' in workflow
+    assert 'TEST2.4.72' in workflow
 else:
     catalog = (ROOT / 'Source' / 'GeneratedParameters.h').read_text(encoding='utf-8')
     assert 'nudgeSequencerPageParameter ("slider317", delta)' in editor

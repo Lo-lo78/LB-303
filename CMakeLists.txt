@@ -105,3 +105,12 @@ add_executable(LB303StepAuditionTest
     Tests/test270_step_preview.cpp)
 target_include_directories(LB303StepAuditionTest PRIVATE Tests/Shim Source)
 target_compile_features(LB303StepAuditionTest PRIVATE cxx_std_20)
+
+# TEST2.4.72: play the REAL classic delay engine through the shared FX rack,
+# and reproduce repeated Ctrl+Space / step-key audition resets without JUCE GUI.
+# No production DSP changes or test-only injection points are required.
+add_executable(LB303DelayResetTest
+    Source/BassEngine.cpp Source/SharedEffects.cpp
+    Tests/DelayResetAuditionTests.cpp)
+target_include_directories(LB303DelayResetTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303DelayResetTest PRIVATE cxx_std_20)

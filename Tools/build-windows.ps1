@@ -31,3 +31,11 @@ if (-not (Test-Path -LiteralPath $freeLfoTest)) {
 & $freeLfoTest
 if ($LASTEXITCODE -ne 0) { throw "Free LFO host-start test failed: $LASTEXITCODE" }
 Write-Host "PASS: LB-303 host transport Free LFO start test"
+
+$delayResetTest = Join-Path $build 'LB303DelayResetTest.exe'
+if (-not (Test-Path -LiteralPath $delayResetTest)) {
+    throw "Classic delay reset test missing: $delayResetTest"
+}
+& $delayResetTest
+if ($LASTEXITCODE -ne 0) { throw "Classic delay reset test failed: $LASTEXITCODE" }
+Write-Host "PASS: LB-303 classic delay repeated micro-preview reset test"

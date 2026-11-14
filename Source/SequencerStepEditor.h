@@ -60,7 +60,7 @@ private:
     // Sequencer enable parameters. Keys 7/8/9 never change the step page.
     int focusedGlobalParameter = -1;
     int currentStep = 0;
-    int stepAuditionMode = 0; // 0 current; 1 start to current; 2 current to end
+    int stepAuditionMode = 0; // 0 start to current; 1 current to end (single step on key press)
     void cycleStepAuditionMode();
     void auditionStep (bool useMode);
     void announceStepPosition();

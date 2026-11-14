@@ -35,8 +35,9 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
 
 void SequencerStepEditor::cycleStepAuditionMode()
 {
-    stepAuditionMode = (stepAuditionMode + 1) % 3;
-    const char* names[] { "Current step", "Start to current step", "Current step to end" };
+    // Pressing a step plays it immediately; Ctrl+P only chooses the range.
+    stepAuditionMode = (stepAuditionMode + 1) % 2;
+    const char* names[] { "Start to current step", "Current step to end" };
     announce (juce::String ("Step preview: ") + names[stepAuditionMode]);
 }
 void SequencerStepEditor::announceStepPosition()
@@ -50,7 +51,7 @@ void SequencerStepEditor::auditionStep (bool useMode)
         || processor.isPreviewPlaying() || processor.isHostTransportPlaying())
         return;
     const auto config = bank().getConfig (pattern());
-    const auto mode = useMode ? static_cast<lb303::StepAuditionMode> (stepAuditionMode)
+    const auto mode = useMode ? static_cast<lb303::StepAuditionMode> (stepAuditionMode + 1)
                               : lb303::StepAuditionMode::current;
     processor.requestSequencerStepAudition (track, pattern(),
         lb303::makeStepAuditionRange (config.startStep, config.endStep,
@@ -355,7 +356,7 @@ void SequencerStepEditor::refresh()
          << "  Division " << juce::String (config.bpmDivision, 4)
          << "  Step " << coarseSteps[static_cast<size_t> (valueStepIndex)]
          << "\n7: Launch Step parameter | 8: Bassline 1 Sequencer On/Off | 9: Bassline 2 Sequencer On/Off"
-         << "\nCtrl+P: preview span  |  Ctrl+Space: preview step or range  |  Ctrl+K: MIDI Step Entry On/Off  |  Ctrl+M: Step announcements while recording  |  Space: Pause while recording"
+         << "\nCtrl+P: Start-to-current / Current-to-end  |  Ctrl+Space: play chosen range  |  Press a step key: hear that step  |  Ctrl+K: MIDI Step Entry On/Off  |  Ctrl+M: Step announcements while recording  |  Space: Pause while recording"
          << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Ctrl+1: Delay Send  |  Ctrl+2: Reverb Send  |  Tab: step info  |  Ctrl+Tab: next 16 steps"
          << "\nZ/X: Start Step -/+  |  C/V: End Step -/+"
          << "\nCtrl+A: select visible 16 steps  |  Delete: deselect all  |  Ctrl+C/V/X: steps  |  Ctrl+Shift+C/X/V: current pattern only"
@@ -400,6 +401,7 @@ void SequencerStepEditor::selectStep (int inBlock)
     {
         focusedGlobalParameter = -1;
         currentStep = index;
+        auditionStep (false); // A step key always gives audible feedback while stopped.
         lastStepKey = -1;
         lastRevision = 0;
         refresh();
@@ -418,6 +420,9 @@ void SequencerStepEditor::selectStep (int inBlock)
         return;
     }
     currentStep = index;
+    // Physical Q..I/A..K keys trigger the current Bassline only. Repeated
+    // presses still select/deselect and Send pages still retain their edits.
+    auditionStep (false);
     if (page == 7 || page == 8)
     {
         lastStepKey = -1;

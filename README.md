@@ -1489,3 +1489,22 @@ Inside Alt+Q Steps, Ctrl+Page Up/Down changes the current track’s existing BPM
 - **Ctrl+P:** cycles **Current step** (default), **Start to current**, **Current to end**. This option applies to Ctrl+Space. Automatic editing preview always auditions the current step.
 - **Tab:** announces the selected Bassline, Pattern and Step. **Ctrl+Tab / Ctrl+Shift+Tab:** next/previous block of 16 steps, bounded by Start/End. MIDI Step Entry retains its own historic Tab movement.
 - The chosen Bassline uses the real PPQ clock, Repeat, Shift, Velocity, Length 101 and Parameter Locks; the other Bassline is muted for this micro-audition. One-pass timing stops at the requested boundary. Existing Song, Pattern, presets, hardware MIDI, and Alt+P behaviour remain unchanged.
+
+
+## LB-303 0.99.5 TEST2.4.71 — immediate step-key audition (14 November 2026)
+
+In Alt+Q Steps, pressing an active step key (Q–I, A–K) immediately auditions **that single step on the selected Bassline only**. Existing double-press selection and the step Send pages still work. A changed value still auditions the current step. Audition is suppressed during host playback, full sequencer preview and MIDI Step Entry.
+
+**Ctrl+P** now offers only **Start to current** and **Current to end**, with Start to current as the initial choice. **Ctrl+Space** plays the chosen range, regardless of Alt+P. Current step is played directly by pressing its key rather than being a Ctrl+P choice.
+
+
+## LB-303 0.99.5 TEST2.4.72 — Classic Delay micro-preview fix (14 November 2026)
+
+Fixed a shared Classic Delay reset/cache mismatch affecting Ctrl+Space and
+immediate step-key audition. Previously clearing a wet tail also cleared the
+calculated delay time, but unchanged parameters were wrongly skipped, leaving
+the displayed Delay knob unchanged while the DSP could sound incorrect or
+silent until the knob moved. The engine now invalidates its cached parameters
+on reset and restores the correct time before playback. All TEST2.4.71 step
+preview shortcuts and host parameter IDs remain unchanged. A new native C++
+regression test checks repeated preview resets without any parameter movement.

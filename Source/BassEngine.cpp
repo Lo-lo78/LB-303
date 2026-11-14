@@ -304,6 +304,10 @@ void BassEngine::setOversamplingFactor (int factor) noexcept
 
 void BassEngine::reset()
 {
+    // Clearing an FX tail also zeroes the calculated delay time. Force the
+    // next setParameters() call to restore it even if the host parameter
+    // values and BPM are unchanged (as in consecutive step auditions).
+    parametersPrepared = false;
     freq = targetFreq = phase = pwmPhase = osc2Phase = osc2GainSmooth = 0;
     curvedGlideActive = false;
     curvedStartLog2 = curvedDeltaLog2 = curvedElapsed = 0;
