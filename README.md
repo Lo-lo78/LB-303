@@ -1508,3 +1508,16 @@ silent until the knob moved. The engine now invalidates its cached parameters
 on reset and restores the correct time before playback. All TEST2.4.71 step
 preview shortcuts and host parameter IDs remain unchanged. A new native C++
 regression test checks repeated preview resets without any parameter movement.
+
+
+## LB-303 0.99.5 TEST2.4.73 — local step previews keep Delay unchanged (14 November 2026)
+
+Alt+Q immediate step-key audition, automatic on-edit audition and Ctrl+Space
+no longer clear the shared delay/reverb/chorus when a new micro-preview begins.
+The Classic Delay's tape-style Speed glide and its entire echo feedback history
+remain continuous, so a short preview can be heard through its normal Delay
+Send and its tail continues after the step ends. During micro-preview only,
+old per-step Delay Time/Feedback/etc. parameter locks are ignored; they still
+work in normal Pattern/Song playback. Per-step Delay Send remains active.
+The explicit factory/runtime reset still clears FX tails correctly. No change
+to Ctrl+P, the two-bassline sequencer, stored parameters or presets.

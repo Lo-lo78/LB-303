@@ -244,7 +244,10 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         sequencerPlayback.setRandomSeed (previewSeed);
         previousPreview = true; // Already reset; avoid a second reset below.
         for (auto& engine : engines) engine.releaseNote();
-        sharedFx.clearTails(); // Isolate selected step from previous wet tails.
+        // Only restart the sequencer and release its notes. Do NOT touch shared
+        // effects on step audition: Classic/Tape delay owns its glide, feedback,
+        // time and wet history. A new step simply excites its normal Send;
+        // previous echoes keep playing exactly as during ordinary MIDI input.
         activeLockStep = { -1, -1 };
         activeLockPattern = { -1, -1 };
         previousLockSongEntry = { -9, -9 };
@@ -255,6 +258,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             stepAuditionRange.first, stepAuditionRange.last);
         stepAuditionActive = stepAuditionDuration > 0.0;
     }
+    // Hold the origin for the WHOLE callback: a one-shot may finish during
+    // this buffer, before step locks are applied at their sample offsets.
+    const bool localStepAuditionBlock = stepAuditionActive;
     const bool activePreview = fullPreview || stepAuditionActive;
     const auto restartEpoch = previewRestartEpoch.load (std::memory_order_acquire);
     if (activePreview && (! previousPreview || consumedPreviewRestartEpoch != restartEpoch))
@@ -660,8 +666,11 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         lb303::SharedEffects::ClassicParameters legacy {};
         for (size_t i = 0; i < legacy.size(); ++i)
             legacy[i] = value (lb303::parameterIndex (0, i));
-        // Preserve older B1 per-step delay locks as automations of that shared delay.
-        if (activeLockStep[0] >= 0 && activeLockPattern[0] >= 0)
+        // Normal playback keeps historic B1 Delay parameter locks. An isolated
+        // step audition must NEVER automate Delay Time/Speed/Glide/Feedback:
+        // the delay receives the audition only through its regular per-step Send.
+        if (! localStepAuditionBlock
+            && activeLockStep[0] >= 0 && activeLockPattern[0] >= 0)
         {
             const auto step = sequenceBanks[0].getStep (activeLockPattern[0], activeLockStep[0]);
             for (int i = 0; i < step.parameterLockCount; ++i)

@@ -17,6 +17,6 @@ assert 'const char* names[] { "Start to current step", "Current step to end" }' 
 assert 'int stepAuditionMode = 0' in h
 assert 'StepAuditionMode::current' in a
 assert 'processor.isPreviewPlaying() || processor.isHostTransportPlaying()' in e
-assert 'LB-303-0.99.5-TEST2.4.72-Windows-x64' in w
+assert 'LB-303-0.99.5-TEST2.4.73-Windows-x64' in w
 assert 'python Tests/check_test2471_press_step_preview.py' in w
 print('PASS TEST2.4.71: immediate step key audition, two Ctrl+P ranges and no MIDI-entry overlap')

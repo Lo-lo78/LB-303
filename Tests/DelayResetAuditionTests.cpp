@@ -1,5 +1,5 @@
-// Regression for TEST2.4.72: repeated one-shot step auditions must never
-// leave the shared classic delay running at a stale near-zero delay time.
+// Regression for TEST2.4.72: an explicit shared-effects reset must never
+// leave the classic delay running at a stale near-zero delay time.
 // Execute the real BassEngine and SharedEffects through the project's JUCE shim.
 #include "BassEngine.h"
 #include "SharedEffects.h"
@@ -29,7 +29,7 @@ static bool checkEngineReset()
     repeated.prepare (fs);
     clean.setParameters (values, 120.0);
     repeated.setParameters (values, 120.0);
-    repeated.reset(); // Clear a previous step's FX tail, as preview does.
+    repeated.reset(); // Deliberate full DSP reset (Alt+I), not a step preview.
     repeated.setParameters (values, 120.0); // No user knob movement!
 
     // A correct reset must re-cook exactly the same delay as on first load.
@@ -65,8 +65,8 @@ static bool checkSharedFxResets()
     reused.setParameters (controls, values, 120.0);
     for (int cycle = 0; cycle < 3; ++cycle)
     {
-        // Compare a fresh FX rack with a rack re-used by repeated step
-        // auditions. This catches exactly the bad cache left by clearTails().
+        // Compare a fresh FX rack with a rack after deliberate explicit
+        // clearTails(). Normal one-shot previews must NOT call clearTails().
         lb303::SharedEffects clean;
         clean.prepare (fs);
         clean.setParameters (controls, values, 120.0);

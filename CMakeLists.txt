@@ -114,3 +114,10 @@ add_executable(LB303DelayResetTest
     Tests/DelayResetAuditionTests.cpp)
 target_include_directories(LB303DelayResetTest PRIVATE Tests/Shim Source)
 target_compile_features(LB303DelayResetTest PRIVATE cxx_std_20)
+
+# TEST2.4.73: real shared FX continuity across consecutive one-step previews.
+add_executable(LB303StepPreviewFxIsolationTest
+    Source/BassEngine.cpp Source/SharedEffects.cpp
+    Tests/StepPreviewFxIsolationTests.cpp)
+target_include_directories(LB303StepPreviewFxIsolationTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303StepPreviewFxIsolationTest PRIVATE cxx_std_20)

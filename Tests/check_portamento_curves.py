@@ -32,7 +32,7 @@ assert 'std::log (0.01) / std::log1p (-coefficient)' in b
 assert 'curvedElapsed *= ratio;' in b and 'curvedDuration *= ratio;' in b
 assert 'if (portamentoCurveMode != 0 && curvedGlideActive && glideSettingsChanged)' in b
 assert 'shaped = t*t;' in b and 'shaped = t*t*(3.0 - 2.0*t);' in b
-assert 'TEST2.4.72-Windows-x64' in w
+assert 'TEST2.4.73-Windows-x64' in w
 assert 'python Tests/check_portamento_curves.py' in w
 assert 'TEST2.4.53' in read('README.md')
 help=read('Help/LB303Help.html')

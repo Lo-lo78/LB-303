@@ -46,6 +46,7 @@ jobs:
           python Tests/check_test2470_step_preview.py
           python Tests/check_test2471_press_step_preview.py
           python Tests/check_test2472_delay_reset.py
+          python Tests/check_test2473_fx_isolation.py
           python Tests/test_midi_key_speech.py
           python Tests/test_midi_entry_esc.py
           python Tests/test_midi_entry_session_transaction.py
@@ -63,12 +64,12 @@ jobs:
           }
           # An actual VST3 is a bundle (directory) on Windows in JUCE 8.
           # Preserve its internal layout (Contents/x86_64-win/*.vst3).
-          Compress-Archive -Path $plugin -DestinationPath "LB-303-0.99.5-TEST2.4.72-Windows-x64.zip" -Force
+          Compress-Archive -Path $plugin -DestinationPath "LB-303-0.99.5-TEST2.4.73-Windows-x64.zip" -Force
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LB-303-0.99.5-TEST2.4.72-Windows-x64
-          path: LB-303-0.99.5-TEST2.4.72-Windows-x64.zip
+          name: LB-303-0.99.5-TEST2.4.73-Windows-x64
+          path: LB-303-0.99.5-TEST2.4.73-Windows-x64.zip
           if-no-files-found: error
           retention-days: 14

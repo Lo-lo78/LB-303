@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TEST2.4.72: protect cached classic delay time from preview clearTails()."""
+"""TEST2.4.72: preserve recovery after explicit FX reset, not step preview."""
 from pathlib import Path
 import os, subprocess, shutil, tempfile
 root = Path(__file__).resolve().parents[1]
@@ -14,10 +14,11 @@ assert 'parametersPrepared = false;' in reset, 'reset must invalidate cached del
 assert reset.index('parametersPrepared = false;') < reset.index('delayTargetSamples = delayPhase = 0')
 assert 'parametersPrepared && p == values && tempo == nextTempo' in bass
 assert 'classic.reset();' in fx and 'settingsPrepared = false;' in fx
-assert 'sharedFx.clearTails(); // Isolate selected step' in processor
+assert 'sharedFx.clearTails(); // Isolate selected step' not in processor
+assert processor.count('sharedFx.clearTails();') == 1, 'FX reset must remain only for explicit runtime reset'
 assert 'LB303DelayResetTest' in cmake and 'LB303DelayResetTest.exe' in script
 assert 'python Tests/check_test2472_delay_reset.py' in workflow
-assert 'TEST2.4.72-Windows-x64' in workflow
+assert 'TEST2.4.73-Windows-x64' in workflow
 compiler = (shutil.which('g++') or shutil.which('clang++')) if os.name != 'nt' else None
 if compiler:
     with tempfile.TemporaryDirectory(prefix='lb303_delay_reset_') as tmp:

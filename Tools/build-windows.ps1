@@ -38,4 +38,12 @@ if (-not (Test-Path -LiteralPath $delayResetTest)) {
 }
 & $delayResetTest
 if ($LASTEXITCODE -ne 0) { throw "Classic delay reset test failed: $LASTEXITCODE" }
-Write-Host "PASS: LB-303 classic delay repeated micro-preview reset test"
+Write-Host "PASS: LB-303 explicit Classic Delay reset restores parameters"
+
+$previewIsolationTest = Join-Path $build 'LB303StepPreviewFxIsolationTest.exe'
+if (-not (Test-Path -LiteralPath $previewIsolationTest)) {
+    throw "FX-isolation test missing: $previewIsolationTest"
+}
+& $previewIsolationTest
+if ($LASTEXITCODE -ne 0) { throw "Step preview FX-isolation test failed: $LASTEXITCODE" }
+Write-Host "PASS: micro-preview preserves Classic Delay glide and wet tail"
