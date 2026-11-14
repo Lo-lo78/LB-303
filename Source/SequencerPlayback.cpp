@@ -40,7 +40,8 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                                   bool playing, double ppq, double bpm,
                                   double sampleRate, int samples,
                                   std::array<StepEvent, maximumStepEvents>& stepEvents,
-                                  int& stepEventCount, int blockOffset)
+                                  int& stepEventCount, int blockOffset,
+                                  const StepAuditionRange* localAuditionRange)
 {
     if (samples <= 0 || ! std::isfinite (ppq) || bpm <= 0.0 || sampleRate <= 0.0)
         return;
@@ -90,12 +91,17 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         const int pattern = juce::jlimit (0, SequencerState::maximumSequences - 1, patterns[lane]);
         const auto& bank = banks[static_cast<size_t> (lane)];
         const auto config = bank.getConfig (pattern); // all ten values per pattern
-        const int start = juce::jlimit (1, 128, config.startStep) - 1;
-        const int finish = juce::jlimit (start + 1, 128, config.endStep);
+        const int start = localAuditionRange != nullptr
+            ? juce::jlimit (0, 127, localAuditionRange->first)
+            : juce::jlimit (1, 128, config.startStep) - 1;
+        const int finish = localAuditionRange != nullptr
+            ? juce::jlimit (start + 1, 128, localAuditionRange->last + 1)
+            : juce::jlimit (start + 1, 128, config.endStep);
         const int patternLength = finish - start;
         const double division = juce::jlimit (0.03125, 64.0, static_cast<double> (config.bpmDivision));
         const double stepBeats = 1.0 / division;
-        const double launchDelay = sequencerTiming::launchBeats (config, bpm);
+        const double launchDelay = localAuditionRange != nullptr ? 0.0
+            : sequencerTiming::launchBeats (config, bpm);
         const std::int64_t entry = songEntryIds[static_cast<size_t> (lane)];
         const bool songEntry = entry >= 0;
         const double entryGrace = newSongEntry[static_cast<size_t> (lane)]

@@ -29,8 +29,32 @@ SequencerStepEditor::SequencerStepEditor (LB303AudioProcessor& p)
     setColour (juce::Label::textColourId, juce::Colours::white);
     setBorderSize (juce::BorderSize<int> (20));
     setTitle ("Sequencer step editor");
-    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. Control Page Up and Page Down change BPM Division of the current bassline. 1 to 6 choose step pages; 7 Launch Step, 8 Bassline 1 Sequencer On/Off, 9 Bassline 2 Sequencer On/Off focus parameters without leaving the current step page; Ctrl+1 Delay Send Steps, Ctrl+2 Reverb Send Steps; press the focused step key again or Enter to cycle Normal Accent Mute. In Normal, Up and Down set that step Send from 0 to 100 percent; the others ignore arrows. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab changes block within active Start/End. Escape closes without stopping preview. Ctrl K toggles monophonic MIDI Step Entry inside Alt Q. MIDI notes store Note and Velocity, Space stores Pause, and step keys move the insertion cursor without editing. Ctrl M controls automatic MIDI-note step announcements (off by default); computer step keys and Space always announce their destination. Ctrl K always announces the starting step. Step Entry auto-stops at End Step and Ctrl K commits. Escape cancels all notes and pauses written since Ctrl K started, restoring earlier values, and stays in Alt Q.");
+    setDescription ("Enter toggles Pause/last Note on page 1, 101/last Length on page 2, and 127/last Velocity on page 3. Alt M switches Pattern/Song preview anywhere in Alt Q. Alt S switches Steps and Song editor. Ctrl A selects only the 16 steps of the focused keyboard block, bounded by Start and End. Delete clears selected steps. Alt Q opens/closes the editor. Alt P selects Space for REAPER transport or dual-bassline preview. Home and End choose bassline. Control Up and Down change pattern. Control Page Up and Page Down change BPM Division of the current bassline. 1 to 6 choose step pages; 7 Launch Step, 8 Bassline 1 Sequencer On/Off, 9 Bassline 2 Sequencer On/Off focus parameters without leaving the current step page; Ctrl+1 Delay Send Steps, Ctrl+2 Reverb Send Steps; press the focused step key again or Enter to cycle Normal Accent Mute. In Normal, Up and Down set that step Send from 0 to 100 percent; the others ignore arrows. On Parameters, Enter opens parameter selection. Q to I and A to K choose step. Z/X change Start Step and C/V change End Step. Tab announces Bassline/Pattern/Step. Ctrl+Tab and Ctrl+Shift+Tab change blocks within Start/End. Escape closes without stopping preview. Ctrl K toggles monophonic MIDI Step Entry inside Alt Q. MIDI notes store Note and Velocity, Space stores Pause, and step keys move the insertion cursor without editing. Ctrl M controls automatic MIDI-note step announcements (off by default); computer step keys and Space always announce their destination. Ctrl K always announces the starting step. Step Entry auto-stops at End Step and Ctrl K commits. Escape cancels all notes and pauses written since Ctrl K started, restoring earlier values, and stays in Alt Q.");
     setVisible (false);
+}
+
+void SequencerStepEditor::cycleStepAuditionMode()
+{
+    stepAuditionMode = (stepAuditionMode + 1) % 3;
+    const char* names[] { "Current step", "Start to current step", "Current step to end" };
+    announce (juce::String ("Step preview: ") + names[stepAuditionMode]);
+}
+void SequencerStepEditor::announceStepPosition()
+{
+    announce ("Bassline " + juce::String (track + 1) + ", Pattern "
+              + juce::String (pattern() + 1) + ", Step " + juce::String (currentStep + 1));
+}
+void SequencerStepEditor::auditionStep (bool useMode)
+{
+    if (! opened || songView || midiEntryActive
+        || processor.isPreviewPlaying() || processor.isHostTransportPlaying())
+        return;
+    const auto config = bank().getConfig (pattern());
+    const auto mode = useMode ? static_cast<lb303::StepAuditionMode> (stepAuditionMode)
+                              : lb303::StepAuditionMode::current;
+    processor.requestSequencerStepAudition (track, pattern(),
+        lb303::makeStepAuditionRange (config.startStep, config.endStep,
+                                      currentStep, mode));
 }
 
 SequencerStepEditor::~SequencerStepEditor() { finishMidiEntry (false); stopMidiEntry(); }
@@ -68,7 +92,9 @@ void SequencerStepEditor::finishMidiEntry (bool cancel)
                 || a.velocity != b.velocity || a.velocityBeforeMax != b.velocityBeforeMax)
                 action.changes.push_back (std::move (change));
         }
+        suppressMicroPreview = true;
         commitAction (std::move (action)); // One Undo for this Ctrl+K session.
+        suppressMicroPreview = false;
     }
     midiEntryChanges.clear();
 }
@@ -329,8 +355,8 @@ void SequencerStepEditor::refresh()
          << "  Division " << juce::String (config.bpmDivision, 4)
          << "  Step " << coarseSteps[static_cast<size_t> (valueStepIndex)]
          << "\n7: Launch Step parameter | 8: Bassline 1 Sequencer On/Off | 9: Bassline 2 Sequencer On/Off"
-         << "\nCtrl+K: MIDI Step Entry On/Off  |  Ctrl+M: Step announcements while recording  |  Space: Pause while recording"
-         << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Ctrl+1: Delay Send  |  Ctrl+2: Reverb Send  |  Tab: active blocks"
+         << "\nCtrl+P: preview span  |  Ctrl+Space: preview step or range  |  Ctrl+K: MIDI Step Entry On/Off  |  Ctrl+M: Step announcements while recording  |  Space: Pause while recording"
+         << "\nHome/End: bassline  |  Ctrl+Up/Down: pattern +/-  |  Ctrl+1: Delay Send  |  Ctrl+2: Reverb Send  |  Tab: step info  |  Ctrl+Tab: next 16 steps"
          << "\nZ/X: Start Step -/+  |  C/V: End Step -/+"
          << "\nCtrl+A: select visible 16 steps  |  Delete: deselect all  |  Ctrl+C/V/X: steps  |  Ctrl+Shift+C/X/V: current pattern only"
          << "  |  Ctrl+Z: Undo  |  Ctrl+Shift+Z: Redo"
@@ -555,11 +581,15 @@ std::vector<int> SequencerStepEditor::editingSteps() const
 void SequencerStepEditor::commitAction (Action&& action)
 {
     if (action.changes.empty() && ! action.hasLaunch && ! action.hasWholePattern) return;
+    const bool previewCurrentStep = action.track == track && action.pattern == pattern()
+        && std::any_of (action.changes.begin(), action.changes.end(),
+                        [this] (const StepChange& edit) { return edit.index == currentStep; });
     undoStack.push_back (std::move (action));
     if (undoStack.size() > maxUndo) undoStack.erase (undoStack.begin());
     redoStack.clear();
     lastRevision = 0;
     refresh();
+    if (previewCurrentStep && ! suppressMicroPreview) auditionStep (false);
 }
 void SequencerStepEditor::applyAction (const Action& action, bool backwards)
 {
@@ -1618,6 +1648,13 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
     const bool ctrlOnly = mods.isCtrlDown() && ! mods.isAltDown()
                        && ! mods.isShiftDown();
     const auto pressedLower = juce::CharacterFunctions::toLowerCase (key.getTextCharacter());
+    if (! songView && ! midiEntryActive && ctrlOnly
+        && (pressedLower == 'p' || code == 'p' || code == 'P'
+            || key.getTextCharacter() == 16))
+    { cycleStepAuditionMode(); return true; }
+    if (! songView && ! midiEntryActive && ctrlOnly
+        && code == juce::KeyPress::spaceKey)
+    { auditionStep (true); return true; }
     // Ctrl+Page Up/Down edits the BPM Division of the currently selected
     // bassline. Handle before MIDI Step Entry's key filter; never change pages.
     if (! songView && ! pickerOpen && ctrlOnly
@@ -1799,9 +1836,9 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
     }
     if (page == 5 && focusedGlobalParameter < 0 && code == juce::KeyPress::deleteKey)
     { deleteSelectedLock (false); return true; }
-    // In the step editor Ctrl+Tab is intentionally unassigned, as are other
-    // unhandled Ctrl combinations; the Ctrl catch-all below consumes them
-    // so focus cannot escape to REAPER or the underlying parameter grids.
+    // Same 16-step block navigation as LJuno. Never escape the overlay.
+    if (code == juce::KeyPress::tabKey && mods.isCtrlDown() && ! mods.isAltDown())
+    { focusedGlobalParameter = -1; changeBlock (mods.isShiftDown() ? -1 : 1); return true; }
     if (mods.isCtrlDown())
     {
         // Ctrl+1/Ctrl+2 select the per-step send pages without changing focus.
@@ -1848,7 +1885,7 @@ bool SequencerStepEditor::keyPressed (const juce::KeyPress& key)
         if (letter ('v')) { changeActiveRange (false, 1); return true; }
     }
     if (code == juce::KeyPress::tabKey)
-    { focusedGlobalParameter = -1; changeBlock (mods.isShiftDown() ? -1 : 1); return true; }
+    { announceStepPosition(); return true; }
     if (code == juce::KeyPress::homeKey) { changeTrack (-1); return true; }
     if (code == juce::KeyPress::endKey) { changeTrack (1); return true; }
     if (code == juce::KeyPress::returnKey)

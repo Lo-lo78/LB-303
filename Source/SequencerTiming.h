@@ -75,4 +75,29 @@ inline double duration (const SequencerState& bank, int pattern,
     // instead apply it once at the start of playback, outside this duration.
     return result;
 }
+// Exact one-pass duration of a local step audition. Uses the same Repeat,
+// random hashes and shuffle intervals as the main sequencer, but no Launch
+// offset: the first audible step must start immediately at PPQ zero.
+inline double auditionDuration (const SequencerState& bank, int pattern,
+                                std::uint32_t seed, int lane,
+                                int first, int last) noexcept
+{
+    const auto config = bank.getConfig (pattern);
+    first = juce::jlimit (0, 127, first);
+    last = juce::jlimit (first, 127, last);
+    const int length = last - first + 1;
+    const double stepBeats = 1.0 / juce::jlimit (0.03125, 64.0,
+                                       static_cast<double> (config.bpmDivision));
+    double durationBeats = 0.0;
+    std::int64_t pulseIndex = 0;
+    for (int index = 0; index < length; ++index)
+    {
+        const int repeats = count (bank.getStep (pattern, first + index), config,
+                                   seed, lane, pattern, index, 0);
+        for (int rep = 0; rep < repeats; ++rep)
+            durationBeats += interval (stepBeats, config.shuffle, pulseIndex++);
+    }
+    return durationBeats;
+}
+
 }

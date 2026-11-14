@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(LB303 VERSION 0.99.3 LANGUAGES C CXX)
+project(LB303 VERSION 0.99.5 LANGUAGES C CXX)
 
 # Same JUCE 8 and static Windows CRT policy as LJuno-116 TEST95.
 if(MSVC)
@@ -97,3 +97,11 @@ endif()
 add_executable(LB303FreeLfoTest Source/BassEngine.cpp Tests/FreeLfoHostStartTests.cpp)
 target_include_directories(LB303FreeLfoTest PRIVATE Tests/Shim Source)
 target_compile_features(LB303FreeLfoTest PRIVATE cxx_std_20)
+
+# TEST2.4.70: real SequencerPlayback with a minimal JUCE shim, one-lane
+# audition source, 3 bounded ranges and actual clock/repeat handling.
+add_executable(LB303StepAuditionTest
+    Source/SequencerPlayback.cpp Source/SequencerState.cpp
+    Tests/test270_step_preview.cpp)
+target_include_directories(LB303StepAuditionTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303StepAuditionTest PRIVATE cxx_std_20)

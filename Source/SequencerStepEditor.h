@@ -43,6 +43,7 @@ private:
     LB303AudioProcessor& processor;
     juce::Component::SafePointer<juce::Component> returnControl;
     bool opened = false;
+    bool suppressMicroPreview = false;
     bool midiEntryActive = false;
     bool midiEntrySpeak = false;
     unsigned int midiEntryGeneration = 0; // Invalidate pending speech on exit/restart.
@@ -59,6 +60,10 @@ private:
     // Sequencer enable parameters. Keys 7/8/9 never change the step page.
     int focusedGlobalParameter = -1;
     int currentStep = 0;
+    int stepAuditionMode = 0; // 0 current; 1 start to current; 2 current to end
+    void cycleStepAuditionMode();
+    void auditionStep (bool useMode);
+    void announceStepPosition();
     int valueStepIndex = 0;
     int lastStepKey = -1;
     double lastPressTime = 0.0;

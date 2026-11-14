@@ -1069,7 +1069,7 @@ Within the editor:
 - **Q W E R T Y U I / A S D F G H J K**: select one of 16 visible steps.
 - Double-press a step key to select/deselect it for multi-step edits.
 - **Tab / Shift+Tab**: move between the eight blocks of 16 steps (128 total).
-- **Home / End**: previous/next bassline editing track (Home selects Bassline 1; End selects Bassline 2). Silent at boundaries. Ctrl+Tab has no action inside the step editor; outside it still switches the three parameter grids.
+- **Home / End**: previous/next bassline editing track (Home selects Bassline 1; End selects Bassline 2). Silent at boundaries. Ctrl+Tab navigates the 16-step blocks inside the step editor; outside it still switches the three parameter grids.
 - **Ctrl+Up / Ctrl+Down**: next/previous pattern (1–16) for the **currently edited bassline only**; the other pattern stays unchanged. The new selection is announced to NVDA/OSARA and updates the corresponding host-automatable VST3 parameter.
 - **Up/Down**: edit step; **Left/Right**: increment width 1,5,10,...40;
   **PageUp/PageDown**: move by chosen increment.
@@ -1481,3 +1481,11 @@ pattern values, transport selection and saving are unchanged.
 ## TEST2.4.66 – Alt+Q track BPM Division shortcut
 
 Inside Alt+Q Steps, Ctrl+Page Up/Down changes the current track’s existing BPM Division in 0.0625 increments. NVDA announces the track and value. Available for the two LB-303 basslines or the three LJuno layers; also works during Ctrl+K MIDI Step Entry. REAPER’s master tempo remains unchanged.
+
+## LB-303 0.99.5 — TEST2.4.70 step micro-preview (14 November 2026)
+
+- **Alt+Q Steps:** editing a step (Note, Length, Velocity, Repeat, Shift, Parameter Locks, Delay/Reverb Sends) automatically auditions only the **current step on the selected Bassline**, while transport is stopped. No restart from page, track, pattern or cursor navigation.
+- **Ctrl+Space:** manual preview at any time in Alt+Q Steps, regardless of the ordinary Space routing selected by Alt+P. Not active during DAW playback, full sequencer preview or MIDI Step Entry.
+- **Ctrl+P:** cycles **Current step** (default), **Start to current**, **Current to end**. This option applies to Ctrl+Space. Automatic editing preview always auditions the current step.
+- **Tab:** announces the selected Bassline, Pattern and Step. **Ctrl+Tab / Ctrl+Shift+Tab:** next/previous block of 16 steps, bounded by Start/End. MIDI Step Entry retains its own historic Tab movement.
+- The chosen Bassline uses the real PPQ clock, Repeat, Shift, Velocity, Length 101 and Parameter Locks; the other Bassline is muted for this micro-audition. One-pass timing stops at the requested boundary. Existing Song, Pattern, presets, hardware MIDI, and Alt+P behaviour remain unchanged.

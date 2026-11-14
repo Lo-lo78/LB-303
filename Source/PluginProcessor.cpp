@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginProcessor.h"
+#include "SequencerTiming.h"
 #include "PluginEditor.h"
 #include <algorithm>
 #include <cmath>
@@ -169,6 +170,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     juce::ScopedNoDenormals noDenormals;
     if (resetRuntimeRequested.exchange (false, std::memory_order_acq_rel))
     {
+        stepAuditionCommand.store (0, std::memory_order_release);
+        stepAuditionActive = false;
+        stepAuditionLane = -1;
         // Clear running notes and all FX tails on the audio thread, avoiding
         // concurrent writes into the synthesizer's non-atomic DSP state.
         for (auto& engine : engines) engine.reset();
@@ -213,9 +217,45 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         hostPlaybackStarted = playing && ! previousHostPlaying;
         previousHostPlaying = playing;
     }
+    hostPlaying.store (playing, std::memory_order_release);
     if (! std::isfinite (bpm) || bpm <= 0.0) bpm = 120.0;
     if (! std::isfinite (ppq)) ppq = 0.0;
-    const bool activePreview = previewEnabled.load (std::memory_order_relaxed);
+    const bool fullPreview = previewEnabled.load (std::memory_order_relaxed);
+    if (playing || fullPreview)
+    {
+        stepAuditionActive = false; // Never interfere with live/normal playback.
+        stepAuditionLane = -1;
+    }
+    if (const int command = stepAuditionCommand.exchange (0, std::memory_order_acq_rel);
+        command != 0 && ! playing && ! fullPreview)
+    {
+        stepAuditionLane = lb303::unpackStepAuditionLane (command);
+        stepAuditionPattern = lb303::unpackStepAuditionPattern (command);
+        const auto config = sequenceBanks[static_cast<size_t> (stepAuditionLane)]
+            .getConfig (stepAuditionPattern);
+        auto request = lb303::unpackStepAuditionRange (command);
+        const int first = juce::jlimit (0, 127, config.startStep - 1);
+        const int last = juce::jlimit (first, 127, config.endStep - 1);
+        stepAuditionRange = { juce::jlimit (first, last, request.first),
+                              juce::jlimit (first, last, request.last) };
+        stepAuditionRange.last = juce::jmax (stepAuditionRange.first, stepAuditionRange.last);
+        const auto previewSeed = sequencerPlayback.getRandomSeed();
+        sequencerPlayback.reset();
+        sequencerPlayback.setRandomSeed (previewSeed);
+        previousPreview = true; // Already reset; avoid a second reset below.
+        for (auto& engine : engines) engine.releaseNote();
+        sharedFx.clearTails(); // Isolate selected step from previous wet tails.
+        activeLockStep = { -1, -1 };
+        activeLockPattern = { -1, -1 };
+        previousLockSongEntry = { -9, -9 };
+        previewPpq = previewOriginPpq = 0.0;
+        stepAuditionDuration = lb303::sequencerTiming::auditionDuration (
+            sequenceBanks[static_cast<size_t> (stepAuditionLane)], stepAuditionPattern,
+            sequencerPlayback.getRandomSeed(), stepAuditionLane,
+            stepAuditionRange.first, stepAuditionRange.last);
+        stepAuditionActive = stepAuditionDuration > 0.0;
+    }
+    const bool activePreview = fullPreview || stepAuditionActive;
     const auto restartEpoch = previewRestartEpoch.load (std::memory_order_acquire);
     if (activePreview && (! previousPreview || consumedPreviewRestartEpoch != restartEpoch))
     {
@@ -236,9 +276,11 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
     const auto songColumns = std::array<lb303::SongArrangement::Snapshot, 2> {{
         songs.column (0), songs.column (1)
     }};
-    const bool useSong = songs.songMode();
-    const int audition = activePreview ? auditionLane.load (std::memory_order_acquire) : -1;
-    const int auditionPat = auditionPattern.load (std::memory_order_acquire);
+    const bool useSong = songs.songMode() && ! stepAuditionActive;
+    const int audition = stepAuditionActive ? stepAuditionLane
+        : activePreview ? auditionLane.load (std::memory_order_acquire) : -1;
+    const int auditionPat = stepAuditionActive ? stepAuditionPattern
+        : auditionPattern.load (std::memory_order_acquire);
     std::array<int, 2> playingPatterns {{ currentPattern (0), currentPattern (1) }};
     const int count = audio.getNumSamples();
     const double beatsPerSample = bpm / (60.0 * sampleRateHz);
@@ -333,7 +375,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                 {
                     audible[static_cast<size_t> (lane)] = lane == audition;
                     if (lane == audition) patterns[static_cast<size_t> (lane)] = auditionPat;
-                    entries[static_cast<size_t> (lane)] = -2;
+                    // Nonnegative entry marks a one-pass Song-like audition.
+                    // Ordinary Alt+Shift+M pattern audition still loops.
+                    entries[static_cast<size_t> (lane)] = stepAuditionActive ? 0 : -2;
                 }
                 else if (useSong && audible[static_cast<size_t> (lane)])
                 {
@@ -377,7 +421,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                 patterns, entries, audible, laneOrigins, transposes,
                 playing || activePreview || audible[0] || audible[1],
                 nowPpq, bpm, sampleRateHz, segmentLength,
-                stepEvents, stepEventCount, cursor);
+                stepEvents, stepEventCount, cursor,
+                stepAuditionActive ? &stepAuditionRange : nullptr);
             engineMidi.addEvents (generated, 0, segmentLength, cursor);
             for (const auto event : generated)
             {
@@ -480,6 +525,35 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             midi.addEvent (message, offset);
     }
     generateSegment (previousSample, count);
+    // Stop a one-shot at its exact beat boundary, even for Length 101 ties.
+    // The renderer will process the generated Note Off at the correct sample;
+    // FX tails are allowed to decay naturally afterwards.
+    if (stepAuditionActive && nextPpq >= stepAuditionDuration)
+    {
+        const int stopSample = juce::jlimit (0, count - 1,
+            static_cast<int> (std::ceil ((stepAuditionDuration - ppq) / beatsPerSample)));
+        juce::MidiBuffer stopNotes;
+        std::array<bool, 2> nothing {{ false, false }};
+        std::array<double, 2> origins {{ 0.0, 0.0 }};
+        std::array<int, 2> transposes {{ 0, 0 }};
+        sequencerPlayback.generate (stopNotes, sequenceBanks,
+            playingPatterns, std::array<std::int64_t, 2> {{ -1, -1 }},
+            nothing, origins, transposes, false,
+            ppq + stopSample * beatsPerSample, bpm, sampleRateHz, 1,
+            stepEvents, stepEventCount, stopSample);
+        engineMidi.addEvents (stopNotes, 0, 1, stopSample);
+        for (const auto event : stopNotes)
+        {
+            const int lane = event.getMessage().getChannel() - 1;
+            if (lane < 0 || lane >= 2) continue;
+            auto message = event.getMessage();
+            message.setChannel (inputChannels[static_cast<size_t> (lane)] == 0 ? lane + 1
+                : inputChannels[static_cast<size_t> (lane)]);
+            midi.addEvent (message, stopSample);
+        }
+        stepAuditionActive = false;
+        stepAuditionLane = -1;
+    }
 
     // Each voice takes its host-automated parameter baseline, then overlays
     // ONLY the locks of the current sequencer step. No APVTS parameter writes:

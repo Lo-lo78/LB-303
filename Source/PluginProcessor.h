@@ -6,6 +6,7 @@
 #include "Oversampling.h"
 #include "SequencerState.h"
 #include "SequencerPlayback.h"
+#include "SequencerStepAudition.h"
 #include "SongArrangement.h"
 #include "PresetManager.h"
 #include "MidiStepEntryQueue.h"
@@ -65,6 +66,15 @@ public:
     { auditionLane.store (-1, std::memory_order_release); }
     int songAuditionLane() const noexcept { return auditionLane.load (std::memory_order_acquire); }
     bool isPreviewPlaying() const noexcept { return previewEnabled.load (std::memory_order_acquire); }
+    bool isHostTransportPlaying() const noexcept { return hostPlaying.load (std::memory_order_relaxed); }
+    // Independent of Alt+P. Local one-lane step audition is not global preview.
+    void requestSequencerStepAudition (int lane, int pattern,
+                                       lb303::StepAuditionRange range) noexcept
+    {
+        if (isPreviewPlaying() || isHostTransportPlaying()) return;
+        stepAuditionCommand.store (lb303::packStepAudition (lane, pattern, range),
+                                   std::memory_order_release);
+    }
     void restartSongPreviewClock() noexcept
     { previewRestartEpoch.fetch_add (1, std::memory_order_release); }
     float value (size_t index) const;
@@ -142,6 +152,14 @@ private:
     std::array<bool, lb303::basslineCount> previousSequencerOn {};
     std::array<int, lb303::basslineCount> previousMidiChannel {{ 1, 2 }};
     std::atomic<bool> previewEnabled { false };
+    std::atomic<bool> hostPlaying { false };
+    std::atomic<int> stepAuditionCommand { 0 };
+    // Audio-thread owned micro-audition, never written directly from the GUI.
+    bool stepAuditionActive = false;
+    int stepAuditionLane = -1;
+    int stepAuditionPattern = 0;
+    lb303::StepAuditionRange stepAuditionRange { 0, 0 };
+    double stepAuditionDuration = 0.0;
     std::atomic<int> auditionLane { -1 };
     std::atomic<int> auditionPattern { 0 };
     std::atomic<unsigned int> previewRestartEpoch { 0 };

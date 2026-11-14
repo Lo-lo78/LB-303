@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 #include "SequencerState.h"
+#include "SequencerStepAudition.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <array>
 
@@ -31,7 +32,8 @@ public:
                    const std::array<int, 2>& keyboardTransposes,
                    bool playing, double ppq, double bpm, double sampleRate, int samples,
                    std::array<StepEvent, maximumStepEvents>& stepEvents,
-                   int& stepEventCount, int blockOffset);
+                   int& stepEventCount, int blockOffset,
+                   const StepAuditionRange* localAuditionRange = nullptr);
 private:
     // LJuno-inspired xorshift32, hashed by musical onset and Song occurrence.
     // Never advance RNG based on audio buffer size: song loops change the
