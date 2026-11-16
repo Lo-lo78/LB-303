@@ -52,6 +52,20 @@ private:
     // keep their exact gate deadline here, so callbacks and pattern wraps
     // do not determine how long a note sounds.
     std::array<double, 2> pendingNoteOffPpq {{ -1.0, -1.0 }};
+    // Audio-thread-only Repeat Random seek cursors. Pattern edits, tempo,
+    // transpose origin and transport jumps invalidate the cached cycle.
+    struct RandomRepeatCursor
+    {
+        bool valid = false;
+        int pattern = -1;
+        std::uint64_t bankRevision = 0;
+        double origin = 0.0;
+        double bpm = 0.0;
+        std::uint32_t seed = 0;
+        std::int64_t cycle = 0;
+        double beat = 0.0;
+    };
+    std::array<RandomRepeatCursor, 2> randomRepeatCursors {};
     double previousPpq = -1.0;
     bool previousPlaying = false;
 };

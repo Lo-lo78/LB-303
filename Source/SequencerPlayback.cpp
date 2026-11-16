@@ -28,6 +28,7 @@ void SequencerPlayback::reset() noexcept
     pendingNoteOffPpq = { -1.0, -1.0 };
     previousPpq = -1.0;
     previousPlaying = false;
+    randomRepeatCursors = {};
 }
 
 void SequencerPlayback::generate (juce::MidiBuffer& output,
@@ -152,6 +153,27 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
         std::int64_t firstCycle = 0;
         double cycleBeat = baseTime;
         const bool randomRepeats = config.repeatRandomDepth > 0.0f;
+        auto& randomCursor = randomRepeatCursors[static_cast<size_t> (lane)];
+        if (! songEntry && randomRepeats)
+        {
+            const auto revision = bank.getRevision();
+            const bool reusable = randomCursor.valid
+                && randomCursor.pattern == pattern
+                && randomCursor.bankRevision == revision
+                && randomCursor.seed == randomSeed
+                && randomCursor.bpm == bpm
+                && randomCursor.origin == triggerOrigins[static_cast<size_t> (lane)]
+                && randomCursor.beat <= lanePpq + stepBeats * 3.0;
+            if (reusable)
+            {
+                firstCycle = randomCursor.cycle;
+                cycleBeat = randomCursor.beat;
+            }
+            else
+            {
+                randomCursor = {};
+            }
+        }
         if (! songEntry && ! randomRepeats)
         {
             const double cycleLength = sequencerTiming::duration (
@@ -179,6 +201,20 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
             {
                 cycleBeat += cycleLength;
                 continue;
+            }
+            // This is the earliest pass that can still affect this audio
+            // segment. Next callback starts HERE, not at cycle zero. Include
+            // overlap/negative Shift from this pass exactly as before.
+            if (randomRepeats && ! songEntry && cycleBeat <= lanePpq)
+            {
+                randomCursor.valid = true;
+                randomCursor.pattern = pattern;
+                randomCursor.bankRevision = bank.getRevision();
+                randomCursor.seed = randomSeed;
+                randomCursor.origin = triggerOrigins[static_cast<size_t> (lane)];
+                randomCursor.bpm = bpm;
+                randomCursor.cycle = cycle;
+                randomCursor.beat = cycleBeat;
             }
             double pulseBeat = cycleBeat;
             std::int64_t pulseIndex = 0;
@@ -243,9 +279,13 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                         gaussian += random (0x23ab4e21u ^ repeatSalt
                             ^ (static_cast<std::uint32_t> (n) * 0x9e3779b9u)) - 0.5f;
                     gaussian = juce::jlimit (-1.0f, 1.0f, gaussian / 3.0f);
-                    const int velocity = juce::jlimit (1, 127, juce::roundToInt (
-                        step.velocity + gaussian * 48.0f
-                        * juce::jlimit (0.0f, 1.0f, config.velocityRandomDepth)));
+                    // 127 is the explicit maximum/accent selected with Enter
+                    // on Alt+Q page 3. Random velocity must never silently
+                    // turn that deliberately accented step into a non-accent.
+                    const int velocity = step.velocity == 127 ? 127
+                        : juce::jlimit (1, 127, juce::roundToInt (
+                            step.velocity + gaussian * 48.0f
+                            * juce::jlimit (0.0f, 1.0f, config.velocityRandomDepth)));
                     const bool tie = step.length == 101
                         || (config.legato && step.length >= 100);
                     double lengthFactor = tie ? 1.0
@@ -278,8 +318,20 @@ void SequencerPlayback::generate (juce::MidiBuffer& output,
                         releaseAt (onPpq);
                         emitNote (true, note, velocity, onPpq);
                     }
-                    // If the pitch is unchanged and no gate is pending, the
-                    // previous Length 101 is still open: never retrigger it.
+                    else
+                    {
+                        // A same-pitch Length 101 tie is ONE MIDI note, but
+                        // its NEXT step has its own velocity/accent. Forward
+                        // that change only to the internal synth via poly
+                        // aftertouch; the host still sees a single held note.
+                        // In particular, an accented step must re-excite the
+                        // accent envelope without restarting the AHDSR gate.
+                        const int sample = juce::jlimit (0, samples - 1,
+                            static_cast<int> (std::floor ((onPpq - lanePpq)
+                                                         / beatsPerSample + 0.5)));
+                        output.addEvent (juce::MidiMessage::aftertouchChange (
+                            lane + 1, note, velocity), sample);
+                    }
                     lastNote[lane] = note;
                     lastSourceNote[lane] = step.note;
                     pendingNoteOffPpq[lane] = tie ? -1.0

@@ -55,3 +55,14 @@ if (-not (Test-Path -LiteralPath $holdTest)) {
 & $holdTest
 if ($LASTEXITCODE -ne 0) { throw "AHDSR Hold test failed: $LASTEXITCODE" }
 Write-Host "PASS: LB-303 independent AHDSR Hold envelopes"
+
+# TEST2.4.76: fail the GitHub build if timing, notes, velocity memory,
+# tied accent or missing Note Off recovery ever regress.
+foreach ($name in @('LB303SequencerResilienceTest', 'LB303TiedAccentTest',
+                    'LB303MidiStepRecoveryTest', 'LB303VelocityStateTest')) {
+    $test = Join-Path $build ($name + '.exe')
+    if (-not (Test-Path -LiteralPath $test)) { throw "Required regression test missing: $test" }
+    & $test
+    if ($LASTEXITCODE -ne 0) { throw "Regression test failed: $name ($LASTEXITCODE)" }
+    Write-Host "PASS: $name"
+}

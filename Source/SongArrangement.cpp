@@ -94,7 +94,8 @@ bool SongArrangement::restore (const juce::String& text)
     return true;
 }
 SongArrangement::Position SongArrangement::locate (const Column& column, bool repeat,
-    const SequencerState& bank, double beats, int lane, std::uint32_t seed, double bpm) noexcept
+    const SequencerState& bank, double beats, int lane, std::uint32_t seed, double bpm,
+    const Position* validatedHint) noexcept
 {
     Position result;
     if (column.empty() || ! std::isfinite (beats) || beats < 0.0) return result;
@@ -115,6 +116,24 @@ SongArrangement::Position SongArrangement::locate (const Column& column, bool re
     // Fast seek for patterns with fixed Repeat counts (the common case):
     // even very long looping playback is O(number of Song rows), not O(loops).
     double cursor = 0.0;
+    size_t firstRow = 0;
+    // A validated previous row gives the exact absolute Song entry key for
+    // the next row. This avoids re-walking the ENTIRE Song on every boundary
+    // when Repeat Random makes durations variable.
+    if (variable && validatedHint != nullptr && validatedHint->active
+        && validatedHint->row >= 0
+        && static_cast<size_t> (validatedHint->row) < column.size()
+        && column[static_cast<size_t> (validatedHint->row)] == validatedHint->pattern
+        && beats >= validatedHint->endBeat)
+    {
+        cursor = validatedHint->endBeat;
+        firstRow = static_cast<size_t> (validatedHint->row) + 1;
+        if (firstRow >= column.size())
+        {
+            if (! repeat) return result;
+            firstRow = 0;
+        }
+    }
     if (repeat && ! variable)
     {
         double cycle = 0.0;
@@ -127,7 +146,8 @@ SongArrangement::Position SongArrangement::locate (const Column& column, bool re
     // infer them from buffer length or a fixed pattern-step count).
     for (std::int64_t songLoop = 0; songLoop < 65536; ++songLoop)
     {
-        for (size_t index = 0; index < column.size(); ++index)
+        for (size_t index = (songLoop == 0 ? firstRow : 0);
+             index < column.size(); ++index)
         {
             const int p = column[index];
             const auto c = bank.getConfig (p);

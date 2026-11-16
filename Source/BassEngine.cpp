@@ -381,6 +381,20 @@ void BassEngine::midi (const juce::MidiMessage& message)
         delayL.clear(); delayR.clear();
         return;
     }
+    if (message.isAftertouch())
+    {
+        // Internal sequencer event: refresh the accent on a tied note
+        // without cutting its gate or restarting the AHDSR envelope.
+        if (noteActive && message.getNoteNumber() == lastNote)
+        {
+            const auto velocity = juce::jlimit (0, 127, message.getAfterTouchValue());
+            velNorm = std::pow (velocity / 127.0, 0.6);
+            updateLpgCoefficient();
+            accent = velocity >= p[15];
+            accentEnvelope = accent ? 1.0 : 0.0;
+        }
+        return;
+    }
     if (message.isNoteOn())
     {
         if (lfoParameters[lb303::lfo::mode] >= .5f || lfoParameters[lb303::lfo::oneShot] >= .5f)

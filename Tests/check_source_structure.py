@@ -983,7 +983,7 @@ assert 'sequencerTiming::count (' in playback
 assert 'double stepBeats' in timing and 'config.shuffle' in playback
 assert 'stepBeats / repeats' not in playback and 'repeat * repeatBeats' not in playback
 assert 'sequencerTiming::duration (' in song_cpp
-assert 'sequencerPlayback.getRandomSeed(), bpm' in processor
+assert 'sequencerPlayback.getRandomSeed(), bpm' in processor or 'randomSeed, bpm, hint' in processor
 assert 'double beats, int lane, std::uint32_t seed, double bpm' in song_h
 print('PASS: TEST2.4.23 repeat pulses at pattern BPM/Shuffle, correct Song durations, global Alt+M.')
 

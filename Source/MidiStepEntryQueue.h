@@ -15,6 +15,7 @@ public:
     {
         // A previous session is always stopped before this is called.
         reading.store (writing.load (std::memory_order_acquire), std::memory_order_release);
+        sessionEpoch.fetch_add (1, std::memory_order_release);
         enabled.store (true, std::memory_order_release);
     }
     void finish() noexcept { enabled.store (false, std::memory_order_release); }
@@ -25,6 +26,17 @@ public:
     bool consume (const juce::MidiMessage& message) noexcept
     {
         if (! message.isNoteOnOrOff()) return false;
+        // A prior Ctrl+K session may end before every physical Note Off
+        // arrives (disconnects, auto-stop, lost MIDI off). All held-note
+        // bookkeeping is owned by this audio thread, so reset it here on
+        // the first event of the NEXT session, never on the GUI thread.
+        const unsigned epoch = sessionEpoch.load (std::memory_order_acquire);
+        if (epoch != consumedSessionEpoch)
+        {
+            for (auto& channelNotes : heldNotes) channelNotes.fill (false);
+            heldCount = 0;
+            consumedSessionEpoch = epoch;
+        }
         const int channel = message.getChannel() - 1;
         const int pitch = message.getNoteNumber();
         if (channel < 0 || channel >= 16 || pitch < 0 || pitch >= 128)
@@ -73,7 +85,9 @@ private:
     std::array<Note, capacity> notes {};
     std::atomic<unsigned> writing { 0 }, reading { 0 };
     std::atomic<bool> enabled { false };
+    std::atomic<unsigned> sessionEpoch { 0 };
     // These are accessed only on the audio thread.
+    unsigned consumedSessionEpoch = 0;
     std::array<std::array<bool, 128>, 16> heldNotes {};
     int heldCount = 0;
 };

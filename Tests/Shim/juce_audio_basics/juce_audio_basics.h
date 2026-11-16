@@ -9,10 +9,15 @@ using uint8 = std::uint8_t;
 template <typename T> T jmax(T a,T b) {return std::max(a,b);}
 struct MidiMessage {
  bool on = false; int channel=1, note=0, velocity=0;
- static MidiMessage noteOn(int ch,int n,uint8 vel) {return {true,ch,n,vel};}
- static MidiMessage noteOff(int ch,int n) {return {false,ch,n,0};}
+ bool aftertouch = false;
+ static MidiMessage noteOn(int ch,int n,uint8 vel) {return {true,ch,n,vel,false};}
+ static MidiMessage noteOff(int ch,int n) {return {false,ch,n,0,false};}
+ static MidiMessage aftertouchChange(int ch,int n,int vel) {return {false,ch,n,vel,true};}
  bool isNoteOn() const {return on;}
- bool isNoteOff() const {return !on;}
+ bool isNoteOff() const {return !on && !aftertouch;}
+ bool isAftertouch() const {return aftertouch;}
+ bool isNoteOnOrOff() const {return isNoteOn() || isNoteOff();}
+ int getVelocity() const {return velocity;}
  int getNoteNumber() const {return note;}
  int getChannel() const {return channel;}
 };

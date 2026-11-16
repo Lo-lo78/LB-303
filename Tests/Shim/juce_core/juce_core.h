@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 namespace juce {
+using int64 = std::int64_t;
 template<typename T> T jlimit(T lo, T hi, T v) { return std::clamp(v, lo, hi); }
 template<typename T> int roundToInt(T v) { return static_cast<int>(std::round(v)); }
 template<typename T> bool isPositiveAndBelow(T index, T upper) { return index >= 0 && index < upper; }
@@ -37,6 +38,7 @@ struct MemoryOutputStream {
 struct MemoryInputStream {
  const unsigned char* bytes; size_t len, pos=0;
  MemoryInputStream(const void* d, size_t n, bool):bytes(static_cast<const unsigned char*>(d)),len(n){}
+ int64 getNumBytesRemaining() const { return static_cast<int64>(len-pos); }
  char readByte(){return pos<len?static_cast<char>(bytes[pos++]):0;}
  int readInt(){uint32_t v=0;for(int i=0;i<4;++i) v|=static_cast<uint32_t>(static_cast<unsigned char>(readByte()))<<(8*i);return static_cast<int>(v);}
  float readFloat(){auto raw=static_cast<uint32_t>(readInt()); float f=0; std::memcpy(&f,&raw,4);return f;}

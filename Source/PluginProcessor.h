@@ -141,6 +141,17 @@ private:
     std::array<int, lb303::basslineCount> activeLockPattern {{ -1, -1 }};
     // Detect new Song rows even when two consecutive rows both reference P1.
     std::array<std::int64_t, lb303::basslineCount> previousLockSongEntry {{ -9, -9 }};
+    // Locator cache remains on the audio thread. Long Repeat Random Songs
+    // must not rescan every elapsed row on every 64/128/256-sample callback.
+    struct SongLocatorCache
+    {
+        lb303::SongArrangement::Position position {};
+        std::uint64_t songRevision = 0, bankRevision = 0;
+        std::uint32_t randomSeed = 0;
+        double bpm = 0.0;
+        bool valid = false;
+    };
+    std::array<SongLocatorCache, lb303::basslineCount> songLocatorCaches {};
     double sampleRateHz = 44100.0;
     double fallbackPpq = 0.0;
     double previewPpq = 0.0;

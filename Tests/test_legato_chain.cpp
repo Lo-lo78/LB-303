@@ -22,8 +22,10 @@ int main() {
    int count=0;
    player.generate(midi,banks,{{0,0}},{{-1,-1}},{{true,false}},{{0,0}},{{0,0}},true,
       block*.25,120,1000,125,stepEvents,count,0);
-   for(const auto& e:midi) events.push_back({block*125+e.samplePosition,
-      e.message.note,e.message.on,e.message.channel});
+   for(const auto& e:midi)
+      if (!e.message.isAftertouch())
+        events.push_back({block*125+e.samplePosition,
+          e.message.note,e.message.on,e.message.channel});
   }
   return events;
  };

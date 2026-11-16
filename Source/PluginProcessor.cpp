@@ -502,8 +502,8 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             activePreview ? previewOriginPpq : triggerOriginPpq[1]
         }};
         const std::array<int, 2> transposes {{
-            activePreview ? lastKeyboardNote[0] - 60 : keyboardTranspose[0],
-            activePreview ? lastKeyboardNote[1] - 60 : keyboardTranspose[1]
+            stepAuditionActive ? 0 : (activePreview ? lastKeyboardNote[0] - 60 : keyboardTranspose[0]),
+            stepAuditionActive ? 0 : (activePreview ? lastKeyboardNote[1] - 60 : keyboardTranspose[1])
         }};
         // Audio always reads the performance controls belonging to the actual
         // pattern being played, not the editing-knob values of another pattern.
@@ -535,10 +535,30 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
                 else if (useSong && audible[static_cast<size_t> (lane)])
                 {
                     const double localBeat = nowPpq - origins[static_cast<size_t> (lane)];
-                    const auto pos = lb303::SongArrangement::locate (
-                        *songColumns[static_cast<size_t> (lane)], songs.loop (lane),
-                        sequenceBanks[static_cast<size_t> (lane)], localBeat, lane,
-                        sequencerPlayback.getRandomSeed(), bpm);
+                    auto& songCache = songLocatorCaches[static_cast<size_t> (lane)];
+                    const auto songRevision = songs.getRevision();
+                    const auto bankRevision = sequenceBanks[static_cast<size_t> (lane)].getRevision();
+                    const auto randomSeed = sequencerPlayback.getRandomSeed();
+                    const bool canUseCache = songCache.valid
+                        && songCache.songRevision == songRevision
+                        && songCache.bankRevision == bankRevision
+                        && songCache.randomSeed == randomSeed
+                        && songCache.bpm == bpm;
+                    const auto* hint = canUseCache && songCache.position.active
+                        ? &songCache.position : nullptr;
+                    const auto pos = hint != nullptr && localBeat >= hint->startBeat
+                                     && localBeat < hint->endBeat
+                        ? *hint
+                        : lb303::SongArrangement::locate (
+                            *songColumns[static_cast<size_t> (lane)], songs.loop (lane),
+                            sequenceBanks[static_cast<size_t> (lane)], localBeat, lane,
+                            randomSeed, bpm, hint);
+                    songCache.position = pos;
+                    songCache.songRevision = songRevision;
+                    songCache.bankRevision = bankRevision;
+                    songCache.randomSeed = randomSeed;
+                    songCache.bpm = bpm;
+                    songCache.valid = true;
                     if (! pos.active)
                     {
                         audible[static_cast<size_t> (lane)] = false;
@@ -579,6 +599,9 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
             engineMidi.addEvents (generated, 0, segmentLength, cursor);
             for (const auto event : generated)
             {
+                // Poly aftertouch above is an INTERNAL tied-step accent
+                // command. Do not leak it into REAPER's MIDI output.
+                if (event.getMessage().isAftertouch()) continue;
                 const int lane = event.getMessage().getChannel() - 1;
                 if (lane < 0 || lane >= 2) continue;
                 const int outputChannel = inputChannels[static_cast<size_t> (lane)] == 0

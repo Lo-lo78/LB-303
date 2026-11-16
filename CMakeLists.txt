@@ -126,3 +126,26 @@ target_compile_features(LB303StepPreviewFxIsolationTest PRIVATE cxx_std_20)
 add_executable(LB303HoldEnvelopeTest Source/BassEngine.cpp Tests/HoldEnvelopeTests.cpp)
 target_include_directories(LB303HoldEnvelopeTest PRIVATE Tests/Shim Source)
 target_compile_features(LB303HoldEnvelopeTest PRIVATE cxx_std_20)
+
+# TEST2.4.76: regression for Repeat Random performance stability,
+# exact Song seek hints, accented Length-101 ties, MIDI entry recovery,
+# and project serialization of each step's Note/Length/Velocity memory.
+add_executable(LB303SequencerResilienceTest
+    Source/SequencerPlayback.cpp Source/SequencerState.cpp
+    Source/SongArrangement.cpp Tests/SequencerResilienceTests.cpp)
+target_include_directories(LB303SequencerResilienceTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303SequencerResilienceTest PRIVATE cxx_std_20)
+
+add_executable(LB303TiedAccentTest
+    Source/BassEngine.cpp Tests/TiedAccentEngineTests.cpp)
+target_include_directories(LB303TiedAccentTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303TiedAccentTest PRIVATE cxx_std_20)
+
+add_executable(LB303MidiStepRecoveryTest Tests/MidiStepEntryRecoveryTests.cpp)
+target_include_directories(LB303MidiStepRecoveryTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303MidiStepRecoveryTest PRIVATE cxx_std_20)
+
+add_executable(LB303VelocityStateTest
+    Source/SequencerState.cpp Tests/test_velocity_toggle_state.cpp)
+target_include_directories(LB303VelocityStateTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303VelocityStateTest PRIVATE cxx_std_20)

@@ -10,14 +10,17 @@ template<typename T> int roundToInt(T x) { return static_cast<int>(std::round(x)
 template<typename T> T jlimit(T lo, T hi, T value) { return std::clamp(value,lo,hi); }
 class MidiMessage {
 public:
- enum Kind { On, Off, Controller, Invalid };
+ enum Kind { On, Off, Controller, Aftertouch, Invalid };
  static MidiMessage noteOn(int n,int v) { return {On,n,v}; }
  static MidiMessage noteOff(int n) { return {Off,n,0}; }
+ static MidiMessage aftertouchChange(int n,int v) { return {Aftertouch,n,v}; }
  static MidiMessage controllerEvent(int n) { return {Controller,n,0}; }
  bool isController() const { return kind==Controller; }
  int getControllerNumber() const { return note; }
  bool isNoteOn() const { return kind==On; }
  bool isNoteOff() const { return kind==Off; }
+ bool isAftertouch() const { return kind==Aftertouch; }
+ int getAfterTouchValue() const { return value; }
  int getNoteNumber() const { return note; }
  int getVelocity() const { return value; }
 private:
