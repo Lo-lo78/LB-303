@@ -1,3 +1,12 @@
+# LB-303 — TEST2.4.77 (GitHub Actions Release fix)
+
+**Sorgente di test TEST2.4.77**, basato sulla versione pubblica 0.99.6.
+Risolve il crash del test della velocity in Release e i controlli Python in Windows CI.
+Il motore audio e le correzioni del sequencer introdotte nella TEST2.4.76 sono invariati.
+Dettagli in `Doc/TEST2.4.77_CI_RELEASE_FIX.md`.
+
+---
+
 # LB-303 0.99.6 — Release 16 novembre 2026
 
 La versione ufficiale **0.99.6** pubblica le modifiche delle **TEST2.4.74** e

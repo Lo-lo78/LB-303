@@ -1,0 +1,4 @@
+LB-303 TEST2.4.77 — GitHub Actions CI fix
+Public version: 0.99.6
+Audio engine unchanged vs TEST2.4.76
+See Doc/TEST2.4.77_CI_RELEASE_FIX.md

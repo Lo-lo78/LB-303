@@ -14,6 +14,9 @@ jobs:
       - name: Check source regressions
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:PYTHONUTF8 = '1'
           python Tests/check_source_structure.py
           python Tests/check_toggle_memory.py
           python Tests/check_oversampling.py
