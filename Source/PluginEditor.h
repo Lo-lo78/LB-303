@@ -130,10 +130,17 @@ private:
     std::pair<int, int> fxCell (int index) const;
     int fxCellIndex (int column, int row) const;
     juce::String contextName() const;
-    void changeContext();
+    void changeContext(int direction = 1);
     void populateContext();
     void timerCallback() override;
     void refreshLabels (bool force = false);
+    juce::AudioProcessorParameter* selectedAutomationParameter() const;
+    int getHostAutomationEnvelopeState(juce::AudioProcessorParameter*) const;
+    bool toggleHostAutomationEnvelope(juce::AudioProcessorParameter*, juce::Component&);
+    bool syncAutomationIndicator(bool forceQuery = false);
+    juce::AudioProcessorParameter* observedAutomationParameter = nullptr;
+    int observedAutomationState = -1;
+    unsigned automationRefreshTicks = 0;
     void changeSelection (int index);
     void selectParameter();
     void moveInGrid (int row, int column);

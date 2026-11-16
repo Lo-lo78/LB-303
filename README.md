@@ -1,3 +1,7 @@
+## TEST2.4.74 — REAPER automation and reverse page navigation
+
+**Ctrl+Shift+A** toggles the ACTIVE status of the selected parameter envelope in REAPER (Grid, Value and Edit), preserving existing points. NVDA announces ", Auto" while active. **Ctrl+Tab** advances across Bassline 1 → Bassline 2 → Sequencer → FX; **Ctrl+Shift+Tab** goes backwards. See `Doc/TEST2.4.74_HOST_AUTOMATION_REVERSE_PAGE.md`.
+
 # LB-303 v0.99.3 — Release 9 November 2026
 
 This publication packages the current TEST2.4.68 source with updated About, seven-language Help, CMake version, and Windows x64 GitHub Actions artifact name. No changes to synthesis DSP, MIDI behavior, VST3 parameter IDs, presets, patterns, Song, controls or shortcuts are introduced by this version update.

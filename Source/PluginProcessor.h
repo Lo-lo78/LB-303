@@ -13,6 +13,9 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <memory>
+
+class LB303ReaperHostExtension;
 
 class LB303AudioProcessor final : public juce::AudioProcessor,
                                  private juce::AudioProcessorValueTreeState::Listener
@@ -39,6 +42,12 @@ public:
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
     void resetToInitialState(); // Alt+I: full synth, FX, MIDI, all 128 patterns
+
+    // REAPER VST3 API: envelope ACTIVE state, preserving existing automation points.
+    juce::VST3ClientExtensions* getVST3ClientExtensions() override;
+    bool hasReaperEnvelopeApi() const noexcept;
+    int getReaperEnvelopeActive(juce::AudioProcessorParameter*) const;
+    bool toggleReaperEnvelopeActive(juce::AudioProcessorParameter*);
 
     // Editor navigation belongs to this live processor instance, not to
     // the host project or a .lb preset. Recreating this instance starts clean.
@@ -111,6 +120,7 @@ public:
     const lb303::SequencerState& patternBank (size_t lane) const noexcept { return sequenceBanks[lane == 0 ? 0 : 1]; }
 
 private:
+    std::unique_ptr<LB303ReaperHostExtension> reaperHostExtension;
     void parameterChanged (const juce::String& parameterID, float newValue) override;
     std::atomic<bool> mirroringPerformance { false };
     std::atomic<bool> restoringPerformance { false };

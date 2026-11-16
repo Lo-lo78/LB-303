@@ -18,7 +18,7 @@ assert 'sharedFx.clearTails(); // Isolate selected step' not in processor
 assert processor.count('sharedFx.clearTails();') == 1, 'FX reset must remain only for explicit runtime reset'
 assert 'LB303DelayResetTest' in cmake and 'LB303DelayResetTest.exe' in script
 assert 'python Tests/check_test2472_delay_reset.py' in workflow
-assert 'TEST2.4.73-Windows-x64' in workflow
+assert 'TEST2.4.74-Windows-x64' in workflow
 compiler = (shutil.which('g++') or shutil.which('clang++')) if os.name != 'nt' else None
 if compiler:
     with tempfile.TemporaryDirectory(prefix='lb303_delay_reset_') as tmp:

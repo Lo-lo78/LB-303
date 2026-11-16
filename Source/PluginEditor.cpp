@@ -37,6 +37,41 @@ public:
     }
 };
 
+// Matches LSampler-24 TEST187: only real activation/deactivation actions
+// count; Show/Hide changes just the visibility of an envelope.
+enum class HostEnvelopeCommand { none, show, hide, toggle, activate, deactivate };
+HostEnvelopeCommand classifyHostEnvelopeItem(const juce::String& original)
+{
+    auto label = original.toLowerCase().trim();
+    if (label.isEmpty() || label.contains("all envelope") || label.contains("all automation")
+        || label.contains("tutte") || label.contains("tutti")
+        || label.contains("write") || label.contains("record") || label.contains("learn")
+        || label.contains("mode") || label.contains("arm") || label.contains("modulation"))
+        return HostEnvelopeCommand::none;
+    label = label.replace("&", "").replace("...", "").trim();
+    const bool envelope = label.contains("envelope") || label.contains("automation lane")
+        || label.contains("automation track") || label.contains("automation for parameter")
+        || label.contains("parameter automation") || label.contains("inviluppo")
+        || label.contains("corsia di automazione") || label.contains("traccia di automazione")
+        || label.contains("pista de automatizaci") || label.contains("courbe d'automation")
+        || label.contains("automationsspur");
+    if (!envelope) return HostEnvelopeCommand::none;
+    if (label.startsWith("disable ") || label.startsWith("deactivate ") || label.startsWith("bypass ")
+        || label.startsWith("disattiva ")) return HostEnvelopeCommand::deactivate;
+    if (label.startsWith("enable ") || label.startsWith("activate ")
+        || label.startsWith("attiva ")) return HostEnvelopeCommand::activate;
+    if (label.startsWith("hide ") || label.startsWith("remove ")
+        || label.startsWith("nascondi ") || label.startsWith("ocultar ")
+        || label.startsWith("masquer ") || label.contains(" ausblenden"))
+        return HostEnvelopeCommand::hide;
+    if (label.startsWith("show ") || label.startsWith("display ")
+        || label.startsWith("mostra ") || label.startsWith("visualizza ")
+        || label.startsWith("mostrar ") || label.startsWith("afficher ")
+        || label.contains(" anzeigen")) return HostEnvelopeCommand::show;
+    if (label.startsWith("toggle ") || label.startsWith("commuta ")
+        || label.startsWith("attiva/disattiva ")) return HostEnvelopeCommand::toggle;
+    return HostEnvelopeCommand::none;
+}
 constexpr int rowsPerColumn = 8;
 constexpr int columnsFor (int count) { return (count + rowsPerColumn - 1) / rowsPerColumn; }
 constexpr int gridGap = 7;
@@ -80,14 +115,16 @@ bool LB303AudioProcessorEditor::ParameterGrid::keyPressed (const juce::KeyPress&
 
 void LB303AudioProcessorEditor::ParameterValue::setLineReadingMode()
 {
-    const auto name = juce::String (lb303::catalog()[editor.globalIndex()].name);
+    const auto name = juce::String (lb303::catalog()[editor.globalIndex()].name)
+        + (editor.observedAutomationState == 1 ? ", Auto" : "");
     setName (name);
     setTitle (name);
     setDescription (juce::String());
 }
 void LB303AudioProcessorEditor::ParameterValue::setEntryAccessibility()
 {
-    const auto name = juce::String (lb303::catalog()[editor.globalIndex()].name);
+    const auto name = juce::String (lb303::catalog()[editor.globalIndex()].name)
+        + (editor.observedAutomationState == 1 ? ", Auto" : "");
     setName ("Value. " + name);
     setTitle ("Value. " + name);
     setDescription ("Tab");
@@ -111,7 +148,9 @@ bool LB303AudioProcessorEditor::ParameterValue::keyPressed (const juce::KeyPress
 
 void LB303AudioProcessorEditor::NumericEdit::focusGained (FocusChangeType why)
 {
-    setTitle ("Edit. " + juce::String (lb303::catalog()[editor.globalIndex()].name));
+    editor.syncAutomationIndicator(true);
+    setTitle ("Edit. " + juce::String (lb303::catalog()[editor.globalIndex()].name)
+        + (editor.observedAutomationState == 1 ? ", Auto" : ""));
     setDescription ("Alt+E");
     juce::TextEditor::focusGained (why);
     editor.editDirty = true;
@@ -133,6 +172,100 @@ bool LB303AudioProcessorEditor::NumericEdit::keyPressed (const juce::KeyPress& k
         && ! editor.processor.spaceControlsSequencerPreview())
         return false;
     return editor.handleKey (k, Control::edit) || juce::TextEditor::keyPressed (k);
+}
+
+// The physical VST3 parameter is selected by the same catalog index used for
+// Grid/Value/Edit, including Bassline 1/2, Sequencer and FX. No new IDs.
+juce::AudioProcessorParameter* LB303AudioProcessorEditor::selectedAutomationParameter() const
+{
+    if (!juce::isPositiveAndBelow(selected, currentParameterCount())) return nullptr;
+    return processor.parameter(globalIndex());
+}
+
+int LB303AudioProcessorEditor::getHostAutomationEnvelopeState(juce::AudioProcessorParameter* param) const
+{
+    if (param == nullptr) return -1;
+    if (processor.hasReaperEnvelopeApi())
+        return processor.getReaperEnvelopeActive(param);
+    auto* host = getHostContext();
+    if (host == nullptr) return -1;
+    auto contextMenu = host->getContextMenuForParameter(param);
+    if (contextMenu == nullptr) return -1;
+    const auto menu = contextMenu->getEquivalentPopupMenu();
+    juce::PopupMenu::MenuItemIterator iterator(menu, true);
+    int matches = 0, state = -1;
+    while (iterator.next())
+    {
+        const auto& item = iterator.getItem();
+        if (!item.isEnabled || !item.action || item.isSeparator || item.isSectionHeader) continue;
+        const auto kind = classifyHostEnvelopeItem(item.text);
+        if (kind == HostEnvelopeCommand::none) continue;
+        if (++matches > 1) return -1;
+        if (kind == HostEnvelopeCommand::deactivate) state = 1;
+        else if (kind == HostEnvelopeCommand::activate) state = 0;
+        else state = -1;
+    }
+    return matches == 1 ? state : -1;
+}
+
+bool LB303AudioProcessorEditor::syncAutomationIndicator(bool forceQuery)
+{
+    auto* param = selectedAutomationParameter();
+    if (!forceQuery && param == observedAutomationParameter) return false;
+    const int state = getHostAutomationEnvelopeState(param);
+    if (param == observedAutomationParameter && state == observedAutomationState) return false;
+    observedAutomationParameter = param;
+    observedAutomationState = state;
+    return true;
+}
+
+bool LB303AudioProcessorEditor::toggleHostAutomationEnvelope(juce::AudioProcessorParameter* param,
+                                                               juce::Component& focused)
+{
+    if (param == nullptr) return false;
+    bool success = false;
+    if (processor.hasReaperEnvelopeApi())
+    {
+        success = processor.toggleReaperEnvelopeActive(param);
+        if (!success)
+        {
+            lb303::announceToActiveScreenReader(focused, "Automation unavailable for this FX");
+            return true; // Never fall back to Hide: an invisible lane can remain ACTIVE.
+        }
+    }
+    else
+    {
+        auto* host = getHostContext();
+        if (host == nullptr) return false;
+        auto menuContext = host->getContextMenuForParameter(param);
+        if (menuContext == nullptr) return false;
+        const auto menu = menuContext->getEquivalentPopupMenu();
+        juce::PopupMenu::MenuItemIterator iterator(menu, true);
+        std::function<void()> command;
+        int matches = 0;
+        while (iterator.next())
+        {
+            const auto& item = iterator.getItem();
+            if (!item.isEnabled || !item.action || item.isSeparator || item.isSectionHeader) continue;
+            const auto kind = classifyHostEnvelopeItem(item.text);
+            if (kind != HostEnvelopeCommand::activate && kind != HostEnvelopeCommand::deactivate) continue;
+            if (++matches > 1) break;
+            command = item.action;
+        }
+        if (matches != 1 || !command) return false;
+        command(); // Execute before menuContext is destroyed.
+        success = true;
+    }
+    if (success)
+    {
+        syncAutomationIndicator(true);
+        refreshLabels(true);
+        parameterValue.setLineReadingMode();
+        numericEdit.setTitle("Edit. " + juce::String(lb303::catalog()[globalIndex()].name)
+            + (observedAutomationState == 1 ? ", Auto" : ""));
+        lb303::announceToActiveScreenReader(focused, labelFor(selected));
+    }
+    return success;
 }
 
 LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
@@ -336,9 +469,13 @@ bool LB303AudioProcessorEditor::keyPressed (const juce::KeyPress& key)
 
     const auto mods = key.getModifiers();
     const auto code = key.getKeyCode();
-    if (! mods.isCtrlDown() || mods.isAltDown() || mods.isShiftDown()
-        || (code != juce::KeyPress::upKey && code != juce::KeyPress::downKey))
-        return false;
+    const bool parameterAutomation = mods.isCtrlDown() && mods.isShiftDown() && !mods.isAltDown()
+        && (juce::CharacterFunctions::toLowerCase(juce::juce_wchar(code)) == 'a'
+            || juce::CharacterFunctions::toLowerCase(key.getTextCharacter()) == 'a');
+    const bool pageSwitch = mods.isCtrlDown() && !mods.isAltDown() && code == juce::KeyPress::tabKey;
+    const bool patternSwitch = mods.isCtrlDown() && !mods.isAltDown() && !mods.isShiftDown()
+        && (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey);
+    if (!parameterAutomation && !pageSwitch && !patternSwitch) return false;
 
     const auto control = numericEdit.hasKeyboardFocus (true) ? Control::edit
                        : parameterValue.hasKeyboardFocus (true) ? Control::value
@@ -613,11 +750,12 @@ void LB303AudioProcessorEditor::populateContext()
     parameterGrid.setLineReadingMode();
     repaint();
 }
-void LB303AudioProcessorEditor::changeContext()
+void LB303AudioProcessorEditor::changeContext(int direction)
 {
     lastSelected[static_cast<size_t> (context)] = selected;
-    // Ctrl+Tab: Bassline 1 -> Bassline 2 -> Sequencer -> FX -> Bassline 1.
-    context = (context + 1) % static_cast<int> (lb303::basslineCount + 2);
+    // Ctrl+Tab forward, Ctrl+Shift+Tab backward, wrap across four pages.
+    const int pages = static_cast<int>(lb303::basslineCount + 2);
+    context = (context + (direction < 0 ? pages - 1 : 1)) % pages;
     populateContext();
     rememberEditorLocation();
     focusControl (Control::grid, true);
@@ -634,7 +772,9 @@ juce::String LB303AudioProcessorEditor::labelFor (int index) const
     const auto& p = lb303::catalog()[globalIndex (index)];
     return juce::String (p.name) + ", "
          + lb303::parameterText (globalIndex (index),
-                                 processor.value (globalIndex (index)));
+                                 processor.value (globalIndex (index)))
+         + ((index == selected && observedAutomationState == 1
+             && observedAutomationParameter == selectedAutomationParameter()) ? ", Auto" : "");
 }
 void LB303AudioProcessorEditor::paint (juce::Graphics& g)
 {
@@ -644,7 +784,7 @@ void LB303AudioProcessorEditor::paint (juce::Graphics& g)
     g.drawText ("LB-303", 18, 8, 190, 34, juce::Justification::centredLeft);
     g.setColour (juce::Colour (0xffb5c9e2));
     g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultSansSerifFontName(), 14.0f, juce::Font::plain)));
-    g.drawText (contextName() + " | Ctrl+Tab: Bassline 1 / Bassline 2 / Sequencer / FX", 203, 12, getWidth() - 223, 27,
+    g.drawText (contextName() + " | Ctrl+Tab / Ctrl+Shift+Tab: Bassline 1 / Bassline 2 / Sequencer / FX", 203, 12, getWidth() - 223, 27,
                 juce::Justification::centredLeft);
 
     const bool fxView = context == static_cast<int> (lb303::fxContextIndex);
@@ -749,7 +889,16 @@ void LB303AudioProcessorEditor::timerCallback()
 {
     processor.syncSelectedPatternPerformance();
     if (stepEditor != nullptr && stepEditor->isOpen()) stepEditor->refresh();
-    else { syncFxColumns(); refreshLabels(); }
+    else
+    {
+        syncFxColumns();
+        if (++automationRefreshTicks >= 8)
+        {
+            automationRefreshTicks = 0;
+            syncAutomationIndicator(true);
+        }
+        refreshLabels();
+    }
 }
 void LB303AudioProcessorEditor::refreshLabels (bool force)
 {
@@ -791,6 +940,7 @@ void LB303AudioProcessorEditor::selectParameter()
         rememberedFxColumn = fxCell (chosen).first;
     }
     rememberEditorLocation();
+    syncAutomationIndicator(true);
     changingParameter = true;
     valueAttachment.reset();
     const auto& p = lb303::catalog()[globalIndex()];
@@ -799,7 +949,8 @@ void LB303AudioProcessorEditor::selectParameter()
     parameterValue.setRange (p.minimum, p.maximum, p.step);
     parameterValue.setValue (processor.value (globalIndex()), juce::dontSendNotification);
     parameterValue.setLineReadingMode();
-    numericEdit.setTitle ("Edit. " + juce::String (p.name));
+    numericEdit.setTitle ("Edit. " + juce::String (p.name)
+        + (observedAutomationState == 1 ? ", Auto" : ""));
     numericEdit.setText (lb303::parameterText (globalIndex(),
                                               processor.value (globalIndex())),
                          juce::dontSendNotification);
@@ -1336,10 +1487,30 @@ bool LB303AudioProcessorEditor::handleKey (const juce::KeyPress& key, Control cu
         if (letter ('-') || code == '-' || code == juce::KeyPress::numberPadSubtract)
         { changePreset (-1); return true; }
     }
-    if (mods.isCtrlDown() && code == juce::KeyPress::tabKey)
+    // Match LR-608 TEST36.3: on Windows Command and Ctrl are the SAME bit.
+    // Do not reject Ctrl by also requiring !mods.isCommandDown().
+    if (mods.isCtrlDown() && mods.isShiftDown() && !mods.isAltDown() && letter ('a'))
+    {
+        auto& focused = current == Control::grid ? static_cast<juce::Component&>(parameterGrid)
+            : current == Control::value ? static_cast<juce::Component&>(parameterValue)
+                                        : static_cast<juce::Component&>(numericEdit);
+        auto* param = selectedAutomationParameter();
+        if (param == nullptr)
+        {
+            lb303::announceToActiveScreenReader(focused, "No automatable parameter selected");
+            return true;
+        }
+        if (toggleHostAutomationEnvelope(param, focused)) return true;
+        lb303::announceToActiveScreenReader(focused, "Direct automation toggle unavailable. Last touched: " + param->getName(160));
+        param->beginChangeGesture();
+        param->setValueNotifyingHost(param->getValue());
+        param->endChangeGesture();
+        return true;
+    }
+    if (mods.isCtrlDown() && !mods.isAltDown() && code == juce::KeyPress::tabKey)
     {
         if (current == Control::edit && editDirty && ! commitEdit()) return true;
-        changeContext();
+        changeContext(mods.isShiftDown() ? -1 : 1);
         return true;
     }
     if (mods.isAltDown() && letter ('q')) { openStepEditor(); return true; }
