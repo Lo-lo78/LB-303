@@ -32,7 +32,7 @@ assert "observedAutomationState == 1" in e
 assert "labelFor(selected)" in e
 assert 'param->setValueNotifyingHost(param->getValue());' in e
 assert "check_test2474_automation_pages.py" in workflow
-assert workflow.count('TEST2.4.75-Windows-x64')==3
+assert workflow.count('LB-303-0.99.6-Windows-x64')==3
 assert (root / "Help/LB303Help.html").read_text(encoding="utf-8").count("TEST2.4.74 — Automation and page navigation")==7
 # In all four pages, an editable parameter should be a VST3 ID, not a transient FX display index.
 assert "return visibleFxParameters.at" in e and "return basslineParameterIndex" in e

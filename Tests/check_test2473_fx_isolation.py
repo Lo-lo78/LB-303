@@ -32,7 +32,7 @@ assert 'sharedFx.setParameters (fxControls, legacy, bpm);' in params
 assert 'delay[lane] = gain' in s and 'sharedFx.setStepSendOverrides (delayAbsolute, reverbAbsolute)' in s
 assert 'LB303StepPreviewFxIsolationTest' in cmake and 'LB303StepPreviewFxIsolationTest.exe' in ps
 assert 'python Tests/check_test2473_fx_isolation.py' in workflow
-assert 'TEST2.4.75-Windows-x64' in workflow
+assert 'LB-303-0.99.6-Windows-x64' in workflow
 
 compiler = (shutil.which('g++') or shutil.which('clang++')) if os.name != 'nt' else None
 if compiler:

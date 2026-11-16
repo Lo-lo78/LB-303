@@ -1,3 +1,29 @@
+# LB-303 0.99.6 — Release 16 novembre 2026
+
+La versione ufficiale **0.99.6** pubblica le modifiche delle **TEST2.4.74** e
+**TEST2.4.75**. Entrambe le bassline hanno un inviluppo **AHDSR**: Attack →
+Hold → Decay → Sustain → Release. **Hold** è indipendente sulle due bassline,
+subito dopo Attack, con durata **0–5 s**, precisione **1 ms** e valore iniziale
+**0 s**; il secondo oscillatore condivide l'inviluppo della propria bassline.
+Note Off avvia Release anche durante Hold. È possibile automatizzare Hold in
+REAPER e bloccarne il valore nei Parameter Locks di Alt+Q (slot **56**). Gli ID
+VST3 precedenti non cambiano. Alt+C/Alt+V ora include Hold nella copia dei
+**44 parametri** della bassline e continua a leggere le vecchie copie da 43.
+
+**Ctrl+Shift+A** attiva o disattiva l'envelope REAPER del parametro selezionato
+(Grid, Value, Edit) senza cancellare i punti; NVDA annuncia **", Auto"** quando
+l'automazione è attiva. **Ctrl+Shift+Tab** torna alla pagina precedente nel
+ciclo Bassline 1, Bassline 2, Sequencer, FX; Ctrl+Tab prosegue in avanti.
+
+Aggiornati **About (Alt+A)**, CMake/VST3, guida HTML incorporata nelle **sette
+lingue** esistenti, GitHub Actions e test. Versione pubblica precedente:
+**0.99.5 del 14 novembre 2026**. Le vecchie note TEST riportate sotto sono
+storiche. Dettagli in `RELEASE_NOTES_0.99.6.md`,
+`Doc/TEST2.4.74_HOST_AUTOMATION_REVERSE_PAGE.md` e
+`Doc/TEST2.4.75_AHDSR_HOLD.md`.
+
+---
+
 ## TEST2.4.75 — AHDSR Hold indipendente per le due bassline
 
 Nuovo parametro **Hold** immediatamente dopo Attack in Bassline 1 e Bassline 2 (0–5 secondi, passo 1 ms, default 0). Attack → Hold → Decay → Sustain → Release. L'oscillatore 2 condivide l'inviluppo della propria bassline. Hold funziona anche con i Parameter Lock per step (slot aggiuntivo 56), l'automazione REAPER, Note Off, legato e oversampling. I vecchi ID VST3 e i preset rimangono invariati; Alt+V legge anche le vecchie copie di 43 parametri mantenendo il valore Hold corrente. Per dettagli: `Doc/TEST2.4.75_AHDSR_HOLD.md`.
