@@ -17,6 +17,8 @@ public:
     void setOversamplingFactor (int factor) noexcept; // 1/2/4, no allocation
     void reset();
     void setParameters (const Values& values, double bpm);
+    // Independent, host-automatable Hold between Attack and Decay (0..5 s).
+    void setHoldSeconds (float seconds) noexcept;
     // Append-only host selector; 0 preserves the original per-sample glide.
     void setPortamentoCurveMode (int mode) noexcept;
     using LfoValues = std::array<float, lfoParameterCount>;
@@ -103,8 +105,9 @@ private:
     double freq = 0, targetFreq = 0, phase = 0, pwmPhase = 0;
     double osc2Phase = 0, osc2GainSmooth = 0, osc2DetuneSmooth = 10;
     double envelope = 0, velNorm = 1, accentEnvelope = 0, lpgMemory = 0;
+    double holdSeconds = 0.0, holdElapsedSamples = 0.0;
     double stage3 = 0, stage4 = 0;
-    int envelopeStage = 3, lastNote = -1;
+    int envelopeStage = 3, lastNote = -1; // 0 A, 4 H, 1 D, 2 S, 3 R
     bool noteActive = false, legato = false, accent = false;
     double smoothDelay = 0, delayTargetSamples = 0, delayPhase = 0;
     DelayLine delayL, delayR;

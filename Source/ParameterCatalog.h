@@ -69,7 +69,12 @@ constexpr size_t reverbAccentSendIndex = delayAccentSendIndex + 1;
 // TEST2.4.55: append-only reverb return ducking, triggered by musical Note On.
 constexpr size_t reverbDuckAmountIndex = reverbAccentSendIndex + 1;
 constexpr size_t reverbDuckRecoveryIndex = reverbDuckAmountIndex + 1;
-constexpr size_t parameterCount = reverbDuckRecoveryIndex + 1;
+// TEST2.4.75: independent AHDSR Hold for both basslines, appended after every
+// existing host parameter; no published VST3 ID or lock slot is renumbered.
+constexpr size_t hold1Index = reverbDuckRecoveryIndex + 1;
+constexpr size_t hold2Index = hold1Index + 1;
+constexpr size_t holdIndex (size_t lane) { return hold1Index + lane; }
+constexpr size_t parameterCount = hold2Index + 1;
 constexpr size_t lfoParameterIndex (size_t lane, size_t control)
 { return lfoParameterBase + lane * lfoParameterCount + control; }
 namespace lfo
@@ -81,11 +86,14 @@ enum Control : size_t { mode, rate, bpmSync, wave, squarePwm, delay, phase,
 // Legacy lock slots 1..37 are synth/output; 38..53 are LFO.
 // Append oscillator-2 slots 54..55 without changing any older lock IDs.
 constexpr size_t osc2LocalBase = voiceParameterCount + lfoParameterCount;
-constexpr size_t voiceLocalParameterCount = osc2LocalBase + osc2ParameterCount;
+// Hold uses new local lock slot 56, after OSC2's stable slots 54..55.
+constexpr size_t holdLocalIndex = osc2LocalBase + osc2ParameterCount;
+constexpr size_t voiceLocalParameterCount = holdLocalIndex + 1;
 constexpr size_t voiceParameterGlobalIndex (size_t voice, size_t local)
 { return local < voiceParameterCount ? voice * voiceParameterCount + local
        : local < osc2LocalBase ? lfoParameterIndex (voice, local - voiceParameterCount)
-       : osc2ParameterIndex (voice, local - osc2LocalBase); }
+       : local < holdLocalIndex ? osc2ParameterIndex (voice, local - osc2LocalBase)
+       : holdIndex (voice); }
 constexpr size_t seqPerformanceIndex (size_t lane, size_t control)
 { return sequencerPerformanceBase + lane * sequencerPerformancePerLane + control; }
 namespace seqPerformance
@@ -94,7 +102,7 @@ enum Control : size_t { bpmDivision, shuffle, legato, skipProbability, noteRando
                          velocityRandom, lengthRandom, repeatRandom, octaveShift, semitoneShift };
 }
 constexpr size_t fxParameterIndex (size_t local) { return legacyParameterCount + local; }
-constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount; // old Level is hidden; Volume is first // voice parameters shown in parameter-lock picker
+constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount + 1; // Hold added; old Level remains hidden
 constexpr size_t voiceGridParameterCount = voiceVisibleParameterCount + 3; // MIDI channel, separate output, Portamento Curve (GUI-only)
 constexpr int voiceMidiDisplayIndex = 5; // Volume, Waveform, Osc 2 Volume, Osc 2 Detune, Pan, MIDI, ...
 constexpr size_t classicDelayParameterCount = 14;

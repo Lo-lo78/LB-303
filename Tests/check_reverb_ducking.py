@@ -15,7 +15,7 @@ seq=read('Source/SequencerPlayback.cpp')
 w=read('.github/workflows/build-windows.yml')
 assert 'constexpr size_t reverbDuckAmountIndex = reverbAccentSendIndex + 1;' in h
 assert 'constexpr size_t reverbDuckRecoveryIndex = reverbDuckAmountIndex + 1;' in h
-assert 'constexpr size_t parameterCount = reverbDuckRecoveryIndex + 1;' in h
+assert 'constexpr size_t parameterCount = hold2Index + 1;' in h
 assert 'constexpr size_t reverbDuckAmount = fxParameterCount + 10;' in h
 assert 'constexpr size_t reverbDuckRecovery = fxParameterCount + 11;' in h
 assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount + 1 + 2 + 3 + 4 + 1 + 2 + 2;' in h
@@ -67,7 +67,7 @@ for fs in (44100,48000,96000):
   assert 0.17 < reduction < 0.19,(fs,ms,reduction)
  assert 10**(-18/20) < 0.127
 assert 'python Tests/check_reverb_ducking.py' in w
-assert 'TEST2.4.74-Windows-x64' in w
+assert 'TEST2.4.75-Windows-x64' in w
 assert 'TEST2.4.57' in read('README.md')
 manual=read('Help/LB303Help.html')
 assert manual.count('TEST2.4.56') >= 7

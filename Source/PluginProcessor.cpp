@@ -740,6 +740,22 @@ void LB303AudioProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::M
         // 14 historic delay controls are routed to one shared classic FX bus.
         synth[31] = 100.0f; synth[32] = 0.0f;
         engines[voice].setParameters (synth, bpm);
+        // New sequencer local slot 56. Old slots 1..55 are untouched.
+        float hold = value (lb303::holdIndex (voice));
+        if (activeLockStep[voice] >= 0 && activeLockPattern[voice] >= 0)
+        {
+            const auto step = sequenceBanks[voice].getStep (
+                activeLockPattern[voice], activeLockStep[voice]);
+            for (int i = 0; i < step.parameterLockCount; ++i)
+            {
+                const auto& lock = step.parameterLocks[static_cast<size_t> (i)];
+                if (lock.sliderNumber != static_cast<int> (lb303::holdLocalIndex + 1)
+                    || ! std::isfinite (lock.value)) continue;
+                const auto& info = lb303::catalog()[lb303::holdIndex (voice)];
+                hold = juce::jlimit (info.minimum, info.maximum, lock.value);
+            }
+        }
+        engines[voice].setHoldSeconds (hold);
         engines[voice].setPortamentoCurveMode (juce::roundToInt (
             value (lb303::portamentoCurveIndex (voice))));
         lb303::BassEngine::LfoValues voiceLfo {};

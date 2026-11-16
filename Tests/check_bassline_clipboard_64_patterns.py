@@ -38,7 +38,7 @@ assert 'sequenceBanks[0].serialiseToBase64()' in processor and 'sequenceBanks[1]
 paramh=read('Source/ParameterCatalog.h')
 assert 'pattern1Index = audioParameterCount' in paramh
 assert 'pattern2Index = audioParameterCount + 1' in paramh
-assert 'parameterCount = reverbDuckRecoveryIndex + 1' in paramh
+assert 'parameterCount = hold2Index + 1' in paramh
 # Keyboard copy/paste available only on Bassline pages and before legacy Alt+V.
 assert 'basslineClipboardHeader = "LB303-BASSLINE-PARAMS-V1:"' in e
 assert 'copyBasslineParameters (Control)' in head and 'pasteBasslineParameters (Control)' in head
@@ -51,13 +51,13 @@ assert 'else pasteBasslineParameters (current);' in e
 assert 'if (current == Control::edit && editDirty && ! commitEdit())' in e
 assert 'LB303-BASSLINE-PARAMS-V1:' not in step # step clipboard remains independent
 assert 'constexpr int count = static_cast<int> (lb303::voiceGridParameterCount)' in e
-assert 'decoded.getDataSize() != static_cast<size_t> (12 + count * 4)' in e
+assert 'decoded.getDataSize() != static_cast<size_t> (12 + storedCount * 4)' in e
 assert 'if (! std::isfinite (v))' in e
 assert 'juce::jlimit (info.minimum, info.maximum' in e
 assert 'param->beginChangeGesture();' in e and 'param->endChangeGesture();' in e
 assert 'Tab' in e and 'setDescription ("Alt+V")' not in e
 assert 'song->setAttribute ("data", songs.serialise())' in processor
-assert 'TEST2.4.74-Windows-x64' in w
+assert 'TEST2.4.75-Windows-x64' in w
 assert 'python Tests/check_bassline_clipboard_64_patterns.py' in w
 manual=read('Help/LB303Help.html')
 for lang in ('en','it','es','fr','ru','zh','ja'):

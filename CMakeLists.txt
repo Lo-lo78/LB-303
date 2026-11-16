@@ -121,3 +121,8 @@ add_executable(LB303StepPreviewFxIsolationTest
     Tests/StepPreviewFxIsolationTests.cpp)
 target_include_directories(LB303StepPreviewFxIsolationTest PRIVATE Tests/Shim Source)
 target_compile_features(LB303StepPreviewFxIsolationTest PRIVATE cxx_std_20)
+
+# TEST2.4.75: original BassEngine AHDSR state transitions and Hold timing.
+add_executable(LB303HoldEnvelopeTest Source/BassEngine.cpp Tests/HoldEnvelopeTests.cpp)
+target_include_directories(LB303HoldEnvelopeTest PRIVATE Tests/Shim Source)
+target_compile_features(LB303HoldEnvelopeTest PRIVATE cxx_std_20)

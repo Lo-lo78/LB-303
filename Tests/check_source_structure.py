@@ -109,7 +109,7 @@ assert 'int currentParameterCount() const' in header
 assert 'focusControl (Control::grid, true);' in editor
 assert 'processor.parameters, p.id, parameterValue' in editor
 assert 'currentParameterCount()' in editor
-assert 'LB-303-0.99.5-TEST2.4.74-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.5-TEST2.4.75-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST1.6 dual independent basslines, panning, persistent IDs and 3 contexts.')
 
 # TEST1.7: separate MIDI channel routing for the two existing DSP engines.
@@ -363,8 +363,9 @@ import ast
 mapsrc = param_cpp
 match = re.search(r'constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder\s*\{\{([^}]+)\}\}', param_cpp)
 assert match
-voice_order = [int(n) for n in re.findall(r'\b\d+\b', re.sub(r'//[^\n]*', '', match.group(1)))]
-assert len(voice_order) == 40 and len(set(voice_order)) == 40
+voice_order = [int(n) for n in re.findall(r'\b\d+\b', re.sub(r'//[^\n]*', '', match.group(1).replace('holdLocalIndex', '55')))]
+assert len(voice_order) == 41 and len(set(voice_order)) == 41
+assert voice_order.index(55) == voice_order.index(1) + 1
 assert voice_order[:2] == [7, 0] # Volume before Waveform; historic Level is hidden
 assert 'sequencerDisplayParameterCount> seqDisplayOrder' in param_cpp
 assert 'midiChannel1Index = audioParameterCount + 5' in param_h
@@ -424,7 +425,7 @@ assert 'fxParameterCount = 35' in param_h
 assert 'fxDisplayParameterCount = fxParameterCount + classicDelayParameterCount' in param_h
 assert 'legacyParameterCount = audioParameterCount + sequencerParameterCount' in param_h
 assert 'fxDisplayOrder' in param_cpp
-assert 'voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount' in param_h
+assert 'voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount + 1' in param_h
 assert 'std::array<int, lb303::basslineCount + 2>' in (root / 'Source/PluginEditor.h').read_text(encoding='utf-8')
 assert 'return context == 2 ? "Sequencer" : "FX"' in editor
 assert 'visibleFxParameters.at' in editor and 'Source/SharedEffects.cpp' in cmake
@@ -675,7 +676,7 @@ assert 'randomValue (lane, pattern, tick' in playback
 assert 'double lengthFactor' in playback
 assert 'config.legato && step.length >= 100' in playback
 assert 'performance,\n                playing' not in processor
-assert 'LB-303-0.99.5-TEST2.4.74-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.5-TEST2.4.75-Windows-x64' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.9 serial FX order, two isolated chorus send paths, 20 sequencer controls, stable parameter indices.')
 
 # TEST2.4.10: guard against the stray second `}};` that broke MSVC
@@ -710,9 +711,9 @@ print('PASS: TEST2.4.11 six independently collapsing FX columns, Type-dependent 
 assert 'lfoParameterBase = sequencerPerformanceBase + sequencerPerformanceCount' in param_h
 assert 'oversamplingIndex = osc2ParameterBase + basslineCount * osc2ParameterCount' in param_h
 assert 'reverbBassDecayIndex = oversamplingIndex + 1' in param_h
-assert 'constexpr size_t voiceLocalParameterCount = osc2LocalBase + osc2ParameterCount' in param_h
-assert 'constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount' in param_h
-assert len(voice_order) == 40 and voice_order[0] == 7 and 35 not in voice_order
+assert 'constexpr size_t voiceLocalParameterCount = holdLocalIndex + 1' in param_h
+assert 'constexpr size_t voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount + 1' in param_h
+assert len(voice_order) == 41 and voice_order[0] == 7 and 35 not in voice_order
 assert voice_order[-16:] == list(range(37, 53))
 assert '"Legacy Level (unused)"' in param_cpp
 for suffix in ('mode','rate','bpm_sync','wave','square_pwm','delay','phase','upper_squash',
@@ -828,7 +829,7 @@ assert 'b2L[nextSample] += fx.dry[1].first;' in processor
 assert 'const float mainDry = sharedFx.dryLevel();' in processor
 assert 'mainDry * (fx.dry[0].first + fx.dry[1].first) + fx.wet.first' in processor
 assert 'for (int channel = 2; channel < audio.getNumChannels(); ++channel)' not in processor
-assert 'LB-303-0.99.5-TEST2.4.74-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.5-TEST2.4.75-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.16 browser NVDA names + existing preview + 4 stereo buses + separate distortion stems + stable IDs (static).')
 
 # TEST2.4.17 — GUI close stops preview; Alt+Q editor close does not.
@@ -865,9 +866,9 @@ print('PASS: TEST2.4.18 four stereo buses: full master, two optional distortion 
 assert 'osc2ParameterBase = separateOutputBase + basslineCount' in param_h
 assert 'oversamplingIndex = osc2ParameterBase + basslineCount * osc2ParameterCount' in param_h
 assert 'reverbBassDecayIndex = oversamplingIndex + 1' in param_h
-assert 'voiceLocalParameterCount = osc2LocalBase + osc2ParameterCount' in param_h
+assert 'voiceLocalParameterCount = holdLocalIndex + 1' in param_h
 assert 'voiceMidiDisplayIndex = 5' in param_h
-assert 'voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount' in param_h
+assert 'voiceVisibleParameterCount = 22 + lfoParameterCount + osc2ParameterCount + 1' in param_h
 assert voice_order[:5] == [7, 0, 53, 54, 36]
 assert voice_order[-16:] == list(range(37, 53))
 assert 'result[osc2ParameterIndex (lane, osc2::volume)]' in param_cpp
@@ -885,7 +886,7 @@ assert 'osc += osc2GainSmooth * waveform (osc2Phase, secondaryDt);' in engine
 assert 'setOsc2Parameters (layerValues)' in processor
 assert 'lock.sliderNumber - 1 - static_cast<int> (lb303::osc2LocalBase)' in processor
 assert 'voiceParameterGlobalIndex' in step
-assert 'LB-303-0.99.5-TEST2.4.74-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
+assert 'LB-303-0.99.5-TEST2.4.75-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.19 two independent second oscillators, shared waveform/voice envelopes, cents detune, stable APVTS and lock slots.')
 
 # TEST2.4.20 — Ctrl+A selects only focused and active keyboard steps.
@@ -1020,7 +1021,7 @@ assert 'processor.syncSelectedPatternPerformance();' in shortcuts
 assert 'selectParameter();' in shortcuts
 assert 'lb303::announceToActiveScreenReader (active,' in shortcuts
 assert 'lb303::editTrackIndex' in editor.split('int LB303AudioProcessorEditor::shortcutPatternLane()', 1)[1].split('void LB303AudioProcessorEditor::changePatternFromGrid', 1)[0]
-assert 'TEST2.4.74' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.75' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.24 Alt+M and Ctrl+Up/Down accessible across all four parameter grids.')
 
 # TEST2.4.25: Ctrl+Up/Down cannot require !Command on Windows because JUCE
@@ -1042,7 +1043,7 @@ assert 'presetBrowser->active()' in root_fallback_2425
 assert 'mods.isCtrlDown()' in root_fallback_2425
 assert 'return handleKey (key, control);' in root_fallback_2425
 assert '! mods.isCommandDown()' not in root_fallback_2425
-assert 'TEST2.4.74' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.75' in (root / '.github/workflows/build-windows.yml').read_text()
 # Explicitly model JUCE's Windows flags: both isCtrlDown and isCommandDown
 # are TRUE for the ctrlModifier bit. The fixed predicate must accept it.
 ctrl_pressed_windows = True
@@ -1064,7 +1065,7 @@ song_code_2426 = step.split('bool SequencerStepEditor::handleSongKey (', 1)[1].s
 assert song_code_2426.count('if (! selection.empty())') >= 3
 assert 'if (selection.size() > 1)' not in song_code_2426
 assert song_code_2426.index('code == juce::KeyPress::spaceKey && mods.isShiftDown()') < song_code_2426.index('if (mods.isCtrlDown())')
-assert 'TEST2.4.74' in (root / '.github/workflows/build-windows.yml').read_text()
+assert 'TEST2.4.75' in (root / '.github/workflows/build-windows.yml').read_text()
 print('PASS: TEST2.4.26 Shift+Space explicitly selects even one Song row; clipboard/delete honor singleton.')
 
 # TEST2.4.27 — explicit singleton selection is visible to NVDA everywhere.

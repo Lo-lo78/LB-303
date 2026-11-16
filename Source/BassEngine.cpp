@@ -290,6 +290,9 @@ void BassEngine::setOversamplingFactor (int factor) noexcept
         curvedElapsed *= ratio;
         curvedDuration *= ratio; // preserve musical time and progress
     }
+    // Hold is measured in oversampled DSP samples: retain elapsed real time
+    // when switching 1x/2x/4x while a note is still holding the peak.
+    holdElapsedSamples *= static_cast<double> (factor) / oversamplingFactor;
     oversamplingFactor = factor;
     parametersPrepared = false; // delay filter coefficients must follow fs
     fs = hostFs * factor;
@@ -316,6 +319,7 @@ void BassEngine::reset()
     lfo = {};
     lastLfoSample = 0.0f;
     envelope = lpgMemory = accentEnvelope = velNorm = 0;
+    holdElapsedSamples = 0.0;
     envelopeStage = 3;
     stage3 = stage4 = 0;
     lastNote = -1; noteActive = legato = accent = false;
@@ -346,6 +350,14 @@ void BassEngine::setParameters (const Values& values, double newBpm)
     updateRateCoefficients();
     if (portamentoCurveMode != 0 && curvedGlideActive && glideSettingsChanged)
         beginCurvedGlide(); // automation re-targets from the current pitch
+}
+
+void BassEngine::setHoldSeconds (float seconds) noexcept
+{
+    // Read once per engine parameter refresh, never from an allocation or
+    // JUCE parameter call inside the audio sample loop. A mid-Hold automation
+    // change takes effect on the next sample (including setting Hold to zero).
+    holdSeconds = std::isfinite (seconds) ? std::clamp (static_cast<double> (seconds), 0.0, 5.0) : 0.0;
 }
 
 void BassEngine::releaseNote() noexcept
@@ -393,7 +405,11 @@ void BassEngine::midi (const juce::MidiMessage& message)
         noteActive = true;
         if (portamentoCurveMode != 0) beginCurvedGlide();
         lastNote = message.getNoteNumber();
-        if (! legato) envelopeStage = 0;
+        if (! legato)
+        {
+            envelopeStage = 0;
+            holdElapsedSamples = 0.0;
+        }
         return;
     }
     if (message.isNoteOff() && message.getNoteNumber() == lastNote)
@@ -550,7 +566,18 @@ std::pair<float, float> BassEngine::tick (float inputL, float inputR)
     {
         case 0:
             envelope += p[1] > 0 ? transient / (p[1]*fs) : 1.0;
-            if (envelope >= 1.0) { envelope = 1.0; envelopeStage = 1; }
+            if (envelope >= 1.0)
+            {
+                envelope = 1.0;
+                holdElapsedSamples = 0.0;
+                envelopeStage = holdSeconds > 0.0 ? 4 : 1;
+            }
+            break;
+        case 4: // Hold: maintain the Attack peak, before Decay.
+            envelope = 1.0;
+            holdElapsedSamples += 1.0;
+            if (holdElapsedSamples >= holdSeconds * fs)
+                envelopeStage = 1;
             break;
         case 1:
             envelope -= p[2] > 0 ? transient * (1.0-p[3]) * decayMult / (p[2]*fs) : 1.0;

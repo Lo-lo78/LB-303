@@ -1,3 +1,7 @@
+## TEST2.4.75 — AHDSR Hold indipendente per le due bassline
+
+Nuovo parametro **Hold** immediatamente dopo Attack in Bassline 1 e Bassline 2 (0–5 secondi, passo 1 ms, default 0). Attack → Hold → Decay → Sustain → Release. L'oscillatore 2 condivide l'inviluppo della propria bassline. Hold funziona anche con i Parameter Lock per step (slot aggiuntivo 56), l'automazione REAPER, Note Off, legato e oversampling. I vecchi ID VST3 e i preset rimangono invariati; Alt+V legge anche le vecchie copie di 43 parametri mantenendo il valore Hold corrente. Per dettagli: `Doc/TEST2.4.75_AHDSR_HOLD.md`.
+
 ## TEST2.4.74 — REAPER automation and reverse page navigation
 
 **Ctrl+Shift+A** toggles the ACTIVE status of the selected parameter envelope in REAPER (Grid, Value and Edit), preserving existing points. NVDA announces ", Auto" while active. **Ctrl+Tab** advances across Bassline 1 → Bassline 2 → Sequencer → FX; **Ctrl+Shift+Tab** goes backwards. See `Doc/TEST2.4.74_HOST_AUTOMATION_REVERSE_PAGE.md`.

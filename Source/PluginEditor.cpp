@@ -545,9 +545,9 @@ size_t LB303AudioProcessorEditor::globalIndex (int local) const
 size_t LB303AudioProcessorEditor::basslineParameterIndex (int lane, int local) const
 {
         // TEST2.4.52: GUI-only Portamento Curve immediately follows Time/Mode.
-        // Display slot 17 is virtual and NOT a sequencer lock slot. No old
-        // voiceDisplayOrder entries, MIDI indices or host IDs are shifted.
-        constexpr int curveDisplayIndex = 17;
+        // Hold adds one visible row before Portamento; Curve is still a
+        // GUI-only row and never a sequencer lock slot or a new host ID.
+        constexpr int curveDisplayIndex = 18;
         if (local == curveDisplayIndex)
             return lb303::portamentoCurveIndex (static_cast<size_t> (lane));
         if (local > curveDisplayIndex) --local;
@@ -1355,38 +1355,47 @@ void LB303AudioProcessorEditor::pasteBasslineParameters (Control current)
         return;
     }
     constexpr int count = static_cast<int> (lb303::voiceGridParameterCount);
-    if (decoded.getDataSize() != static_cast<size_t> (12 + count * 4))
-    {
-        lb303::announceToActiveScreenReader (focused, "Invalid bassline clipboard size");
-        return;
-    }
+    constexpr int legacyCount = count - 1;
     juce::MemoryInputStream input (decoded.getData(), decoded.getDataSize(), false);
-    if (input.readInt() != basslineClipboardMagic || input.readInt() != 1 || input.readInt() != count)
+    const auto magic = input.readInt();
+    const auto version = input.readInt();
+    const auto storedCount = input.readInt();
+    if (magic != basslineClipboardMagic || version != 1
+        || (storedCount != count && storedCount != legacyCount)
+        || decoded.getDataSize() != static_cast<size_t> (12 + storedCount * 4))
     {
         lb303::announceToActiveScreenReader (focused, "Unsupported bassline clipboard");
         return;
     }
     std::array<float, lb303::voiceGridParameterCount> values {};
-    for (auto& v : values)
+    for (int i = 0; i < storedCount; ++i)
     {
-        v = input.readFloat();
+        const float v = input.readFloat();
         if (! std::isfinite (v))
         {
             lb303::announceToActiveScreenReader (focused, "Invalid bassline parameter");
             return;
         }
+        values[static_cast<size_t> (i)] = v;
     }
+    // New AHDSR page inserts Hold immediately after Attack (visible slot 12).
+    // A legacy clipboard omits this row; preserve its destination's Hold.
+    constexpr int holdDisplayIndex = 12;
     // Never paste to the sequencer or FX contexts. Do not touch pattern banks.
-    for (int display = 0; display < count; ++display)
-        if (auto* param = processor.parameter (basslineParameterIndex (context, display)))
+    for (int display = 0; display < storedCount; ++display)
+    {
+        const int targetDisplay = storedCount == legacyCount && display >= holdDisplayIndex
+            ? display + 1 : display;
+        if (auto* param = processor.parameter (basslineParameterIndex (context, targetDisplay)))
         {
-            const auto& info = lb303::catalog()[basslineParameterIndex (context, display)];
+            const auto& info = lb303::catalog()[basslineParameterIndex (context, targetDisplay)];
             const auto bounded = juce::jlimit (info.minimum, info.maximum, values[static_cast<size_t> (display)]);
             const auto value = param->convertTo0to1 (bounded);
             param->beginChangeGesture();
             param->setValueNotifyingHost (value);
             param->endChangeGesture();
         }
+    }
     refreshLabels (true);
     selectParameter();
     lb303::announceToActiveScreenReader (focused,

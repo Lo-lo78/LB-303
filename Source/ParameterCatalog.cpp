@@ -42,7 +42,7 @@ constexpr const char* midiChannelChoices[] = { "Omni", "1", "2", "3", "4", "5", 
 // Group tone, envelopes and response; delay is accessible only in shared FX.
 constexpr std::array<size_t, voiceVisibleParameterCount> voiceDisplayOrder {{
     // No duplicate Level: the original synth Volume slider007 now leads each grid.
-    7, 0, 53, 54, 36, 8, 9, 10, 14, 1,
+    7, 0, 53, 54, 36, 8, 9, 10, 14, 1, holdLocalIndex,
     2, 3, 4, 5, 6, 15, 16, 17,
     18, 33, 34, 11, 12, 13,
     // Each bassline owns its own LFO, stored as virtual local lock slots 38..53.
@@ -288,6 +288,10 @@ const std::array<ParameterInfo, parameterCount>& catalog()
                                          0.5f, 2.0f, 0.01f, 0.5f, "x" };
         result[reverbBassXoverIndex] = { "fx_reverb_bass_xover", "Reverb Bass XOver",
                                          50.0f, 1000.0f, 1.0f, 360.0f, "Hz" };
+        // Two monophonic basslines have independent ADSR envelopes. Hold = 0
+        // leaves the original ADSR timing and saved sound unchanged.
+        result[hold1Index] = { "b1_env_hold", "Hold", 0.0f, 5.0f, 0.001f, 0.0f, "s" };
+        result[hold2Index] = { "b2_env_hold", "Hold", 0.0f, 5.0f, 0.001f, 0.0f, "s" };
         // The default mode Off is bit-identical to TEST2.4.43's unmodulated FDN.
         result[reverbMotionModeIndex] = { "fx_reverb_motion_mode", "Reverb Motion Mode",
             0, 6, 1, 0, "", reverbMotionChoices, 7 };
@@ -381,6 +385,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
             ? ("FX - " + p.name)
             : index == oversamplingIndex
             ? ("FX - " + p.name)
+            : index == hold1Index || index == hold2Index
+            ? ("Bassline " + juce::String (1 + index - hold1Index) + " - " + p.name)
             : index == portamentoCurve1Index || index == portamentoCurve2Index
             ? ("Bassline " + juce::String (1 + index - portamentoCurve1Index)
                + " - " + p.name)

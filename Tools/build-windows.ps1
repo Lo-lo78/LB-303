@@ -47,3 +47,11 @@ if (-not (Test-Path -LiteralPath $previewIsolationTest)) {
 & $previewIsolationTest
 if ($LASTEXITCODE -ne 0) { throw "Step preview FX-isolation test failed: $LASTEXITCODE" }
 Write-Host "PASS: micro-preview preserves Classic Delay glide and wet tail"
+
+$holdTest = Join-Path $build 'LB303HoldEnvelopeTest.exe'
+if (-not (Test-Path -LiteralPath $holdTest)) {
+    throw "AHDSR Hold test missing: $holdTest"
+}
+& $holdTest
+if ($LASTEXITCODE -ne 0) { throw "AHDSR Hold test failed: $LASTEXITCODE" }
+Write-Host "PASS: LB-303 independent AHDSR Hold envelopes"
