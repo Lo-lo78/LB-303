@@ -41,7 +41,7 @@ assert 'display >= holdDisplayIndex' in e and 'display + 1 : display' in e
 assert 'LB303HoldEnvelopeTest' in cmake and 'HoldEnvelopeTests.cpp' in cmake
 assert 'LB303HoldEnvelopeTest.exe' in build
 assert 'python Tests/check_test2475_ahdsr_hold.py' in w
-assert w.count('LB-303-0.99.6-Windows-x64') == 3
+assert w.count('LB-303-0.99.7-Windows-x64') == 3
 assert read('Help/LB303Help.html').count('TEST2.4.75 — AHDSR Hold')==7
 assert 'Doc/TEST2.4.75_AHDSR_HOLD.md' in read('README.md')
 print('PASS TEST2.4.75: independent AHDSR Hold, stable IDs, locks, automation, legacy clipboard, 7 manuals, CI')

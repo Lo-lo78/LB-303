@@ -9,5 +9,5 @@ for name, call in [('PluginEditor.cpp','processor.toggleSequencerPreview()'),
     assert 'Both basslines preview playing' not in code, name
     assert 'Both basslines preview stopped' not in code, name
     assert 'juce::ignoreUnused (' in code, name
-assert 'LB-303-0.99.6-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
+assert 'LB-303-0.99.7-Windows-x64' in (root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8')
 print('PASS: LB303 preview still toggles in all three views without announcement')

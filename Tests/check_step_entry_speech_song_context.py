@@ -18,5 +18,5 @@ assert 'preserveOrder' in acc
 assert 'processor.songs.setSongMode (songView);' in ed
 assert 'processor.songs.setSongMode (false);' in ed
 assert 'processor.restartSongPreviewClock();' in ed
-assert 'LB-303-0.99.6-Windows-x64' in wf
+assert 'LB-303-0.99.7-Windows-x64' in wf
 print('PASS: LB303 MIDI speech, guaranteed end, UIA and automatic preview context')

@@ -11,8 +11,8 @@
 
 namespace
 {
-constexpr auto lb303Version = "0.99.6";
-constexpr auto lb303ReleaseDate = "16 November 2026";
+constexpr auto lb303Version = "0.99.7";
+constexpr auto lb303ReleaseDate = "17 November 2026";
 constexpr auto lb303ProjectUrl = "https://github.com/Lo-lo78/LB-303";
 constexpr auto lb303ContactEmail = "vmanolo301@gmail.com";
 constexpr auto lb303License = "GNU Affero General Public License v3 or later (AGPL-3.0-or-later)";
@@ -348,7 +348,7 @@ LB303AudioProcessorEditor::LB303AudioProcessorEditor (LB303AudioProcessor& p)
 
     const auto aboutText = juce::String ("LB-303\nVersion: ") + lb303Version
         + "\nRelease date: " + lb303ReleaseDate
-        + "\nNew: accessible step parameter announcements in Alt+Q Parameters (page 6), including value changes and Alt+Home/Alt+End navigation"
+        + "\nFixed: sequencer Accent and tied-step velocity updates, MIDI step-entry recovery, step preview, and Repeat Random playback stability"
         + "\nLicense: " + lb303License
         + "\nProject: " + lb303ProjectUrl
         + "\nContact: " + lb303ContactEmail;

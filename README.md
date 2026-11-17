@@ -1,3 +1,9 @@
+# LB-303 0.99.7 — Release 17 novembre 2026
+
+Release di manutenzione basata sulla TEST2.4.77: correzioni di Accent/Velocity sugli step legati, anteprima dei passi, recupero della registrazione MIDI Ctrl+K, prestazioni di Repeat Random/Song e test Windows CI. Aggiornati About, metadati VST3 e nome artefatto GitHub Actions. La guida multilingue e le funzionalità del plugin restano invariate. Vedi `RELEASE_NOTES_0.99.7.md`.
+
+---
+
 # LB-303 — TEST2.4.77 (GitHub Actions Release fix)
 
 **Sorgente di test TEST2.4.77**, basato sulla versione pubblica 0.99.6.
